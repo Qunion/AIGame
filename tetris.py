@@ -94,6 +94,58 @@ except Exception as e:
     FONT_XXLARGE = pygame.font.Font(None, FONT_XXLARGE)
 
 
+# --- 规则文本和行高 ---
+RULES_TEXT = [
+    "[基础操作]",
+    " ← / → : 左右移动方块",
+    " ↑     : 旋转方块 (顺时针)",
+    " ↓     : 加速下落 (软降)",
+    " 空格  : 瞬间下落 (硬降) / [关卡7] 时空切换",
+    " P     : 暂停 / 继续游戏",
+    " R     : (暂停/结束后) 重新开始本关",
+    " ESC   : 退出游戏",
+    "",
+    "[通用规则]",
+    "- 场地: 10格宽 x 20格高",
+    "- 目标: 在限定时间内获得尽可能高的分数",
+    "- 失败条件:",
+    "  * 方块堆叠触顶 (新方块无法生成)",
+    "  * [关卡6] 方块触碰炸弹格子",
+    "  * 失败后不记录本关分数",
+    "- 消除与得分:",
+    "  * 填满整行即可消除该行方块",
+    "  * 基础分: 每消除1个小方块得 1 分",
+    "  * 额外奖励 (单次结算取最高项):",
+    "    ≥ 20块: 额外 +10分",
+    "    ≥ 30块: 额外 +20分",
+    "    ≥ 40块: 额外 +40分",
+    "  * 额外分数会以 (+N) 形式显示",
+    "- 关卡进度:",
+    "  * 完成关卡 (时间到) 后，若分数达到要求，则解锁下一关",
+    "  * 总分 = 所有已完成关卡的最高分之和",
+    "- 速度递增:",
+    "  * 游戏进行中，方块下落速度会逐渐加快",
+    "  * 默认: 每5秒增加 初始速度的 5%",
+    "",
+    "[特殊关卡机制]",
+    "- 关卡 1 & 2: 初始掉落障碍方块",
+    "- 关卡 3: 加速效果 x2 (每5秒 +10%)",
+    "- 关卡 4 & 5: [王的凝视]",
+    "  * 场地出现特定数量相连的黄色背景格",
+    "  * 当所有黄格都被方块填满时，这些方块立即消除，并获得 100 分",
+    "  * 消除后，黄格会重新生成",
+    "- 关卡 6: [炸弹]",
+    "  * 场地出现红色背景格 (炸弹)",
+    "  * 正在下落的方块碰到任意炸弹格，本关立即失败",
+    "- 关卡 7: [时空切换]",
+    "  * 存在两个独立的游戏面板",
+    "  * 按 [空格] 可将当前下落方块切换至另一面板的相同位置",
+    "  * 若目标位置冲突，方块上移至最近合法位置",
+    "  * 固定方块留在各自面板，两面板得分独立计算并累加"
+]
+
+RULES_LINE_HEIGHT = FONT_SMALL.get_height() + 6  # 行高 = 字体高度 + 间距
+
 # --- 日志记录器 ---
 MAX_LOG_MESSAGES = 8 # Increased capacity for larger log area # 增加容量以适应更大的日志区域
 log_queue = deque(maxlen=MAX_LOG_MESSAGES)
@@ -191,7 +243,7 @@ INITIAL_WINDOW_WIDTH = get_window_width(False) # 初始规则区隐藏
 # 规则说明区域 (右侧，可隐藏)
 RULES_AREA_WIDTH = 400 # Increased width
 RULES_AREA_HEIGHT = WINDOW_HEIGHT # Match total window height
-RULES_SCROLL_SPEED = 20  # 每次滚动的像素数
+RULES_SCROLL_SPEED = 60  # 每次滚动的像素数
 rules_scroll_y = 0  # 规则区域的滚动位置
 
 # 各区域起始坐标 (动态计算 Y 坐标)
@@ -1049,6 +1101,7 @@ def draw_game_area1(surface, board, current_tetromino, game_timer, level_time_li
 
     # Determine which board to draw (for Level 7)
     active_board = None
+    active_board_index = 0 # For level 7: 0 or 1
     if current_level_data.dual_board:
         # board is assumed to be a list [board1, board2] passed in
         if board and len(board) == 2:
@@ -1180,7 +1233,7 @@ def draw_log_area(surface, log_messages):
 
 # Update draw_rules_area positioning and add more detailed text
 def draw_rules_area(surface, visible):
-    global screen, rules_scroll_y  # 添加全局变量声明
+    global screen, rules_scroll_y, RULES_TEXT, RULES_LINE_HEIGHT  # 添加全局变量声明
 
     target_width = get_window_width(visible)
     current_width, current_height = screen.get_size()
@@ -1202,108 +1255,65 @@ def draw_rules_area(surface, visible):
         rules_scroll_y = 0  # 重置滚动位置
         return
 
-    area_rect = pygame.Rect(RULES_AREA_POS, (RULES_AREA_WIDTH, RULES_AREA_HEIGHT))
+    # 修改规则区域的位置，使其从窗口顶部开始
+    area_rect = pygame.Rect(RULES_AREA_POS[0], 0, RULES_AREA_WIDTH, WINDOW_HEIGHT)
 
     # 创建规则区域的表面
-    rules_surface = pygame.Surface((RULES_AREA_WIDTH, RULES_AREA_HEIGHT), pygame.SRCALPHA)
+    rules_surface = pygame.Surface((RULES_AREA_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
     rules_surface.fill(COLOR_RULES_BACKGROUND)
-    pygame.draw.rect(rules_surface, COLOR_GRID, (0, 0, RULES_AREA_WIDTH, RULES_AREA_HEIGHT), 1)
+    pygame.draw.rect(rules_surface, COLOR_GRID, (0, 0, RULES_AREA_WIDTH, WINDOW_HEIGHT), 1)
 
-    rules_title = "游戏规则说明"
-    title_rect = draw_text(rules_surface, rules_title, FONT_LARGE, COLOR_NEON_YELLOW, center=(RULES_AREA_WIDTH // 2, 40))
+    # 绘制标题区域
+    title_height = 80  # 标题区域固定高度
+    title_rect = pygame.Rect(0, 0, RULES_AREA_WIDTH, title_height)
+    pygame.draw.rect(rules_surface, COLOR_DARK_GRAY, title_rect)
+    draw_text(rules_surface, "游戏规则说明", FONT_LARGE, COLOR_NEON_YELLOW, center=(RULES_AREA_WIDTH // 2, title_height // 2))
 
-    # 定义规则文本
-    rules_text = [
-        "[基础操作]",
-        " ← / → : 左右移动方块",
-        " ↑     : 旋转方块 (顺时针)",
-        " ↓     : 加速下落 (软降)",
-        " 空格  : 瞬间下落 (硬降) / [关卡7] 时空切换",
-        " P     : 暂停 / 继续游戏",
-        " R     : (暂停/结束后) 重新开始本关",
-        " ESC   : 退出游戏",
-        "",
-        "[通用规则]",
-        "- 场地: 10格宽 x 20格高",
-        "- 目标: 在限定时间内获得尽可能高的分数",
-        "- 失败条件:",
-        "  * 方块堆叠触顶 (新方块无法生成)",
-        "  * [关卡6] 方块触碰炸弹格子",
-        "  * 失败后不记录本关分数",
-        "- 消除与得分:",
-        "  * 填满整行即可消除该行方块",
-        "  * 基础分: 每消除1个小方块得 1 分",
-        "  * 额外奖励 (单次结算取最高项):",
-        "    ≥ 20块: 额外 +10分",
-        "    ≥ 30块: 额外 +20分",
-        "    ≥ 40块: 额外 +40分",
-        "  * 额外分数会以 (+N) 形式显示",
-        "- 关卡进度:",
-        "  * 完成关卡 (时间到) 后，若分数达到要求，则解锁下一关",
-        "  * 总分 = 所有已完成关卡的最高分之和",
-        "- 速度递增:",
-        "  * 游戏进行中，方块下落速度会逐渐加快",
-        "  * 默认: 每5秒增加 初始速度的 5%",
-        "",
-        "[特殊关卡机制]",
-        "- 关卡 1 & 2: 初始掉落障碍方块",
-        "- 关卡 3: 加速效果 x2 (每5秒 +10%)",
-        "- 关卡 4 & 5: [王的凝视]",
-        "  * 场地出现特定数量相连的黄色背景格",
-        "  * 当所有黄格都被方块填满时，这些方块立即消除，并获得 100 分",
-        "  * 消除后，黄格会重新生成",
-        "- 关卡 6: [炸弹]",
-        "  * 场地出现红色背景格 (炸弹)",
-        "  * 正在下落的方块碰到任意炸弹格，本关立即失败",
-        "- 关卡 7: [时空切换]",
-        "  * 存在两个独立的游戏面板",
-        "  * 按 [空格] 可将当前下落方块切换至另一面板的相同位置",
-        "  * 若目标位置冲突，方块上移至最近合法位置",
-        "  * 固定方块留在各自面板，两面板得分独立计算并累加",
-    ]
-
-    line_y = title_rect.bottom + 30
-    line_height = FONT_SMALL.get_height() + 6
-    left_margin = 20
-    right_margin = RULES_AREA_WIDTH - 20
-    text_width = right_margin - left_margin
-
-    # 计算总内容高度
+    # 计算文本区域的总高度
     total_content_height = 0
-    for line in rules_text:
+    for line in RULES_TEXT:
         if not line:
-            total_content_height += line_height // 2
+            total_content_height += RULES_LINE_HEIGHT // 2
         else:
             text_surface = FONT_SMALL.render(line, True, COLOR_WHITE)
             total_content_height += text_surface.get_height() + 6
 
-    # 限制滚动范围
-    max_scroll = max(0, total_content_height - RULES_AREA_HEIGHT + 100)
+    # 文本区域的实际可用高度
+    text_area_height = WINDOW_HEIGHT - title_height
+    max_scroll = max(0, total_content_height - text_area_height)
     rules_scroll_y = max(0, min(rules_scroll_y, max_scroll))
 
+    # 绘制文本区域
+    text_area_rect = pygame.Rect(0, title_height, RULES_AREA_WIDTH, text_area_height)
+    pygame.draw.rect(rules_surface, COLOR_RULES_BACKGROUND, text_area_rect)
+
     # 绘制规则文本
-    current_y = line_y - rules_scroll_y
-    for line in rules_text:
+    current_y = title_height - rules_scroll_y
+    left_margin = 20
+    right_margin = RULES_AREA_WIDTH - 20
+    text_width = right_margin - left_margin
+
+    for line in RULES_TEXT:
         if not line:
-            current_y += line_height // 2
+            current_y += RULES_LINE_HEIGHT // 2
             continue
 
         color = COLOR_NEON_GREEN if line.startswith("[") else COLOR_WHITE
         text_rect = draw_text(rules_surface, line, FONT_SMALL, color, topleft=(left_margin, current_y), max_width=text_width)
-        current_y += text_rect.height if text_rect.height > line_height else line_height
+        current_y += text_rect.height if text_rect.height > RULES_LINE_HEIGHT else RULES_LINE_HEIGHT
 
     # 将规则表面绘制到主表面
     surface.blit(rules_surface, area_rect)
 
     # 如果内容超出显示范围，绘制滚动条
-    if total_content_height > RULES_AREA_HEIGHT:
+    if total_content_height > text_area_height:
         scrollbar_width = 10
         scrollbar_x = RULES_AREA_POS[0] + RULES_AREA_WIDTH - scrollbar_width - 5
-        scrollbar_height = (RULES_AREA_HEIGHT / total_content_height) * RULES_AREA_HEIGHT
-        scrollbar_y = RULES_AREA_POS[1] + (rules_scroll_y / total_content_height) * RULES_AREA_HEIGHT
+        scrollbar_height = (text_area_height / total_content_height) * text_area_height
+        scrollbar_y = title_height + (rules_scroll_y / total_content_height) * text_area_height
         
-        pygame.draw.rect(surface, COLOR_LIGHT_GRAY, (scrollbar_x, RULES_AREA_POS[1], scrollbar_width, RULES_AREA_HEIGHT), 1)
-        pygame.draw.rect(surface, COLOR_GRAY, (scrollbar_x, scrollbar_y, scrollbar_width, scrollbar_height))
+        pygame.draw.rect(surface, COLOR_LIGHT_GRAY, (scrollbar_x, title_height, scrollbar_width, text_area_height))
+        pygame.draw.rect(surface, COLOR_WHITE, (scrollbar_x, scrollbar_y, scrollbar_width, scrollbar_height))
 
 def draw_temp_score_message(surface, message, timer, max_time):
     if not message or timer <= 0: return
@@ -1545,6 +1555,23 @@ def main_game_loop():
                              if is_paused or game_active:
                                  log_message("请求重新开始当前关卡。")
                                  start_level(game_state.selected_level_index)
+
+            # --- Mouse Wheel Handling ---
+            elif event.type == pygame.MOUSEWHEEL:
+                if game_state.rules_visible:  # 只在规则区域可见时处理滚动
+                    # 获取鼠标位置
+                    mouse_pos = pygame.mouse.get_pos()
+                    # 检查鼠标是否在规则区域内
+                    if RULES_AREA_POS[0] <= mouse_pos[0] <= RULES_AREA_POS[0] + RULES_AREA_WIDTH:
+                        # 计算总内容高度
+                        total_content_height = len(RULES_TEXT) * RULES_LINE_HEIGHT
+                        max_scroll = max(0, total_content_height - WINDOW_HEIGHT + 100)
+                        
+                        # 根据滚轮方向调整滚动位置
+                        rules_scroll_y -= event.y * RULES_SCROLL_SPEED
+                        # 确保滚动位置在有效范围内
+                        rules_scroll_y = max(0, min(rules_scroll_y, max_scroll))
+                        log_message(f"规则区域滚动位置: {rules_scroll_y}")
 
             # --- Keyboard Input Handling ---
             if event.type == pygame.KEYDOWN:
