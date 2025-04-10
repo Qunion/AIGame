@@ -1233,7 +1233,7 @@ def draw_log_area(surface, log_messages):
 
 # Update draw_rules_area positioning and add more detailed text
 def draw_rules_area(surface, visible):
-    global screen, rules_scroll_y, RULES_TEXT, RULES_LINE_HEIGHT  # 添加全局变量声明
+    global screen, rules_scroll_y, RULES_TEXT, RULES_LINE_HEIGHT
 
     target_width = get_window_width(visible)
     current_width, current_height = screen.get_size()
@@ -1252,22 +1252,25 @@ def draw_rules_area(surface, visible):
              log_message(f"错误：调整窗口大小失败 - {e}")
 
     if not visible: 
-        rules_scroll_y = 0  # 重置滚动位置
+        rules_scroll_y = 0
         return
 
-    # 修改规则区域的位置，使其从窗口顶部开始
-    area_rect = pygame.Rect(RULES_AREA_POS[0], 0, RULES_AREA_WIDTH, WINDOW_HEIGHT)
-
     # 创建规则区域的表面
+    area_rect = pygame.Rect(RULES_AREA_POS[0], 0, RULES_AREA_WIDTH, WINDOW_HEIGHT)
     rules_surface = pygame.Surface((RULES_AREA_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
     rules_surface.fill(COLOR_RULES_BACKGROUND)
     pygame.draw.rect(rules_surface, COLOR_GRID, (0, 0, RULES_AREA_WIDTH, WINDOW_HEIGHT), 1)
 
     # 绘制标题区域
-    title_height = 80  # 标题区域固定高度
+    title_height = 80
     title_rect = pygame.Rect(0, 0, RULES_AREA_WIDTH, title_height)
     pygame.draw.rect(rules_surface, COLOR_DARK_GRAY, title_rect)
     draw_text(rules_surface, "游戏规则说明", FONT_LARGE, COLOR_NEON_YELLOW, center=(RULES_AREA_WIDTH // 2, title_height // 2))
+
+    # 创建文本区域的裁剪区域
+    text_area_rect = pygame.Rect(0, title_height, RULES_AREA_WIDTH, WINDOW_HEIGHT - title_height)
+    text_surface = pygame.Surface((RULES_AREA_WIDTH, WINDOW_HEIGHT - title_height), pygame.SRCALPHA)
+    text_surface.fill(COLOR_RULES_BACKGROUND)
 
     # 计算文本区域的总高度
     total_content_height = 0
@@ -1278,20 +1281,20 @@ def draw_rules_area(surface, visible):
             text_surface = FONT_SMALL.render(line, True, COLOR_WHITE)
             total_content_height += text_surface.get_height() + 6
 
-    # 文本区域的实际可用高度
-    text_area_height = WINDOW_HEIGHT - title_height
-    max_scroll = max(0, total_content_height - text_area_height)
+    # 计算实际可滚动范围
+    visible_height = WINDOW_HEIGHT - title_height
+    max_scroll = max(0, total_content_height - visible_height)
     rules_scroll_y = max(0, min(rules_scroll_y, max_scroll))
 
-    # 绘制文本区域
-    text_area_rect = pygame.Rect(0, title_height, RULES_AREA_WIDTH, text_area_height)
-    pygame.draw.rect(rules_surface, COLOR_RULES_BACKGROUND, text_area_rect)
-
     # 绘制规则文本
-    current_y = title_height - rules_scroll_y
+    current_y = 20 - rules_scroll_y  # 从顶部开始绘制，考虑滚动位置
     left_margin = 20
     right_margin = RULES_AREA_WIDTH - 20
     text_width = right_margin - left_margin
+
+    # 创建文本表面
+    text_surface = pygame.Surface((RULES_AREA_WIDTH, total_content_height), pygame.SRCALPHA)
+    text_surface.fill(COLOR_RULES_BACKGROUND)
 
     for line in RULES_TEXT:
         if not line:
@@ -1299,20 +1302,23 @@ def draw_rules_area(surface, visible):
             continue
 
         color = COLOR_NEON_GREEN if line.startswith("[") else COLOR_WHITE
-        text_rect = draw_text(rules_surface, line, FONT_SMALL, color, topleft=(left_margin, current_y), max_width=text_width)
+        text_rect = draw_text(text_surface, line, FONT_SMALL, color, topleft=(left_margin, current_y), max_width=text_width)
         current_y += text_rect.height if text_rect.height > RULES_LINE_HEIGHT else RULES_LINE_HEIGHT
+
+    # 将文本表面绘制到规则表面，使用裁剪区域
+    rules_surface.blit(text_surface, (0, title_height), (0, rules_scroll_y, RULES_AREA_WIDTH, visible_height))
 
     # 将规则表面绘制到主表面
     surface.blit(rules_surface, area_rect)
 
     # 如果内容超出显示范围，绘制滚动条
-    if total_content_height > text_area_height:
+    if total_content_height > visible_height:
         scrollbar_width = 10
         scrollbar_x = RULES_AREA_POS[0] + RULES_AREA_WIDTH - scrollbar_width - 5
-        scrollbar_height = (text_area_height / total_content_height) * text_area_height
-        scrollbar_y = title_height + (rules_scroll_y / total_content_height) * text_area_height
+        scrollbar_height = (visible_height / total_content_height) * visible_height
+        scrollbar_y = title_height + (rules_scroll_y / total_content_height) * visible_height
         
-        pygame.draw.rect(surface, COLOR_LIGHT_GRAY, (scrollbar_x, title_height, scrollbar_width, text_area_height))
+        pygame.draw.rect(surface, COLOR_LIGHT_GRAY, (scrollbar_x, title_height, scrollbar_width, visible_height))
         pygame.draw.rect(surface, COLOR_WHITE, (scrollbar_x, scrollbar_y, scrollbar_width, scrollbar_height))
 
 def draw_temp_score_message(surface, message, timer, max_time):
