@@ -211,6 +211,7 @@ BLOCK_SIZE = 30 # Increased block size slightly
 GRID_WIDTH = 10
 GRID_HEIGHT = 20
 NUM_LEVELS = 7
+active_board_index = 0  # 添加全局变量定义
 
 # --- 区域尺寸定义 (显著增大) ---
 # 总览区域 (顶部)
@@ -381,15 +382,16 @@ class Board:
         return True
 
     def merge_tetromino(self, tetromino):
+        """将方块合并到游戏网格中，返回合并的格子坐标"""
         color_val = tetromino.color_index + 1
         merged_coords = []
         positions = tetromino.get_block_positions()
         for x, y in positions:
             if 0 <= y < self.height and 0 <= x < self.width:
-                 # Prevent merging outside bounds, though validation should prevent this
-                 self.grid[y][x] = color_val
-                 merged_coords.append((x,y))
-        return merged_coords # 返回合并的格子坐标，用于计分
+                # 防止合并到边界外，虽然验证应该已经防止了这种情况
+                self.grid[y][x] = color_val
+                merged_coords.append((x,y))
+        return merged_coords  # 返回合并的格子坐标，用于计分
 
     def clear_lines(self):
         lines_cleared = 0
@@ -868,8 +870,17 @@ def draw_tetromino(surface, tetromino, offset_x=0, offset_y=0, block_size=BLOCK_
              draw_block(surface, tetromino.color, x, y, offset_x, offset_y, alpha=alpha, block_size=block_size)
 
 def draw_board(surface, board, offset_x=0, offset_y=0):
-    """Draws the fixed blocks on the board."""
+    """绘制游戏板上的固定方块"""
+    global active_board_index  # 添加全局变量声明
+    
     if not board: return
+    
+    # 处理双面板模式
+    if isinstance(board, list):
+        # 如果是列表，说明是双面板模式，使用active_board_index选择当前面板
+        if not board[active_board_index]: return
+        board = board[active_board_index]  # 使用当前活动的面板
+    
     for r, row in enumerate(board.grid):
         for c, cell_val in enumerate(row):
             if cell_val != 0:
@@ -877,7 +888,7 @@ def draw_board(surface, board, offset_x=0, offset_y=0):
                 if 0 <= color_index < len(TETROMINO_COLORS):
                     color = TETROMINO_COLORS[color_index]
                     draw_block(surface, color, c, r, offset_x, offset_y)
-                else: # Fallback color for invalid index
+                else: # 无效索引的备用颜色
                     draw_block(surface, COLOR_GRAY, c, r, offset_x, offset_y)
 
 
@@ -1013,8 +1024,13 @@ def draw_overview_area(surface, game_state):
     button_rects["rules_toggle"] = rules_btn_rect
 
 
-def draw_game_area1(surface, board, current_tetromino, game_timer, level_time_limit, clearing_state, game_active, is_paused, game_over_flag, level_complete_flag, current_level_data):
+def draw_game_area1(surface, board, current_tetromino, game_timer, level_time_limit,
+                clearing_state, game_active, is_paused,
+                game_over_flag, level_complete_flag,
+                current_level_data):
     """Draws Game Area 1 including controls above the grid."""
+    global active_board_index  # 使用全局变量
+    
     area_rect = pygame.Rect(GAME_AREA1_POS, (GAME_AREA1_WIDTH, GAME_AREA1_HEIGHT))
     # pygame.draw.rect(surface, (50,0,0), area_rect) # Debug draw area
 
@@ -1101,10 +1117,9 @@ def draw_game_area1(surface, board, current_tetromino, game_timer, level_time_li
 
     # Determine which board to draw (for Level 7)
     active_board = None
-    active_board_index = 0 # For level 7: 0 or 1
     if current_level_data.dual_board:
         # board is assumed to be a list [board1, board2] passed in
-        if board and len(board) == 2:
+        if isinstance(board, list) and len(board) == 2:
             active_board = board[active_board_index] # Use the global active_board_index
         else:
              log_message("错误：双面板模式下 board 数据无效。")
@@ -1117,17 +1132,20 @@ def draw_game_area1(surface, board, current_tetromino, game_timer, level_time_li
          return
 
     # Draw Special Cells (Bombs, Gaze) - Background Layer
-    for x, y in active_board.kings_gaze_cells:
-        gaze_rect = pygame.Rect(grid_offset_x + x * BLOCK_SIZE, grid_offset_y + y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
-        gaze_surface = pygame.Surface((BLOCK_SIZE, BLOCK_SIZE), pygame.SRCALPHA)
-        gaze_surface.fill(COLOR_KINGS_GAZE)
-        surface.blit(gaze_surface, gaze_rect.topleft)
-    for x, y in active_board.bomb_cells:
-        bomb_rect = pygame.Rect(grid_offset_x + x * BLOCK_SIZE, grid_offset_y + y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
-        bomb_surface = pygame.Surface((BLOCK_SIZE, BLOCK_SIZE), pygame.SRCALPHA)
-        bomb_surface.fill(COLOR_BOMB)
-        surface.blit(bomb_surface, bomb_rect.topleft)
-        draw_text(surface, "!", FONT_NORMAL, COLOR_WHITE, center=bomb_rect.center)
+    if hasattr(active_board, 'kings_gaze_cells'):
+        for x, y in active_board.kings_gaze_cells:
+            gaze_rect = pygame.Rect(grid_offset_x + x * BLOCK_SIZE, grid_offset_y + y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+            gaze_surface = pygame.Surface((BLOCK_SIZE, BLOCK_SIZE), pygame.SRCALPHA)
+            gaze_surface.fill(COLOR_KINGS_GAZE)
+            surface.blit(gaze_surface, gaze_rect.topleft)
+    
+    if hasattr(active_board, 'bomb_cells'):
+        for x, y in active_board.bomb_cells:
+            bomb_rect = pygame.Rect(grid_offset_x + x * BLOCK_SIZE, grid_offset_y + y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+            bomb_surface = pygame.Surface((BLOCK_SIZE, BLOCK_SIZE), pygame.SRCALPHA)
+            bomb_surface.fill(COLOR_BOMB)
+            surface.blit(bomb_surface, bomb_rect.topleft)
+            draw_text(surface, "!", FONT_NORMAL, COLOR_WHITE, center=bomb_rect.center)
 
     # Draw Fixed Blocks
     draw_board(surface, active_board, grid_offset_x, grid_offset_y)
