@@ -1,0 +1,747 @@
+我现在已经准备好了Android的开发环境，下面是一些具体的配置
+
+1. 我用的电脑是Windows
+
+2. JDK 路径：
+
+  - 环境变量：JAVA_HOME
+
+    - C:\Program Files\Java\jdk-18.0.2.1\
+
+  - 验证
+
+    - C:\Users\admin>java -version
+
+    - java version "18.0.2.1" 2022-08-18
+
+    - Java(TM) SE Runtime Environment (build 18.0.2.1+1-1)
+
+    - Java HotSpot(TM) 64-Bit Server VM (build 18.0.2.1+1-1, mixed mode, sharing)
+
+3. Android SDK 路径：
+
+  1. 环境变量：ANDROID_HOME
+
+    1. C:\Users\admin\AppData\Local\Android\Sdk
+
+  2. 环境变量：NDK_ROOT
+
+    1. C:\Users\admin\AppData\Local\Android\Sdk\ndk\25.1.8937393
+
+  - 已安装
+
+    - SDK Platforms
+
+      - Android 14.0("UpsideDownCake")——API Level 34
+
+      - Android 13.0("Tiramisu")——API Level 33
+
+      - Android 12L("Sv2")——API Level 32
+
+      - Android 11.0("R")——API Level 30
+
+      - Android 10.0("Q")——API Level 29
+
+      - Android 9.0("Pie")——API Level 28
+
+      - Android 8.0("Oreo")——API Level 26
+
+    - SDK Tools
+
+      - Android SDK Build-Tools 36
+
+        - 35.0.0
+
+        - 34.0.0
+
+        - 33.0.1
+
+        - 28.0.3
+
+      - NDK (Side by side)
+
+        - 28.0.12433566
+
+        - 25.2.9519653
+
+        - 25.1.8937393
+
+4. Gradle 路径：
+
+  - 文件夹目录
+
+    - C:\Users\admin\.gradle\wrapper\dists\gradle-8.9-bin\90cnw93cvbtalezasaz0blq0a\gradle-8.9
+
+    - C:\Users\admin\.gradle\wrapper\dists\gradle-8.9-bin\90cnw93cvbtalezasaz0blq0a\gradle-8.9\lib
+
+  - 压缩包目录
+
+    - C:\Users\admin\.gradle\wrapper\dists\gradle-8.9-bin.zip
+
+  - gradle-8.9-all文件path路径
+
+    - C:\Users\admin\.gradle\wrapper\dists\gradle-8.9-all\gradle-8.9\bin
+
+  - cmd验证
+
+    - C:\Users\admin>gradle -v
+
+    - Gradle 8.9
+
+    - Build time:    2024-07-11 14:37:41 UTC
+
+    - Revision:      d536ef36a19186ccc596d8817123e5445f30fef8
+
+    - Kotlin:        1.9.23
+
+    - Groovy:        3.0.21
+
+    - Ant:           Apache Ant(TM) version 1.10.13 compiled on January 4 2023
+
+    - Launcher JVM:  18.0.2.1 (Oracle Corporation 18.0.2.1+1-1)
+
+    - Daemon JVM:    C:\Program Files\Java\jdk-18.0.2.1 (no JDK specified, using current Java home)
+
+    - OS:            Windows 11 10.0 amd64
+
+5. AndroidStudio
+
+  1. C:\Program Files\Android\Android Studio\bin
+
+6. 安装了Python
+
+  - path路径
+
+    - C:\Users\admin\AppData\Local\Programs\Python\Python313\
+
+    - C:\Users\admin\AppData\Local\Programs\Python\Python313\Scripts\
+
+  - 验证
+
+    - C:\Users\admin>python --version
+
+    - Python 3.13.2
+
+
+
+目的
+
+1. 我现在的最终目的就是验证用AI开发安卓游戏是否可行
+
+  1. 从需求到生成一个完整可以发布到安卓游戏的APK文件
+
+  2. 我会通过电脑直接将打包好的APK文件通过文件传输工具直接传输到手机上，然后直接安装使用。
+
+2. 现在我需要你根据我现在已有的开发环境，结合我发给你的设计文档，给我生成一套完整的代码，以及方法，让我能快捷方便的通过你给的文件和方式，生成可以直接发布安装到安卓手机的APK文件。
+
+  1. 不要通过AndroidStudio开发。而是直接用cmd命令来打包。——核心目的是我不希望通过复杂的IDE工具来开发。而是简单明了的通过cmd命令来执行。因为IDE工具太复杂，而且它自身可能就存在问题。
+
+  2. 并且AI很难了解它内部的具体情况。
+
+  3. 我希望你能了解并记住你给我的核心代码，用尽量少的文件数量，和文件夹目录结构，来更高效的完成项目开发和APK构建。以便之后你了解自己的开发内容，而能更方便的调试。
+
+3. 我不在意你用什么语言来实现逻辑。如果你觉得更方便，那你可以使用python语言来实现逻辑。
+
+  1. 前提是最终能打包成可以正常运行的apk文件。
+
+  2. 你能通过越少的文件数量来实现完整的逻辑越好。
+
+4. 回答时，如果有大文件，那么分批回答，分多个文件回答。我会将他们重新组装好。比如一个文件最多400行，超过了就在新的文件下写。保证能重新组装起来就行。
+
+5. 下面是设计文档。
+
+
+
+一款经典的贪吃蛇游戏：
+
+注意：游戏设计文档中涉及到的变量的默认值，明确了需要【调试编辑】的，需要在代码的前面专门区域提前声明。方便我调试。比如下面说到的——加速功能额外加快当前蛇的移动速度50%——这里的50%就需要调试。
+
+1. 界面基础
+
+  1. 横屏显示
+
+  2. 需要背景图片。
+
+    1. 告诉我需要多大像素的，png格式的图片。我会放到你指定的目录下，以及命名为什么名字，有哪些规范。
+
+      1. 并做好兼容处理，确保有这个资源时能正常生效，没有整个资源游戏也能正常运行。
+
+  3. 背景显示浅色半透明的网格
+
+  4. 蛇的移动是在格子内移动，每次移动一格。格子的数量充分多。
+
+  5. 蛇的移动空间——命名为画布。这个画布固定大小（格子数量固定），需要自适应不同分辨率的手机。
+
+    1. 画布的总大小大概是4个手机屏幕那么大。
+
+      1. 也就是假设手机屏幕是宽*高=1920*1080。假设对应 宽*高=35.5格*20格
+
+      2. 那么游戏的总画布大小为：宽*高=71格*40格
+
+    2. 默认蛇头居中在屏幕中间。当蛇头移动到画布边缘时，屏幕不再移动到画布边缘外，也就是允许这时蛇头不在屏幕中间。
+
+2. 界面显示内容
+
+  1. 左上角显示游戏时长
+
+    1. 如：时长：1:30
+
+  2. 右上角显示蛇的当前长度
+
+    1. 按格子算，显示当前有多少格，初始为1格。
+
+    2. 如：长度：12
+
+  3. 左下角：是控制蛇移动方向的轮盘。通过按着上下左右滑动来实现上下左右的控制。
+
+  4. 右下角：有两个按钮：分裂和加速
+
+    1. 加速：额外加快当前蛇的移动速度50%——需要【调试编辑】
+
+    2. 分裂：将蛇的长度按前后头尾均分为两部分，蛇头也算一格。
+
+      1. 如果为奇数，那么蛇头相连的部分多一格。
+
+      2. 当蛇长度 ≤1 时，分裂按钮自动禁用——按钮置灰
+
+      3. 与蛇尾相连的部分——成为新的蛇
+
+        1. 朝当前蛇尾端所在方向的反方向继续正常移动——即原来倒数第二格，朝向最后一格的方向
+
+        2. 成为新的蛇。玩家操控新的蛇继续移动。
+
+      4. 与蛇头相连的部分——成为尸体
+
+        1. 这部分的格子变成灰色。停留在原地。
+
+        2. 并且从蛇的长度数据中减去这部分长度。
+
+        3. 尸体会在30后连续闪烁3秒，然后在10秒后消失。
+
+      5. 融合功能：
+
+        1. 当新蛇的蛇头再次触碰到灰色的尸体的格子的第一格或最后一格时，自动触发融合。
+
+          1. 整条蛇重新相连。
+
+          2. 蛇头触碰尸体的一端叫触碰端，另一端叫非触碰端。
+
+          3. 相连的同时，蛇头重置到尸体的另一端——即非触碰端。
+
+          4. 蛇继续朝着尸体的非触碰端第二格朝向第一格的方向移动。
+
+  5. 游戏结算
+
+    1. 游戏是无尽模式，直到玩家触及画布边缘或其他死亡规则死亡。结算游戏。
+
+    2. 结算时游戏暂停。显示结算界面。
+
+      1. 居中显示
+
+      2. 包含内容
+
+        1. 标题：游戏结算
+
+        2. 最终长度：XXX（替换为具体数值）
+
+        3. 重玩按钮
+
+          1. 点击重新开始新的游戏
+
+        4. 时光倒流
+
+          1. 回到10s前的状态。
+
+          2. 同一局游戏只能使用一次。当第二次死亡时，时光倒流按钮置灰。
+
+3. 全局规则
+
+  1. 逐渐燥热
+
+    1. 蛇的移动随着时间的进行，会越来越快
+
+    2. 随时间进行，每10秒，加2%的移动速度。
+
+  2. 速度叠加公式：
+
+    1. 最终速度 = 基础速度 × (1 + 0.02×t/10) × (1 + 躁动加成) × 加速按钮系数
+
+    2. 躁动时刻速度曲线：
+
+      1.   0-2秒：线性提升到120%
+
+      2.   2-8秒：保持120%
+
+      3.   8-10秒：线性回落
+
+  3. 躁动时刻
+
+    1. 每隔一段时间60s，会进入10s的躁动时间。在躁动结束后，又回归平静。
+
+      1. 躁动时：速度额外提升当前速度的20%。
+
+      2. 前两秒逐渐提升。到第2秒时达到20%。最后两秒逐渐恢复正常水平。
+
+4. 果实
+
+  1. 每个果实占据一格大小。
+
+  2. 果实需要图片，告诉我需要多大像素的，png格式的图片。我会放到你指定的目录下
+
+    1. 并做好兼容处理，确保有这个资源时能正常生效，没有整个资源游戏也能正常运行。
+
+    2. 格子相关图片建议都用64*64大小的图片。
+
+  3. 果实生成
+
+    1. 随时间进行，陆续随机生成更多的果实
+
+    2. 每隔5s生成一个，上限10个。
+
+    3. 如果当前果实为0，那么立刻生成两个，并且其中一个必然是特殊效果的果实（即非普通果实的果实）。
+
+  4. 果实种类
+
+    1. 普通果实——白色
+
+      1. 永远持续在场上
+
+      2. 吃到后增加一节长度
+
+    2. 健康果实——绿色
+
+      1. 持续时间30s。到达持续时间后消失。
+
+      2. 吃到健康果实后，额外增加两节长度。
+
+    3. 炸弹果实——红黑色
+
+      1. 持续时间30s。到达持续时间后消失。
+
+      2. 触碰到炸弹果实时，游戏结束。
+
+5. 敌人鬼魂
+
+  1. 每个鬼魂占据一格大小。
+
+  2. 鬼魂需要图片，告诉我需要多大像素的，png格式的图片。我会放到你指定的目录下
+
+  3. 当鬼魂碰到玩家操控的蛇时，游戏失败
+
+  4. Blinky（红色鬼魂）：
+
+    1. 个性是 “追”
+
+      1. 游戏开始后直接出现在画布上，会一直朝蛇身的中间格直冲而来。
+
+      2. 移动速度比蛇的基础速度慢50%左右。
+
+      3. 每0.5秒重新计算蛇身中点坐标
+
+      4. 移动路径采用A*算法绕开障碍
+
+  5. Pinky（粉色鬼魂）：
+
+    1. 鬼魂中唯一的女性，个性是 “伏”
+
+      1. 当蛇第一次达到10长度时出现在画布上随机位置。
+
+      2. 会瞄准玩家蛇头移动方向的前 4 格前进，来围堵玩家。
+
+      3. 移动速度比蛇的基础速度慢50%左右。
+
+      4. "前4格"计算规则：
+
+        1. 根据当前蛇头方向预测4格后的坐标，每0.5秒更新一次预测坐标。
+
+        2. 若预测坐标超出画布，改为朝最近可移动方向
+
+6. 视觉反馈系统：
+
+  1. 蛇身是淡黄色。蛇身颜色渐变——从蛇头部开始，逐渐增加蛇身格子的透明度，每向后一格，增加2%透明度。
+
+  2. 加速时显示速度线特效
+
+  3. 分裂时播放粒子动画
+
+  4. 相关的特效需要什么样的资源告诉我，放到哪个文件夹，以及命名为什么名字，有哪些规范。
+
+    1. 并做好兼容处理，确保有这个资源时能正常生效，没有整个资源游戏也能正常运行。
+
+
+
+7. 音效体系：
+
+  1. 不同果子拾取音效
+
+  2. 鬼魂接近预警音（距离3格内触发）
+
+  3. 需要背景音乐
+
+  4. 相关的音乐和音效需要什么样的资源告诉我，放到哪个文件夹，以及命名为什么名字，有哪些规范。
+
+    1. 并做好兼容处理，确保有这个资源时能正常生效，没有整个资源游戏也能正常运行。
+
+
+
+
+
+
+
+下面是你之前回答的内容。但因为文件太大而没有回答完，你可以继续。
+
+
+
+好的，我们来一起规划和实现这个基于AI开发的安卓贪吃蛇游戏项目。
+
+核心思路
+
+根据你的需求，特别是希望通过命令行（CMD）构建APK，并尽量减少文件和目录结构复杂度，同时对使用Python持开放态度，我推荐使用 Python + Kivy + Buildozer 的技术栈。
+
+- Python: 你熟悉且已安装，适合快速实现游戏逻辑。
+
+- Kivy: 一个开源的Python库，专门用于开发跨平台的应用程序，包括Android。它自带UI框架和图形渲染能力，非常适合制作游戏界面和处理交互。
+
+- Buildozer: 一个命令行工具，可以将Python/Kivy项目打包成Android APK（以及iOS、Windows、macOS等），它会自动处理Android SDK/NDK的调用、依赖库的编译等复杂过程，让你只需关注Python代码和buildozer.spec配置文件。
+
+这种方法可以满足你以下关键要求：
+
+1. CMD构建APK: Buildozer的核心就是通过命令行操作。
+
+2. 无需Android Studio: 完全脱离IDE。
+
+3. Python逻辑: 可以用Python编写游戏核心。
+
+4. 相对简洁: 主要文件就是.py代码文件、buildozer.spec配置文件和一个assets资源文件夹。
+
+开发步骤概览
+
+1. 环境准备: 安装Buildozer及其依赖。
+
+2. 项目结构: 创建主Python文件 (main.py)、Buildozer配置文件 (buildozer.spec) 和资源文件夹 (assets)。
+
+3. 编写代码 (main.py): 使用Kivy实现游戏界面、逻辑、输入处理等。
+
+4. 配置构建 (buildozer.spec): 设置应用名称、版本、权限、依赖项、屏幕方向等。
+
+5. 资源准备: 根据规格准备图片和音频文件，放入assets目录。
+
+6. 构建APK: 使用CMD运行Buildozer命令。
+
+7. 测试与调试: 将APK安装到手机进行测试，根据反馈迭代代码。
+
+8. 环境准备 (安装Buildozer)
+
+既然你已经有了Python和必要的Android SDK/NDK环境，主要就是安装Buildozer。打开你的CMD（命令提示符），运行以下命令：
+
+Bash
+
+pip install buildozer cython==0.29.34 docutils pygments pypiwin32 kivy_deps.sdl2 kivy_deps.glew Jninja
+
+- buildozer: 主要的打包工具。
+
+- cython: Buildozer编译Python代码到C时可能需要。指定版本0.29.34以提高兼容性。
+
+- 其他库是Buildozer或Kivy的常见依赖。
+
+然后，初始化Buildozer（在你的项目文件夹中进行，比如创建一个SnakeGame文件夹，然后在里面运行）：
+
+Bash
+
+cd path\to\your\SnakeGame
+
+buildozer init
+
+这会在SnakeGame文件夹下创建一个buildozer.spec文件。
+
+9. 项目结构
+
+建议采用以下结构：
+
+SnakeGame/
+
+├── main.py           # 游戏主逻辑 (Python/Kivy)
+
+├── buildozer.spec    # Buildozer 配置文件
+
+└── assets/
+
+    ├── images/       # 图片资源
+
+    │   ├── background.png
+
+    │   ├── grid_overlay.png  # (可选) 如果网格用图片实现
+
+    │   ├── snake_head.png
+
+    │   ├── snake_body.png
+
+    │   ├── corpse.png
+
+    │   ├── fruit_normal.png
+
+    │   ├── fruit_healthy.png
+
+    │   ├── fruit_bomb.png
+
+    │   ├── ghost_blinky.png
+
+    │   └── ghost_pinky.png
+
+    └── sounds/       # 音频资源
+
+        ├── bgm.ogg
+
+        ├── pickup_normal.wav
+
+        ├── pickup_healthy.wav
+
+        # ... 其他音效 ...
+
+        └── ghost_warning.wav
+
+10. 资源规格 (Assets)
+
+你需要根据以下规格准备资源文件，并将它们放入对应的assets子目录：
+
+- 图片 (assets/images/)
+
+  - 格式: PNG (支持透明度)
+
+  - 大小: 由于游戏是基于格子的，图片最好是正方形。考虑到不同屏幕分辨率，建议提供稍大尺寸的图片，例如 64x64 或 128x128 像素。Kivy可以缩放它们以适应计算出的格子大小。 
+
+    - background.png: 背景图。尺寸需要足够大以覆盖71x40格的画布，或者设计成可平铺的。建议尺寸至少 1920x1080 像素或更大，并考虑其在不同宽高比屏幕上的显示效果。
+
+    - grid_overlay.png (可选): 如果你想用半透明图片实现网格效果，而不是代码绘制。需要是可平铺的网格单元图案。
+
+    - snake_head.png: 蛇头。
+
+    - snake_body.png: 蛇身段。
+
+    - corpse.png: 尸体段（灰色）。
+
+    - fruit_normal.png: 普通果实（白色）。
+
+    - fruit_healthy.png: 健康果实（绿色）。
+
+    - fruit_bomb.png: 炸弹果实（红黑色）。
+
+    - ghost_blinky.png: 红色鬼魂。
+
+    - ghost_pinky.png: 粉色鬼魂。
+
+  - 特效资源:
+
+    - 速度线: 可以通过代码在蛇头周围绘制线条实现，无需图片资源。
+
+    - 分裂粒子: 可以通过Kivy的图形指令（如绘制多个快速消失的小圆点）模拟，无需图片资源。
+
+- 音频 (assets/sounds/)
+
+  - 格式: OGG (推荐，压缩率和质量较好) 或 WAV/MP3。
+
+  - 命名: 使用清晰的英文名，如： 
+
+    - bgm.ogg: 背景音乐 (循环播放)
+
+    - pickup_normal.wav: 吃普通果实
+
+    - pickup_healthy.wav: 吃健康果实
+
+    - pickup_bomb.wav: 碰到炸弹 (虽然是游戏结束，但可以有个音效)
+
+    - split.wav: 分裂
+
+    - merge.wav: 融合
+
+    - death.wav: 死亡/游戏结束
+
+    - rewind.wav: 时光倒流
+
+    - ghost_warning.wav: 鬼魂接近警告
+
+  - 兼容性: 代码中会使用try-except来加载音效，如果文件不存在，游戏不会崩溃，只是没有声音。
+
+
+
+
+
+Buildozer 配置 (buildozer.spec)
+
+buildozer init 命令生成了一个默认的 buildozer.spec 文件。你需要用文本编辑器打开它，并根据你的游戏需求修改以下关键部分。请注意，这个文件里有很多配置项，这里只列出最重要和与你需求直接相关的部分。
+
+我将为你生成一个包含关键配置的 buildozer.spec 文件片段。你可以将其内容复制并替换到你生成的 buildozer.spec 文件中相应的部分，或者仔细比对并修改你现有的文件。
+
+
+
+[app]
+
+
+
+# (必需) 应用的标题，会显示在手机上
+
+title = 贪吃蛇 Kivy
+
+
+
+# (必需) 应用的包名，格式通常是 com.yourdomain.yourapp
+
+package.name = snakesnake
+
+
+
+# (必需) 应用的包域名
+
+package.domain = org.kivy.games
+
+
+
+# (必需) 主程序入口文件
+
+source.dir = .
+
+source.include_exts = py,png,jpg,kv,atlas,ttf,txt,spec,json,wav,ogg,mp3 # 确保包含所有资源类型
+
+
+
+# (必需) 应用版本号
+
+version = 0.1
+
+
+
+# (必需) 应用运行所需的库，kivy是必须的
+
+# 如果用到其他库（比如后面可能需要的 numpy 用于计算），也要加在这里
+
+requirements = python3,kivy,pillow
+
+
+
+# (推荐) 应用图标文件 (需要你提供一个 icon.png 在项目根目录)
+
+icon.filename = %(source.dir)s/assets/images/icon.png
+
+
+
+# (推荐) 应用启动画面图片 (需要你提供一个 presplash.png 在项目根目录)
+
+# presplash.filename = %(source.dir)s/assets/images/presplash.png
+
+
+
+# (必需) 应用屏幕方向设置为横屏
+
+orientation = landscape
+
+
+
+# (可选) 如果应用需要访问网络（比如未来可能加排行榜），需要这个权限
+
+# android.permissions = INTERNET
+
+
+
+# (可选) 如果需要震动反馈
+
+# android.permissions = VIBRATE
+
+
+
+# (必需) 指定目标 Android API Level (与你安装的 SDK Platforms 对应)
+
+# 建议使用较新的稳定版本，比如 33 (Android 13) 或 34 (Android 14)
+
+android.api = 33
+
+android.minapi = 21 # 最低支持的 API Level (Android 5.0)
+
+
+
+# (推荐) 全屏模式，隐藏状态栏和导航栏
+
+fullscreen = 1
+
+
+
+# (重要) 包含你的资源文件
+
+source.include_patterns = assets/*, assets/images/*, assets/sounds/*
+
+
+
+# (可选) Buildozer 使用的 Android NDK 版本 (应与你安装的版本匹配)
+
+# 如果你有多个 NDK 版本，可以指定一个，比如 25.1.8937393
+
+# android.ndk = 25c # 或者具体的版本号 25.1.8937393
+
+
+
+# (可选) JDK 路径，通常 Buildozer 能自动找到，如果不行可以手动指定
+
+# android.jdk_path = C:/Program Files/Java/jdk-18.0.2.1/
+
+
+
+# (可选) SDK 路径，通常 Buildozer 能自动找到，如果不行可以手动指定
+
+# android.sdk_path = C:/Users/admin/AppData/Local/Android/Sdk/
+
+
+
+# (可选) NDK 路径，通常 Buildozer 能自动找到，如果不行可以手动指定
+
+# android.ndk_path = C:/Users/admin/AppData/Local/Android/Sdk/ndk/25.1.8937393/
+
+
+
+
+
+[buildozer]
+
+
+
+# (可选) 日志级别 (0 = error, 1 = warning, 2 = info, 3 = debug)
+
+log_level = 2
+
+
+
+# (可选) 警告模式 (0 = no warnings, 1 = show warnings)
+
+warn_on_root = 1
+
+
+
+
+
+重要提示:
+
+
+
+requirements: python3,kivy 是基础。pillow 是 Kivy 处理图片的依赖库，强烈建议加上。如果后续代码使用了其他标准库之外的 Python 包（例如 numpy），也需要加到这里。
+
+source.include_exts 和 source.include_patterns: 这两个设置确保你的 .py 文件、图片 (png) 和音频 (ogg, wav, mp3) 文件被正确打包进 APK。
+
+android.api: 设置为你已安装的较新 SDK Platform 的 API Level，例如 33 或 34。
+
+android.minapi: 设置一个合理的最低兼容版本，例如 21 (Android 5.0)，可以覆盖大多数设备。
+
+路径配置: android.jdk_path, android.sdk_path, android.ndk_path 通常 Buildozer 能自动检测到你的环境变量。如果构建时报错找不到路径，可以取消注释并手动指定。
+
+图标和启动画面: 你需要自己创建 icon.png (建议 512x512 像素) 和 presplash.png (启动画面图，尺寸匹配横屏，例如 1920x1080) 并放在 assets/images/ 目录下，然后在 buildozer.spec 中取消对应行的注释并确保路径正确。如果暂时没有，可以先注释掉这两行。
+
+游戏代码 (main.py - Part 1)
+
+这是游戏的核心 Python 代码。由于代码量会比较大，我将分部分提供。请将所有部分的代码按顺序合并到一个名为 main.py 的文件中。
+
+这个第一部分包含了必要的导入、常量定义（包括你需要调试编辑的变量）、Kivy App 的基本结构、资源加载函数、游戏主类 SnakeGame 的初始化以及游戏画布 GameCanvas 的基本设置。
+
+
+
+这部分我已经放到了文件中
+
+请继续你的回答。不要重写代码，接着之前的内容回答即可
+
+记得分批，不要因为量太大而卡死。
