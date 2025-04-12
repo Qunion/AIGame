@@ -391,14 +391,26 @@ class Game:
         if eaten_fruit_index != -1:
             if eaten_fruit_index < len(self.fruits): del self.fruits[eaten_fruit_index]
 
+# ===============================================
+    # ======= 修正后的 check_ghost_collisions =======
+    # ===============================================
     def check_ghost_collisions(self):
-        """检查蛇头是否与鬼魂发生碰撞。"""
-        if not self.snake or not self.snake.alive: return
-        head_pos = self.snake.get_head_position()
+        """检查蛇的任何部分（头或身体）是否与鬼魂发生碰撞。"""
+        if not self.snake or not self.snake.alive: return # 如果蛇不存在或死亡，则不检查
+
+        # 使用集合进行更高效的查找（如果蛇很长）
+        snake_segments_set = set(self.snake.body)
+
+        # 遍历每一个鬼魂
         for ghost in self.ghosts:
-            if ghost.grid_pos == head_pos:
+            # 检查鬼魂的当前格子位置是否存在于蛇的身体段集合中
+            if ghost.grid_pos in snake_segments_set:
+                 # 触发游戏结束，原因包含鬼魂类型
                  self.trigger_game_over(f"撞到 {ghost.type}")
-                 break
+                 # 只需要检测到一次碰撞即可结束游戏，立即返回
+                 return
+    # ===============================================
+    # ===============================================
 
     # 在 Game 类中找到 check_corpse_merge 方法
     def check_corpse_merge(self):

@@ -294,47 +294,199 @@ class Fruit:
         if self.image: surface.blit(self.image, (pixel_x, pixel_y))
 
 # --- 鬼魂 基类 ---
+# === ADDED/MODIFIED SECTION START: Ghost Class with A* ===
+try:
+    from pathfinding.core.grid import Grid
+    from pathfinding.finder.a_star import AStarFinder
+    from pathfinding.core.diagonal_movement import DiagonalMovement # 决定是否允许对角移动
+    pathfinding_available = True
+except ImportError:
+    print("警告：未找到 'pathfinding' 库。鬼魂将使用简单的直线移动逻辑。")
+    print("请运行 'pip install pathfinding' 来安装。")
+    pathfinding_available = False
+
 class Ghost:
     def __init__(self, game, start_pos, image_name, speed_factor):
-        self.game = game; self.grid_pos = start_pos; self.pixel_pos = [start_pos[0] * GRID_SIZE, start_pos[1] * GRID_SIZE]; self.grid_size = GRID_SIZE
+        self.game = game
+        self.grid_pos = start_pos
+        self.pixel_pos = [start_pos[0] * GRID_SIZE, start_pos[1] * GRID_SIZE]
+        self.grid_size = GRID_SIZE
         self.image = load_image(image_name, size=self.grid_size)
         if not self.image:
              print(f"错误：未能加载 {image_name}"); self.image = pygame.Surface((self.grid_size, self.grid_size))
              if 'blinky' in image_name: self.image.fill(RED)
              elif 'pinky' in image_name: self.image.fill((255,182,193))
              else: self.image.fill(BLUE)
-        self.speed_factor = speed_factor; self.target_grid_pos = start_pos; self.last_target_update = 0; self.current_path = []; self.move_direction = (0, 0)
-    def get_speed(self): return BASE_SNAKE_SPEED_PPS * self.speed_factor * self.grid_size
-    def update_target(self, snake_body): pass # 由子类实现
+        self.speed_factor = speed_factor
+        self.target_grid_pos = start_pos
+        # --- 修改：使用秒为单位记录上次路径计算时间 ---
+        self.last_path_time = 0.0 # 初始化为 0.0 秒
+        self.current_path = [] # 存储计算出的路径 [(x1, y1), (x2, y2), ...]
+        self.move_direction = (0, 0) # 当前格子移动方向
+
+    def get_speed(self):
+        """获取鬼魂当前的移动速度（像素/秒）。"""
+        return BASE_SNAKE_SPEED_PPS * self.speed_factor * self.grid_size
+
+    def update_target(self, snake_body):
+        """更新鬼魂的目标格子。由子类重写。"""
+        pass # 基类不实现
+
+    # --- 新增：A* 寻路方法 ---
+    def find_path(self):
+        """使用 A* 算法计算到目标点的路径。"""
+        # 如果库不可用、无目标或已到达，则清空路径
+        if not pathfinding_available or not self.target_grid_pos or self.grid_pos == self.target_grid_pos:
+            self.current_path = []
+            return
+
+        # 1. 创建障碍物矩阵 (0: 可通行, 1: 障碍)
+        matrix = [[0 for _ in range(CANVAS_GRID_WIDTH)] for _ in range(CANVAS_GRID_HEIGHT)]
+
+        # 标记蛇身和头为障碍
+        if self.game.snake and self.game.snake.body:
+            # 排除蛇尾？或者也作为障碍？作为障碍更安全
+            for seg_x, seg_y in self.game.snake.body:
+                if 0 <= seg_y < CANVAS_GRID_HEIGHT and 0 <= seg_x < CANVAS_GRID_WIDTH:
+                    matrix[seg_y][seg_x] = 1 # 1 表示障碍
+
+        # 标记尸体为障碍
+        for corpse in self.game.corpses:
+            for seg_x, seg_y in corpse.segments:
+                if 0 <= seg_y < CANVAS_GRID_HEIGHT and 0 <= seg_x < CANVAS_GRID_WIDTH:
+                    matrix[seg_y][seg_x] = 1 # 1 表示障碍
+
+        # 2. 创建 Grid 对象
+        try:
+             # 注意：Grid 构造函数默认权重为1是可通行，但我们可以直接用 0/1 矩阵
+             # 然后在 find_path 时处理。更简单的方式是确认 Grid 如何处理 matrix。
+             # 查看文档或测试：如果 matrix 中 0 表示可通行，Grid 会正确处理。
+             grid = Grid(matrix=matrix)
+
+             # 3. 定义起点和终点节点
+             start_node = grid.node(self.grid_pos[0], self.grid_pos[1])
+             target_x = max(0, min(CANVAS_GRID_WIDTH - 1, self.target_grid_pos[0]))
+             target_y = max(0, min(CANVAS_GRID_HEIGHT - 1, self.target_grid_pos[1]))
+             end_node = grid.node(target_x, target_y)
+
+             # 检查起点是否在障碍物上
+             if not grid.is_walkable(start_node):
+                 # print(f"警告：鬼魂起点 {start_node.x},{start_node.y} 在障碍物上，尝试寻找邻近可走点。")
+                 # 简单的处理：暂时不移动，等待下一周期蛇移开
+                 self.current_path = []
+                 return
+
+             # 4. 创建 A* 查找器，不允许对角移动
+             finder = AStarFinder(diagonal_movement=DiagonalMovement.never)
+
+             # 5. 查找路径
+             path, runs = finder.find_path(start_node, end_node, grid)
+
+             # 6. 处理路径结果
+             if path and len(path) > 1: # 确保路径存在且至少包含下一步
+                 # print(f"路径找到 ({self.type}): {[ (n.x, n.y) for n in path]}") # 调试信息
+                 self.current_path = [(node.x, node.y) for node in path[1:]] # 存储路径（去掉起点）
+             else:
+                 # print(f"未找到路径 ({self.type}) 从 {start_node} 到 {end_node}") # 调试信息
+                 self.current_path = []
+
+        except Exception as e:
+             print(f"A* 寻路时发生错误 ({self.type}): {e}")
+             self.current_path = []
+    # --- A* 寻路方法结束 ---
+
+
     def update(self, dt, snake_body):
-        current_time_ms = pygame.time.get_ticks()
-        if current_time_ms - self.last_target_update > GHOST_TARGET_UPDATE_INTERVAL_MS:
-            if snake_body: self.update_target(snake_body)
-            self.last_target_update = current_time_ms
-            if self.target_grid_pos and self.target_grid_pos != self.grid_pos:
-                dx = self.target_grid_pos[0] - self.grid_pos[0]; dy = self.target_grid_pos[1] - self.grid_pos[1]
-                if abs(dx) > abs(dy): self.move_direction = (1 if dx > 0 else -1, 0)
-                elif abs(dy) > abs(dx): self.move_direction = (0, 1 if dy > 0 else -1)
-                elif dx != 0: self.move_direction = (1 if dx > 0 else -1, 0)
-                elif dy != 0: self.move_direction = (0, 1 if dy > 0 else -1)
-                else: self.move_direction = (0, 0)
-            else: self.move_direction = (0, 0)
-        speed_pixels_per_sec = self.get_speed(); move_dist = speed_pixels_per_sec * dt
-        target_center_px = (self.target_grid_pos[0] * self.grid_size + self.grid_size / 2, self.target_grid_pos[1] * self.grid_size + self.grid_size / 2)
-        current_center_px = (self.pixel_pos[0] + self.grid_size / 2, self.pixel_pos[1] + self.grid_size / 2)
-        delta_px = target_center_px[0] - current_center_px[0]; delta_py = target_center_px[1] - current_center_px[1]; dist_to_target = (delta_px**2 + delta_py**2)**0.5
-        if dist_to_target > 1:
-            norm_dx = delta_px / dist_to_target; norm_dy = delta_py / dist_to_target
-            self.pixel_pos[0] += norm_dx * move_dist; self.pixel_pos[1] += norm_dy * move_dist
-            new_grid_x = int(self.pixel_pos[0] // self.grid_size); new_grid_y = int(self.pixel_pos[1] // self.grid_size)
-            new_grid_x = max(0, min(CANVAS_GRID_WIDTH - 1, new_grid_x)); new_grid_y = max(0, min(CANVAS_GRID_HEIGHT - 1, new_grid_y))
-            self.grid_pos = (new_grid_x, new_grid_y)
+        """更新鬼魂状态（目标、移动）。使用 A* (如果可用) 或简单逻辑。"""
+        current_time = time.time()
+
+        # --- 修改：定期更新目标和路径 ---
+        if current_time - self.last_path_time > GHOST_TARGET_UPDATE_INTERVAL_SECONDS:
+            self.last_path_time = current_time # 更新时间戳
+            if snake_body:
+                self.update_target(snake_body) # 1. 更新目标点
+
+            # --- 2. 调用 A* 寻路 (如果可用) 或简单逻辑确定方向 ---
+            if pathfinding_available:
+                self.find_path() # 计算路径并存储在 self.current_path
+                if self.current_path: # 如果找到了路径
+                    next_step = self.current_path[0] # 获取路径的下一步
+                    self.move_direction = (next_step[0] - self.grid_pos[0],
+                                           next_step[1] - self.grid_pos[1])
+                else: # 没有找到路径或路径为空
+                    self.move_direction = (0, 0) # 停止移动
+            else:
+                # --- Fallback: 简单的直线移动逻辑 ---
+                if self.target_grid_pos and self.target_grid_pos != self.grid_pos:
+                    dx = self.target_grid_pos[0] - self.grid_pos[0]; dy = self.target_grid_pos[1] - self.grid_pos[1]
+                    if abs(dx) > abs(dy): self.move_direction = (1 if dx > 0 else -1, 0)
+                    elif abs(dy) > abs(dx): self.move_direction = (0, 1 if dy > 0 else -1)
+                    elif dx != 0: self.move_direction = (1 if dx > 0 else -1, 0)
+                    elif dy != 0: self.move_direction = (0, 1 if dy > 0 else -1)
+                    else: self.move_direction = (0, 0)
+                else:
+                    self.move_direction = (0, 0)
+        # --- 目标和路径/方向更新结束 ---
+
+
+        # --- 移动鬼魂（像素级移动）---
+        if self.move_direction != (0, 0): # 只有在需要移动时才计算
+            speed_pixels_per_sec = self.get_speed()
+            move_dist = speed_pixels_per_sec * dt
+
+            # 计算目标像素中心：下一个格子的中心
+            next_grid_center_px = ( (self.grid_pos[0] + self.move_direction[0]) * self.grid_size + self.grid_size / 2,
+                                    (self.grid_pos[1] + self.move_direction[1]) * self.grid_size + self.grid_size / 2 )
+            current_pixel_center = ( self.pixel_pos[0] + self.grid_size / 2,
+                                     self.pixel_pos[1] + self.grid_size / 2 )
+
+            delta_px = next_grid_center_px[0] - current_pixel_center[0]
+            delta_py = next_grid_center_px[1] - current_pixel_center[1]
+            dist_to_target_center = (delta_px**2 + delta_py**2)**0.5
+
+            if dist_to_target_center > 1: # 移动阈值
+                norm_dx = delta_px / dist_to_target_center
+                norm_dy = delta_py / dist_to_target_center
+
+                # 移动，最多移动到目标中心
+                actual_move = min(move_dist, dist_to_target_center)
+                self.pixel_pos[0] += norm_dx * actual_move
+                self.pixel_pos[1] += norm_dy * actual_move
+
+        # 根据像素位置更新格子位置 (保持不变)
+        new_grid_x = int(self.pixel_pos[0] // self.grid_size)
+        new_grid_y = int(self.pixel_pos[1] // self.grid_size)
+        new_grid_x = max(0, min(CANVAS_GRID_WIDTH - 1, new_grid_x))
+        new_grid_y = max(0, min(CANVAS_GRID_HEIGHT - 1, new_grid_y))
+        # --- 重要：只有当格子位置实际改变时才更新，防止像素移动未跨越格子边界时路径失效 ---
+        if (new_grid_x, new_grid_y) != self.grid_pos:
+             self.grid_pos = (new_grid_x, new_grid_y)
+             # 如果使用了 A* 路径并且当前格子是路径中的下一步，则移除该步
+             if pathfinding_available and self.current_path and self.grid_pos == self.current_path[0]:
+                  self.current_path.pop(0)
+                  # 如果路径移除后还有下一步，预先计算方向，使得下次update时可以直接用
+                  if self.current_path:
+                      next_step = self.current_path[0]
+                      self.move_direction = (next_step[0] - self.grid_pos[0], next_step[1] - self.grid_pos[1])
+                  else: # 路径走完
+                      self.move_direction = (0,0)
+
+
+        # 触发警告音效 (逻辑不变)
         if snake_body:
-             head_pos = snake_body[-1]; dist_sq = (head_pos[0] - self.grid_pos[0])**2 + (head_pos[1] - self.grid_pos[1])**2
-             if dist_sq <= GHOST_WARNING_DISTANCE_GRIDS**2: self.game.try_play_sound('ghost_warning', unique=True)
+             head_pos = snake_body[-1]
+             dist_sq = (head_pos[0] - self.grid_pos[0])**2 + (head_pos[1] - self.grid_pos[1])**2
+             if dist_sq <= GHOST_WARNING_DISTANCE_GRIDS**2:
+                 self.game.try_play_sound('ghost_warning', unique=True)
+
     def draw(self, surface, camera_offset=(0, 0)):
-        offset_x, offset_y = 0, 0; draw_x = self.pixel_pos[0] + offset_x; draw_y = self.pixel_pos[1] + offset_y
-        if self.image: surface.blit(self.image, (draw_x, draw_y))
+        """绘制鬼魂。"""
+        offset_x, offset_y = 0, 0
+        draw_x = self.pixel_pos[0] + offset_x
+        draw_y = self.pixel_pos[1] + offset_y
+        if self.image:
+            surface.blit(self.image, (draw_x, draw_y))
+# === ADDED/MODIFIED SECTION END: Ghost Class with A* ===
 
 # --- Blinky ---
 class Blinky(Ghost):
