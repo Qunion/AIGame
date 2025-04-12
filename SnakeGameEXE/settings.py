@@ -77,40 +77,56 @@ STATE_PLAYING = 0
 STATE_GAME_OVER = 1
 STATE_PAUSED = 2
 
-# --- Helper Functions ---
+# --- 帮助函数 ---
 def scale_image(image, size):
-    """Scales a Pygame surface."""
-    # Ensure size is at least 1x1
+    """缩放 Pygame 表面。"""
+    # 确保尺寸至少是 1x1
     safe_size = max(1, size)
-    return pygame.transform.scale(image, (safe_size, safe_size))
+    try:
+        return pygame.transform.scale(image, (safe_size, safe_size))
+    except Exception as e:
+        print(f"缩放图像时出错: {e}")
+        # 返回一个占位符或原始图像
+        return image # 或者返回一个小的占位符表面
 
 def load_image(filename, size=None, use_alpha=True):
-    """Loads an image, scales it using GRID_SIZE if size is not specified, and handles errors."""
+    """
+    加载图像，如果提供了 size 则缩放，并处理错误。
+    size=None 表示不缩放。
+    """
     path = os.path.join(IMG_DIR, filename)
-    effective_size = size if size is not None else GRID_SIZE # Use GRID_SIZE if no specific size given
+    # effective_size = size if size is not None else GRID_SIZE # <--- 旧的错误逻辑
+    effective_size = size # <--- 修正：只有在 size 被指定时才使用它
 
     try:
         image = pygame.image.load(path)
         if use_alpha:
-            image = image.convert_alpha()
+            image = image.convert_alpha() # 使用透明通道
         else:
-            image = image.convert()
-        if effective_size: # Scale if an effective size is determined
+            image = image.convert() # 不使用透明通道（例如背景图）
+
+        # --- 修正：仅当提供了有效的 size 参数时才缩放 ---
+        if effective_size is not None and isinstance(effective_size, int) and effective_size > 0:
             image = scale_image(image, effective_size)
+        # ----------------------------------------------------
+
         return image
     except pygame.error as e:
-        print(f"Warning: Could not load image '{filename}': {e}")
-        placeholder = pygame.Surface((effective_size if effective_size else 10, effective_size if effective_size else 10))
-        placeholder.fill(RED)
-        # Draw lines only if size is large enough
+        print(f"警告：无法加载图像 '{filename}': {e}")
+        # 如果加载失败，创建一个占位符表面
+        placeholder_size = effective_size if (effective_size is not None and effective_size > 0) else 10 # 备用尺寸
+        placeholder = pygame.Surface((placeholder_size, placeholder_size))
+        placeholder.fill(RED) # 填充红色表示错误
         if placeholder.get_width() > 1 and placeholder.get_height() > 1:
             pygame.draw.line(placeholder, BLACK, (0,0), (placeholder.get_width()-1, placeholder.get_height()-1), 1)
             pygame.draw.line(placeholder, BLACK, (0, placeholder.get_height()-1), (placeholder.get_width()-1, 0), 1)
         return placeholder
     except FileNotFoundError:
-        print(f"Warning: Image file not found '{filename}'")
-        placeholder = pygame.Surface((effective_size if effective_size else 10, effective_size if effective_size else 10))
-        placeholder.fill(BLUE)
+        print(f"警告：图像文件未找到 '{filename}'")
+        # 如果文件未找到，创建另一个占位符
+        placeholder_size = effective_size if (effective_size is not None and effective_size > 0) else 10
+        placeholder = pygame.Surface((placeholder_size, placeholder_size))
+        placeholder.fill(BLUE) # 填充蓝色表示文件缺失
         if placeholder.get_width() > 1 and placeholder.get_height() > 1:
              pygame.draw.line(placeholder, WHITE, (0,0), (placeholder.get_width()-1, placeholder.get_height()-1), 1)
              pygame.draw.line(placeholder, WHITE, (0, placeholder.get_height()-1), (placeholder.get_width()-1, 0), 1)
@@ -149,43 +165,54 @@ def load_music(filename):
         print(f"Warning: Music file not found '{filename}'")
         return False
 
-# --- Font ---
-# Specify paths to common Chinese fonts on Windows. Adjust if needed for your system.
-# SimHei is often available. Microsoft YaHei ('msyh.ttc') is also common.
-PRIMARY_FONT_NAME = "simhei.ttf" # Try SimHei first
-FALLBACK_FONT_NAME = "msyh.ttc" # Try Microsoft YaHei if SimHei fails
+# --- 字体 ---
+# 指定常见中文字体的名称或路径 (根据你的系统调整)
+# 确保这些字体文件存在于系统或脚本目录中
+PRIMARY_FONT_NAME = "simhei.ttf" # 尝试 黑体
+FALLBACK_FONT_NAME = "msyh.ttc" # 尝试 微软雅黑
 
 def get_font(size):
-    """Attempts to load a Chinese font, falling back to Pygame default."""
+    """尝试加载指定的中文字体，失败则使用 Pygame 默认字体。"""
+    # 优先尝试系统字体名称
     try:
-        # Try primary font directly by name (may work if installed system-wide)
         font = pygame.font.SysFont(PRIMARY_FONT_NAME, size)
-        print(f"Loaded system font: {PRIMARY_FONT_NAME}")
+        # print(f"已加载系统字体: {PRIMARY_FONT_NAME}") # 调试信息
         return font
     except:
         try:
-             # Try fallback font directly by name
             font = pygame.font.SysFont(FALLBACK_FONT_NAME, size)
-            print(f"Loaded system font: {FALLBACK_FONT_NAME}")
+            # print(f"已加载系统字体: {FALLBACK_FONT_NAME}") # 调试信息
             return font
         except:
-             try:
-                 # Try loading primary font from file (relative path)
-                 font_path = os.path.join(os.path.dirname(__file__), PRIMARY_FONT_NAME) # Assumes font file is in the same directory
-                 if os.path.exists(font_path):
-                     font = pygame.font.Font(font_path, size)
-                     print(f"Loaded font file: {font_path}")
-                     return font
-             except Exception as e1:
-                 print(f"Could not load font file {PRIMARY_FONT_NAME}: {e1}")
-                 pass # Continue to final fallback
+            # 如果系统字体加载失败，尝试从文件加载
+            try:
+                # 假设字体文件在脚本相同目录下
+                font_path = os.path.join(os.path.dirname(__file__), PRIMARY_FONT_NAME)
+                if os.path.exists(font_path):
+                    font = pygame.font.Font(font_path, size)
+                    # print(f"已加载字体文件: {font_path}") # 调试信息
+                    return font
+                else:
+                     # 尝试备用字体文件
+                     font_path = os.path.join(os.path.dirname(__file__), FALLBACK_FONT_NAME)
+                     if os.path.exists(font_path):
+                          font = pygame.font.Font(font_path, size)
+                          # print(f"已加载字体文件: {font_path}") # 调试信息
+                          return font
+            except Exception as e1:
+                print(f"无法从文件加载字体 ({PRIMARY_FONT_NAME}, {FALLBACK_FONT_NAME}): {e1}")
+                pass # 继续使用最终后备方案
 
-             # Final fallback to Pygame's default font
-             print(f"Warning: Could not load specified Chinese fonts ({PRIMARY_FONT_NAME}, {FALLBACK_FONT_NAME}). Falling back to default font. Chinese characters may not display correctly.")
-             return pygame.font.Font(None, size + 4) # Default font might need size adjustment
+            # 最终后备：Pygame 默认字体
+            print(f"警告：无法加载指定的中文字体。将使用默认字体，中文字符可能无法正确显示。")
+            try:
+                return pygame.font.Font(None, size + 4) # 默认字体可能需要调整大小
+            except Exception as e_default:
+                 print(f"加载 Pygame 默认字体时也出错: {e_default}")
+                 # 极特殊情况：返回 None 或引发异常
+                 return None # 或者 raise Exception("无法加载任何字体")
 
-
-# --- Direction Vectors ---
+# ... (方向向量等保持不变) ...
 UP = (0, -1)
 DOWN = (0, 1)
 LEFT = (-1, 0)
