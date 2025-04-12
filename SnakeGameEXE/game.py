@@ -143,7 +143,14 @@ class Game:
         self.history.clear()
 
         self.snake = Snake(self)
-        self.spawn_fruit(count=2, force_special=True)
+        
+        # --- 修改：使用新的初始果实数量设置 ---
+        # 确保初始数量至少为 1，并且如果数量大于等于2，强制生成一个特殊果实
+        initial_count = max(1, INITIAL_FRUIT_COUNT) # 保证至少有1个
+        force_special_on_init = initial_count >= 2 # 如果初始数量大于等于2，则强制特殊
+        self.spawn_fruit(count=initial_count, force_special=force_special_on_init)
+        # ------------------------------------
+
         self.ghosts.append(Blinky(self))
 
         # 重置状态... (省略重复代码)
@@ -393,55 +400,112 @@ class Game:
                  self.trigger_game_over(f"撞到 {ghost.type}")
                  break
 
+    # 在 Game 类中找到 check_corpse_merge 方法
     def check_corpse_merge(self):
-         """检查蛇头是否与尸体的端点接触以触发融合。"""
+         """检查蛇头是否与尸体的端点接触以触发融合。修正头部重置和方向逻辑，并修复 deque 切片错误。"""
          if not self.snake or not self.snake.alive: return
          head_pos = self.snake.get_head_position()
          corpse_to_remove_index = -1
          current_time = time.time()
 
          for i, corpse in enumerate(self.corpses):
-             # 免疫检查
+             # 免疫时间检查
              if current_time - corpse.creation_time < MERGE_IMMUNITY_SECONDS: continue
              if not corpse.segments: continue
 
              first_seg, last_seg = corpse.get_end_points()
-             if first_seg is None: continue # 如果端点无效则跳过
+             if first_seg is None: continue # 无效尸体
 
-             if head_pos == first_seg or head_pos == last_seg:
-                 print(f"融合触发! 蛇头: {head_pos}, 尸体端点: {first_seg}, {last_seg}") # 调试信息
+             # --- 1. 判断接触点和非接触点 ---
+             contact_point = None
+             non_contact_end = None
+             merge_at_first = False
+
+             if head_pos == first_seg:
+                 contact_point = first_seg
+                 non_contact_end = last_seg
+                 merge_at_first = True
+                 print(f"融合触发! 蛇头 {head_pos} 接触尸体首段 {contact_point}")
+             elif head_pos == last_seg:
+                 contact_point = last_seg
+                 non_contact_end = first_seg
+                 merge_at_first = False
+                 print(f"融合触发! 蛇头 {head_pos} 接触尸体末段 {contact_point}")
+
+             # --- 2. 如果触发了融合 ---
+             if contact_point is not None:
                  corpse_to_remove_index = i
-                 merge_at_first = (head_pos == first_seg)
 
-                 # 融合逻辑 (与上次相同)
-                 if merge_at_first:
-                      new_body_list = list(self.snake.body) + list(corpse.segments)
-                      if len(corpse.segments) > 1:
-                           p_last_x, p_last_y = corpse.segments[-2]; last_x, last_y = corpse.segments[-1]
-                           new_direction = (last_x - p_last_x, last_y - p_last_y)
-                      else: new_direction = self.snake.direction
-                 else:
-                       new_body_list = list(corpse.segments) + list(self.snake.body)
-                       if len(corpse.segments) > 1:
-                            first_x, first_y = corpse.segments[0]; sec_x, sec_y = corpse.segments[1]
-                            new_direction = (first_x - sec_x, first_y - sec_y)
-                       else: new_direction = self.snake.direction
+                 # --- 3. 拼接身体，确保非接触端是新头 ---
+                 new_body_list = []
+                 original_corpse_list = list(corpse.segments)
 
-                 # 更新蛇状态
+                 # -------->>>  修改点 1 开始 <<<-----------
+                 # 先将 deque 转换为 list，再进行切片
+                 snake_body_list = list(self.snake.body)
+                 snake_body_without_head = snake_body_list[:-1] if snake_body_list else []
+                 # -------->>>  修改点 1 结束 <<<-----------
+
+
+                 if merge_at_first: # 蛇头接触尸体首段
+                     # -------->>>  修改点 2 开始 <<<-----------
+                     # 使用转换后的列表进行拼接
+                     new_body_list = snake_body_without_head + original_corpse_list
+                     # -------->>>  修改点 2 结束 <<<-----------
+                     print(f"融合方式：蛇头接触首段。拼接前蛇身: {snake_body_without_head}, 尸体: {original_corpse_list}")
+                 else: # 蛇头接触尸体末段
+                     original_corpse_list.reverse() # 反转尸体段
+                     # -------->>>  修改点 3 开始 <<<-----------
+                     # 使用转换后的列表进行拼接
+                     new_body_list = snake_body_without_head + original_corpse_list
+                     # -------->>>  修改点 3 结束 <<<-----------
+                     print(f"融合方式：蛇头接触末段。拼接前蛇身: {snake_body_without_head}, 反转后尸体: {original_corpse_list}")
+
+                 # 安全检查
+                 if not new_body_list:
+                      print("错误：融合后身体列表为空！")
+                      continue
+
+                 # --- 4. 计算新方向 ---
+                 new_direction = None
+                 # 方向计算基于 original_corpse_list (如果接触末段，它已经被反转)
+                 # 确保 non_contact_end 是有效的
+                 if non_contact_end and len(original_corpse_list) > 1:
+                     # 方向: 倒数第二段 -> 非接触端 (即新头)
+                     prev_to_non_contact = original_corpse_list[-2]
+                     new_direction = (non_contact_end[0] - prev_to_non_contact[0],
+                                      non_contact_end[1] - prev_to_non_contact[1])
+                     print(f"计算新方向: 从 {prev_to_non_contact} -> {non_contact_end} = {new_direction}")
+                 # else: (如果无法计算，则使用备用逻辑)
+
+                 if new_direction is None or new_direction == (0,0):
+                      print(f"警告：无法根据尸体计算有效方向，保持融合前方向 {self.snake.last_move_direction}")
+                      new_direction = self.snake.last_move_direction
+                      if new_direction == (0,0): new_direction = random.choice([UP, DOWN, LEFT, RIGHT])
+
+
+                 # --- 5. 强制更新蛇的状态 ---
                  self.snake.body = deque(new_body_list)
                  self.snake.length = len(self.snake.body)
                  self.snake.direction = new_direction
                  self.snake.new_direction = new_direction
+                 self.snake.last_move_direction = new_direction
                  self.snake.update_head_image()
 
+                 print(f"融合后蛇身: {list(self.snake.body)}")
+                 print(f"融合后头部应为: {non_contact_end}")
+                 print(f"融合后最终方向: D={self.snake.direction}, NewD={self.snake.new_direction}, LastMoveD={self.snake.last_move_direction}")
+
+                 # 播放效果
                  self.play_sound('merge')
-                 self.add_particles(head_pos, 15, GREEN)
+                 self.add_particles(contact_point, 15, GREEN)
+
                  break # 处理完一次融合即退出循环
 
+         # 移除被融合的尸体
          if corpse_to_remove_index != -1:
               if corpse_to_remove_index < len(self.corpses):
                    del self.corpses[corpse_to_remove_index]
-
 
     def add_particles(self, grid_pos, count, color):
          """在指定的格子位置生成粒子效果。"""
@@ -551,7 +615,7 @@ class Game:
         surface.blit(replay_text_surf, replay_text_rect)
 
         # 时光倒流按钮
-        rewind_button_color = BLUE if self.rewind_available else GREY
+        rewind_button_color = BRIGHT_YELLOW if self.rewind_available else GREY
         self.rewind_button_rect = pygame.Rect(0, 0, button_width, button_height)
         self.rewind_button_rect.midtop = (center_x + button_width/2 + button_spacing/2, base_y)
         pygame.draw.rect(surface, rewind_button_color, self.rewind_button_rect, border_radius=10)

@@ -1,3 +1,5 @@
+# --- START OF FILE sprites.py ---
+
 import pygame
 import random
 import time
@@ -11,12 +13,14 @@ class Snake:
         self.grid_size = GRID_SIZE
         self.color = DARK_YELLOW
         self.body = deque()
-        self.direction = random.choice([UP, DOWN, LEFT, RIGHT])
-        self.new_direction = self.direction
+        self.direction = random.choice([UP, DOWN, LEFT, RIGHT]) # 初始方向
+        self.last_move_direction = self.direction # 记录上一帧实际移动方向
+        self.new_direction = self.direction # 缓冲下一个方向
         self.length = INITIAL_SNAKE_LENGTH
         self.is_accelerating = False
         self.alive = True
         self.split_available = True
+        self.current_head_angle = None # 用于优化头部旋转
 
         # 加载精灵图像时明确指定大小为 GRID_SIZE
         self.head_image_orig = load_image('snake_head.png', size=self.grid_size)
@@ -33,310 +37,239 @@ class Snake:
         self.head_image = self.head_image_orig
 
         # 初始化蛇位置
-        start_x = CANVAS_GRID_WIDTH // 2
-        start_y = CANVAS_GRID_HEIGHT // 2
+        start_x = CANVAS_GRID_WIDTH // 2; start_y = CANVAS_GRID_HEIGHT // 2
         for i in range(self.length):
-            segment_x = start_x - self.direction[0] * i
-            segment_y = start_y - self.direction[1] * i
-            segment_x = max(0, min(CANVAS_GRID_WIDTH - 1, segment_x))
-            segment_y = max(0, min(CANVAS_GRID_HEIGHT - 1, segment_y))
+            segment_x = start_x - self.direction[0] * i; segment_y = start_y - self.direction[1] * i
+            segment_x = max(0, min(CANVAS_GRID_WIDTH - 1, segment_x)); segment_y = max(0, min(CANVAS_GRID_HEIGHT - 1, segment_y))
             self.body.appendleft((segment_x, segment_y))
 
         self.update_head_image() # 调用旋转方法
 
-    # --------->>> 定义 get_head_position 方法 <<<---------
     def get_head_position(self):
         """获取蛇头的格子坐标。"""
-        # 检查蛇身是否存在且不为空
         if hasattr(self, 'body') and self.body:
-            return self.body[-1] # 蛇头是队列的最后一个元素
+            return self.body[-1]
         else:
-            # 如果蛇身不存在或为空，返回一个默认值或记录错误
-            # print("错误：尝试获取空蛇或不存在的蛇的头部位置。")
-            # 根据游戏逻辑，可能需要返回中心点或引发异常
-            return (CANVAS_GRID_WIDTH // 2, CANVAS_GRID_HEIGHT // 2) # 返回画布中心作为备用
-    # --------->>> get_head_position 方法定义结束 <<<---------
-
+            return (CANVAS_GRID_WIDTH // 2, CANVAS_GRID_HEIGHT // 2)
 
     def update_head_image(self):
-        """根据当前方向旋转蛇头图像。"""
+        """根据当前实际移动方向旋转蛇头图像。"""
+        direction_to_render = self.last_move_direction
         angle = 0
-        # 确保 self.direction 是有效的方向元组
-        if isinstance(self.direction, tuple) and len(self.direction) == 2:
-            if self.direction == UP: angle = 0
-            elif self.direction == DOWN: angle = 180
-            elif self.direction == LEFT: angle = 90
-            elif self.direction == RIGHT: angle = -90
-        else:
-            print(f"警告：无效的蛇方向值 {self.direction}，无法确定旋转角度。")
-            # 可以设置一个默认角度或不旋转
+        if isinstance(direction_to_render, tuple) and len(direction_to_render) == 2:
+            if direction_to_render == UP: angle = 0
+            elif direction_to_render == DOWN: angle = 180
+            elif direction_to_render == LEFT: angle = 90
+            elif direction_to_render == RIGHT: angle = -90
+        else: pass # 忽略无效方向
 
         if hasattr(self, 'head_image_orig') and self.head_image_orig:
             try:
-                self.head_image = pygame.transform.rotate(self.head_image_orig, angle)
+                if self.current_head_angle != angle: # 仅当角度变化时旋转
+                    self.head_image = pygame.transform.rotate(self.head_image_orig, angle)
+                    self.current_head_angle = angle
             except Exception as e:
                 print(f"旋转蛇头图像时出错: {e}")
-                if not hasattr(self, 'head_image') or not self.head_image:
-                     self.head_image = self.head_image_orig # 使用原始图像作为备用
-        else:
-            print("警告：蛇头原始图像不存在，无法旋转。")
-            if not hasattr(self, 'head_image') or not self.head_image:
-                 self.head_image = pygame.Surface((self.grid_size, self.grid_size)); self.head_image.fill(self.color)
-
+                if not hasattr(self, 'head_image') or not self.head_image: self.head_image = self.head_image_orig
+        else: # head_image_orig 不存在
+            if not hasattr(self, 'head_image') or not self.head_image: self.head_image = pygame.Surface((self.grid_size, self.grid_size)); self.head_image.fill(self.color)
 
     def grow(self, amount=1):
         """增加蛇的目标长度。"""
         self.length += amount
 
-
     def change_direction(self, new_dir):
-        """
-        尝试改变蛇的移动方向（缓冲）。
-        只有当新方向不是当前实际移动方向的反方向时才接受。
-        """
-        # 使用 self.direction (当前实际移动方向) 来判断是否为反方向
-        if (new_dir[0] != -self.direction[0] or \
-            new_dir[1] != -self.direction[1]):
-           self.new_direction = new_dir # 更新缓冲方向
-
+        """尝试改变蛇的移动方向（缓冲）。"""
+        if (new_dir[0] != -self.last_move_direction[0] or \
+            new_dir[1] != -self.last_move_direction[1]):
+           self.new_direction = new_dir
 
     def update(self):
         """更新蛇的状态（处理方向缓冲、移动、移除尾巴）。"""
-        # 1. 应用缓冲的方向（如果有效）
-        # 同样使用 self.direction 判断反方向
-        if (self.new_direction[0] != -self.direction[0] or \
-            self.new_direction[1] != -self.direction[1]):
-             self.direction = self.new_direction # 更新实际移动方向
-             self.update_head_image() # 方向改变，更新蛇头图像
+        current_direction = self.direction
+        if (self.new_direction[0] != -self.last_move_direction[0] or \
+            self.new_direction[1] != -self.last_move_direction[1]):
+             current_direction = self.new_direction
+        else: self.new_direction = current_direction # 重置无效的反向缓冲
 
-        # 2. 计算新头位置
-        head_x, head_y = self.get_head_position() # <-- 调用 get_head_position
+        self.last_move_direction = current_direction
+        self.direction = current_direction
+
+        head_x, head_y = self.get_head_position()
         move_x, move_y = self.direction
         new_head = (head_x + move_x, head_y + move_y)
 
-        # 3. 碰撞检测（由 Game 类在蛇移动后调用）
-        #   这里只负责移动逻辑，碰撞检测在 Game.update 中进行更合适，
-        #   因为它需要检查与其他对象（果实、鬼魂、尸体）的交互。
-        #   但内部的 check_collisions 需要保留用于检测边界和自撞。
-        self.check_collisions(new_head) # 检测边界和自撞，可能会设置 self.alive=False
+        self.check_collisions(new_head) # 内部碰撞检测
 
-        # 4. 如果存活，执行移动
         if self.alive:
-            self.body.append(new_head) # 添加新头
-            # 检查是否需要移除尾巴
-            if len(self.body) > self.length:
-                self.body.popleft()
-        else:
-            # 如果死亡，可以选择是否在死亡的那一帧移除导致碰撞的头？
-            # 当前逻辑是不移除，游戏结束画面会显示碰撞状态。
-            pass
+            self.body.append(new_head)
+            if len(self.body) > self.length: self.body.popleft()
+            self.update_head_image() # 更新头部图像朝向
+        # else: 死亡时不移动
 
-        # 5. 更新分裂可用状态
         self.split_available = self.length >= SPLIT_MIN_LENGTH
-
 
     def check_collisions(self, new_head):
         """仅检查新头位置是否撞墙或撞自身。"""
         head_x, head_y = new_head
-
-        # 1. 撞墙
         if not (0 <= head_x < CANVAS_GRID_WIDTH and 0 <= head_y < CANVAS_GRID_HEIGHT):
-            self.alive = False
-            self.game.trigger_game_over("撞墙")
-            return # 已死亡，无需后续检查
-
-        # 2. 撞自身
+            self.alive = False; self.game.trigger_game_over("撞墙"); return
         check_body = list(self.body)
-        if len(self.body) >= self.length: # 只有当蛇身达到目标长度时，尾巴才会被移除
-             check_body = check_body[1:]
+        if len(self.body) >= self.length: check_body = check_body[1:]
         if new_head in check_body:
-             self.alive = False
-             self.game.trigger_game_over("撞到自己")
-             return
+             self.alive = False; self.game.trigger_game_over("撞到自己"); return
 
-
-    def draw(self, surface, camera_offset=(0, 0)): # camera_offset 参数保留但未使用
+    def draw(self, surface, camera_offset=(0, 0)):
         """绘制蛇的身体和头部。"""
-        offset_x, offset_y = 0, 0 # 因为画布等于屏幕，偏移为0
+        offset_x, offset_y = 0, 0
         num_segments = len(self.body)
-
-        # 绘制身体段（从尾到头绘制，除了最后一个）
-        for i in range(num_segments - 1):
-            segment = self.body[i]
-            seg_x, seg_y = segment
-            pixel_x = seg_x * self.grid_size + offset_x
-            pixel_y = seg_y * self.grid_size + offset_y
-
+        for i in range(num_segments - 1): # 绘制身体
+            segment = self.body[i]; seg_x, seg_y = segment; pixel_x = seg_x * self.grid_size + offset_x; pixel_y = seg_y * self.grid_size + offset_y
             alpha = max(0, 255 * (1 - (num_segments - 1 - i) * SNAKE_ALPHA_DECREASE_PER_SEGMENT))
-
-            if self.body_image: # 确保身体图像已加载
-                # 优化：仅在需要透明度时复制和设置 alpha
+            if self.body_image:
                 if alpha < 254:
-                    try:
-                        body_copy = self.body_image.copy()
-                        body_copy.set_alpha(int(alpha))
-                        surface.blit(body_copy, (pixel_x, pixel_y))
-                    except Exception as e:
-                         print(f"绘制蛇身段时出错: {e}")
-                         pygame.draw.rect(surface, GREY, (pixel_x, pixel_y, self.grid_size, self.grid_size)) # 绘制备用方块
-                else: # 完全不透明
-                    surface.blit(self.body_image, (pixel_x, pixel_y))
-            else: # 如果身体图像未加载
-                 pygame.draw.rect(surface, GREY, (pixel_x, pixel_y, self.grid_size, self.grid_size))
-
-        # 绘制头部（最后一个元素）
-        if num_segments > 0:
-             head = self.body[-1]
-             head_x, head_y = head
-             pixel_x = head_x * self.grid_size + offset_x
-             pixel_y = head_y * self.grid_size + offset_y
-             if hasattr(self, 'head_image') and self.head_image:
-                 surface.blit(self.head_image, (pixel_x, pixel_y))
-             else: # 如果头部图像未加载或无效
-                 pygame.draw.rect(surface, self.color, (pixel_x, pixel_y, self.grid_size, self.grid_size))
-
-
-        # 绘制速度线 (如果正在加速)
-        if self.is_accelerating and self.alive:
+                    try: body_copy = self.body_image.copy(); body_copy.set_alpha(int(alpha)); surface.blit(body_copy, (pixel_x, pixel_y))
+                    except Exception: pygame.draw.rect(surface, GREY, (pixel_x, pixel_y, self.grid_size, self.grid_size))
+                else: surface.blit(self.body_image, (pixel_x, pixel_y))
+            else: pygame.draw.rect(surface, GREY, (pixel_x, pixel_y, self.grid_size, self.grid_size))
+        if num_segments > 0: # 绘制头部
+             head = self.body[-1]; head_x, head_y = head; pixel_x = head_x * self.grid_size + offset_x; pixel_y = head_y * self.grid_size + offset_y
+             if hasattr(self, 'head_image') and self.head_image: surface.blit(self.head_image, (pixel_x, pixel_y))
+             else: pygame.draw.rect(surface, self.color, (pixel_x, pixel_y, self.grid_size, self.grid_size))
+        if self.is_accelerating and self.alive: # 绘制速度线
             head_x, head_y = self.get_head_position()
             center_x = head_x * self.grid_size + self.grid_size // 2 + offset_x
             center_y = head_y * self.grid_size + self.grid_size // 2 + offset_y
-            num_lines = 5
-            line_length = self.grid_size * 1.2
-            line_speed_offset = self.grid_size * 0.6
-
-            back_dir_x, back_dir_y = -self.direction[0], -self.direction[1]
-            perp_dir_x, perp_dir_y = -back_dir_y, back_dir_x # 垂直方向
-
+            num_lines = 5; line_length = self.grid_size * 1.2; line_speed_offset = self.grid_size * 0.6
+            back_dir_x, back_dir_y = -self.last_move_direction[0], -self.last_move_direction[1] # 基于上次移动方向绘制
+            perp_dir_x, perp_dir_y = -back_dir_y, back_dir_x
             for i in range(num_lines):
                 spread_factor = (i - num_lines // 2) * 0.3
-                start_x = center_x + back_dir_x * line_speed_offset + perp_dir_x * spread_factor * self.grid_size
-                start_y = center_y + back_dir_y * line_speed_offset + perp_dir_y * spread_factor * self.grid_size
-                end_x = start_x + back_dir_x * line_length
-                end_y = start_y + back_dir_y * line_length
+                start_x = center_x + back_dir_x * line_speed_offset + perp_dir_x * spread_factor * self.grid_size; start_y = center_y + back_dir_y * line_speed_offset + perp_dir_y * spread_factor * self.grid_size
+                end_x = start_x + back_dir_x * line_length; end_y = start_y + back_dir_y * line_length
                 pygame.draw.line(surface, WHITE, (start_x, start_y), (end_x, end_y), 1)
 
-
+    # ===============================================
+    # ==========  修正后的 split 方法开始 ==========
+    # ===============================================
     def split(self):
-        """执行分裂操作。"""
-        if not self.split_available:
+        """执行分裂操作，修正方向计算，使尾部变头。"""
+        if not self.split_available or len(self.body) < SPLIT_MIN_LENGTH:
             return None, None
 
+        print("-" * 10 + " 开始分裂 " + "-" * 10)
+        print(f"分裂前蛇身: {list(self.body)}")
+        print(f"分裂前方向: D={self.direction}, NewD={self.new_direction}, LastMoveD={self.last_move_direction}")
+
         split_index = len(self.body) // 2
-        # 确保分裂后两部分都有内容 (至少长度为2才能分)
-        if split_index == 0 or split_index == len(self.body):
-             print("警告：蛇太短无法分裂。")
-             return None, None
+        corpse_segments = deque(list(self.body)[split_index:]) # 头部部分成为尸体
 
-        corpse_segments = deque(list(self.body)[split_index:])
-        new_snake_body = deque(list(self.body)[:split_index])
+        # 1. 获取尾部段列表 (成为新蛇的部分)
+        tail_part_list = list(self.body)[:split_index]
 
-        # --- 计算新蛇的方向 (基于尾部变头) ---
-        new_direction = (0, 0)
-        if new_snake_body: # 确保新蛇身体不为空
-            new_head_pos = new_snake_body[-1] # 新头是原尾巴段的最后一节
-            if len(new_snake_body) > 1:
-                # 方向：倒数第二节指向新头
-                prev_segment_pos = new_snake_body[-2]
-                new_direction = (new_head_pos[0] - prev_segment_pos[0],
-                                 new_head_pos[1] - prev_segment_pos[1])
-            elif corpse_segments: # 新蛇只有一节，尝试远离尸体
-                 corpse_start_pos = corpse_segments[0]
-                 new_direction = (new_head_pos[0] - corpse_start_pos[0],
-                                  new_head_pos[1] - corpse_start_pos[1])
-                 # 如果紧挨着，使用分裂前的方向作为备用
-                 if new_direction == (0,0): new_direction = self.direction
-            else: # 无法确定方向，保持原方向
-                 new_direction = self.direction
+        if not tail_part_list: # 安全检查
+            print("错误：分裂后尾部段为空！")
+            return None, None
+        print(f"获取到的尾部段 (原始顺序，尾->头): {tail_part_list}")
 
-            # 最终检查零向量
-            if new_direction == (0,0):
-                print("警告：分裂后计算方向为零向量，随机选择方向。")
-                valid_dirs = [d for d in [UP, DOWN, LEFT, RIGHT] if d != self.direction and d != (-self.direction[0], -self.direction[1])]
-                new_direction = random.choice(valid_dirs) if valid_dirs else RIGHT
-        else:
-             print("错误：分裂逻辑中 new_snake_body 意外为空。")
-             return None, None
-        # --- 方向计算结束 ---
+        # 2. *** 关键：反转列表，使原尾巴成为新头 ***
+        tail_part_list.reverse()
+        print(f"反转后的新蛇身体段 (新尾->新头): {tail_part_list}")
 
-        # 更新当前蛇对象的状态
-        self.body = new_snake_body
-        self.length = len(self.body)
+        # 3. 将反转后的列表赋给 self.body
+        self.body = deque(tail_part_list)
+        self.length = len(self.body) # 更新长度
+
+        # --- 4. 重新计算新蛇的方向 ---
+        new_direction = None
+        if len(self.body) > 1:
+            # 方向: 从倒数第二段(新蛇头的上一段)指向新的头
+            new_head_pos = self.body[-1]       # 新头 (原尾巴)
+            prev_segment_pos = self.body[-2]   # 新头的上一段 (原倒数第二段)
+            print(f"新蛇(反转后) 头部: {new_head_pos}, 上一段: {prev_segment_pos}")
+            new_direction = (new_head_pos[0] - prev_segment_pos[0],
+                             new_head_pos[1] - prev_segment_pos[1])
+            print(f"新计算的方向 (len>1): {new_direction}")
+        elif len(self.body) == 1:
+            # 单节蛇，方向是分裂前朝向尾巴的方向，即分裂前移动方向的反方向
+            if hasattr(self, 'last_move_direction') and isinstance(self.last_move_direction, tuple) and len(self.last_move_direction) == 2:
+                # 检查 last_move_direction 是否为 (0,0)，虽然不太可能
+                if self.last_move_direction != (0,0):
+                    new_direction = (-self.last_move_direction[0], -self.last_move_direction[1])
+                    print(f"新计算的方向 (len=1, 反向): {new_direction} (基于 last_move_direction: {self.last_move_direction})")
+                else:
+                    print("警告：分裂前的 last_move_direction 为 (0,0)，无法取反，随机选择。")
+                    new_direction = random.choice([d for d in [UP, DOWN, LEFT, RIGHT]]) # 随机选一个
+            else:
+                 print("警告：计算单节蛇方向时 last_move_direction 无效，随机选择。")
+                 new_direction = random.choice([UP, DOWN, LEFT, RIGHT])
+
+        # 最终检查方向有效性 (防止计算出零向量等问题)
+        if new_direction is None or new_direction == (0,0):
+            print(f"警告：最终方向计算无效({new_direction})，使用分裂前的最后移动方向作为备用。")
+            new_direction = self.last_move_direction
+            if new_direction == (0,0): # 如果连分裂前的方向也是(0,0)
+                 print("警告：分裂前方向也为(0,0)，最终随机选择。")
+                 new_direction = random.choice([UP, DOWN, LEFT, RIGHT])
+
+        # --- 5. 更新方向状态 ---
         self.direction = new_direction
-        self.new_direction = new_direction # 同步缓冲方向
-        self.update_head_image()
+        self.new_direction = new_direction
+        self.last_move_direction = new_direction # 立即更新
+        self.update_head_image() # 根据新方向更新头图像
 
-        # 创建尸体对象
+        # --- 创建尸体对象 ---
         corpse = Corpse(self.game, corpse_segments)
 
-        # 播放效果
+        # --- 播放效果 ---
         self.game.play_sound('split')
         if corpse.segments:
             self.game.add_particles(corpse.segments[0], 10, RED)
 
-        print(f"分裂完成: 新蛇身体: {list(self.body)}, 新方向: {self.direction}")
+        print(f"分裂最终确定的方向: D={self.direction}, NewD={self.new_direction}, LastMoveD={self.last_move_direction}")
+        print("-" * 10 + " 分裂结束 (已应用反转) " + "-" * 10)
         return corpse, True
+    # ===============================================
+    # ==========  修正后的 split 方法结束 ==========
+    # ===============================================
 
 
 # --- 尸体 类 ---
 class Corpse:
     def __init__(self, game, segments):
-        self.game = game
-        self.segments = segments
-        self.grid_size = GRID_SIZE
+        self.game = game; self.segments = segments; self.grid_size = GRID_SIZE
         self.image = load_image('corpse.png', size=self.grid_size)
-        if not self.image:
-             print("错误：未能加载 corpse.png")
-             self.image = pygame.Surface((self.grid_size, self.grid_size)); self.image.fill(GREY)
-        self.creation_time = time.time()
-        self.lifespan = CORPSE_LIFESPAN_SECONDS
+        if not self.image: print("错误：未能加载 corpse.png"); self.image = pygame.Surface((self.grid_size, self.grid_size)); self.image.fill(GREY)
+        self.creation_time = time.time(); self.lifespan = CORPSE_LIFESPAN_SECONDS
         self.flicker_start_time = self.creation_time + CORPSE_FLICKER_START_OFFSET
         self.flicker_end_time = self.flicker_start_time + CORPSE_Flicker_DURATION_SECONDS
-        self.fade_start_time = self.flicker_end_time
-        self.fade_end_time = self.fade_start_time + CORPSE_FADE_DURATION_SECONDS
-        self.visible = True
-        self.is_fading = False
-        self.flicker_on = True
-        self.last_flicker_toggle = 0
-        self.flicker_interval = 150
-
+        self.fade_start_time = self.flicker_end_time; self.fade_end_time = self.fade_start_time + CORPSE_FADE_DURATION_SECONDS
+        self.visible = True; self.is_fading = False; self.flicker_on = True; self.last_flicker_toggle = 0; self.flicker_interval = 150
     def update(self):
-        current_time = time.time()
+        current_time = time.time();
         if current_time > self.fade_end_time: return False
         self.is_fading = current_time > self.fade_start_time
         if self.flicker_start_time <= current_time < self.flicker_end_time:
             now_ms = pygame.time.get_ticks()
-            if now_ms - self.last_flicker_toggle > self.flicker_interval:
-                self.flicker_on = not self.flicker_on
-                self.last_flicker_toggle = now_ms
+            if now_ms - self.last_flicker_toggle > self.flicker_interval: self.flicker_on = not self.flicker_on; self.last_flicker_toggle = now_ms
             self.visible = self.flicker_on
         elif self.is_fading: self.visible = True
         else: self.visible = True
         return True
-
     def draw(self, surface, camera_offset=(0, 0)):
         if not self.visible: return
-        offset_x, offset_y = 0, 0
-        alpha = 255
+        offset_x, offset_y = 0, 0; alpha = 255
         if self.is_fading:
-             fade_duration = CORPSE_FADE_DURATION_SECONDS
-             if fade_duration <= 0: fade_duration = 1
-             fade_progress = (time.time() - self.fade_start_time) / fade_duration
-             alpha = max(0, 255 * (1 - fade_progress))
-
+             fade_duration = max(1, CORPSE_FADE_DURATION_SECONDS) # 防除零
+             fade_progress = (time.time() - self.fade_start_time) / fade_duration; alpha = max(0, 255 * (1 - fade_progress))
         img_to_draw = self.image
         if alpha < 254:
-            try:
-                img_to_draw = self.image.copy()
-                img_to_draw.set_alpha(int(alpha))
-            except Exception as e: img_to_draw = self.image
-
+            try: img_to_draw = self.image.copy(); img_to_draw.set_alpha(int(alpha))
+            except Exception: img_to_draw = self.image
         for seg_x, seg_y in self.segments:
-            pixel_x = seg_x * self.grid_size + offset_x
-            pixel_y = seg_y * self.grid_size + offset_y
+            pixel_x = seg_x * self.grid_size + offset_x; pixel_y = seg_y * self.grid_size + offset_y
             if img_to_draw: surface.blit(img_to_draw, (pixel_x, pixel_y))
             else: pygame.draw.rect(surface, GREY, (pixel_x, pixel_y, self.grid_size, self.grid_size), 1)
-
     def get_end_points(self):
         if not self.segments: return None, None
         try: return self.segments[0], self.segments[-1]
@@ -345,57 +278,34 @@ class Corpse:
 # --- 果实 基类 ---
 class Fruit:
     def __init__(self, game, position, fruit_type, image_name, lifespan=None):
-        self.game = game
-        self.position = position
-        self.type = fruit_type
-        self.grid_size = GRID_SIZE
+        self.game = game; self.position = position; self.type = fruit_type; self.grid_size = GRID_SIZE
         self.image = load_image(image_name, size=self.grid_size)
         if not self.image:
-             print(f"错误：未能加载 {image_name}")
-             self.image = pygame.Surface((self.grid_size, self.grid_size))
+             print(f"错误：未能加载 {image_name}"); self.image = pygame.Surface((self.grid_size, self.grid_size))
              if self.type == 'healthy': self.image.fill(GREEN)
              elif self.type == 'bomb': self.image.fill(RED)
              else: self.image.fill(WHITE)
-        self.lifespan = lifespan
-        self.creation_time = time.time()
-        self.is_special = fruit_type != 'normal'
-
+        self.lifespan = lifespan; self.creation_time = time.time(); self.is_special = fruit_type != 'normal'
     def update(self):
-        if self.lifespan is not None and time.time() - self.creation_time > self.lifespan:
-            return False
+        if self.lifespan is not None and time.time() - self.creation_time > self.lifespan: return False
         return True
-
     def draw(self, surface, camera_offset=(0, 0)):
-        offset_x, offset_y = 0, 0
-        pixel_x = self.position[0] * self.grid_size + offset_x
-        pixel_y = self.position[1] * self.grid_size + offset_y
+        offset_x, offset_y = 0, 0; pixel_x = self.position[0] * self.grid_size + offset_x; pixel_y = self.position[1] * self.grid_size + offset_y
         if self.image: surface.blit(self.image, (pixel_x, pixel_y))
 
 # --- 鬼魂 基类 ---
 class Ghost:
     def __init__(self, game, start_pos, image_name, speed_factor):
-        self.game = game
-        self.grid_pos = start_pos
-        self.pixel_pos = [start_pos[0] * GRID_SIZE, start_pos[1] * GRID_SIZE]
-        self.grid_size = GRID_SIZE
+        self.game = game; self.grid_pos = start_pos; self.pixel_pos = [start_pos[0] * GRID_SIZE, start_pos[1] * GRID_SIZE]; self.grid_size = GRID_SIZE
         self.image = load_image(image_name, size=self.grid_size)
         if not self.image:
-             print(f"错误：未能加载 {image_name}")
-             self.image = pygame.Surface((self.grid_size, self.grid_size))
+             print(f"错误：未能加载 {image_name}"); self.image = pygame.Surface((self.grid_size, self.grid_size))
              if 'blinky' in image_name: self.image.fill(RED)
              elif 'pinky' in image_name: self.image.fill((255,182,193))
              else: self.image.fill(BLUE)
-        self.speed_factor = speed_factor
-        self.target_grid_pos = start_pos
-        self.last_target_update = 0
-        self.current_path = []
-        self.move_direction = (0, 0)
-
-    def get_speed(self):
-        return BASE_SNAKE_SPEED_PPS * self.speed_factor * self.grid_size
-
-    def update_target(self, snake_body): pass
-
+        self.speed_factor = speed_factor; self.target_grid_pos = start_pos; self.last_target_update = 0; self.current_path = []; self.move_direction = (0, 0)
+    def get_speed(self): return BASE_SNAKE_SPEED_PPS * self.speed_factor * self.grid_size
+    def update_target(self, snake_body): pass # 由子类实现
     def update(self, dt, snake_body):
         current_time_ms = pygame.time.get_ticks()
         if current_time_ms - self.last_target_update > GHOST_TARGET_UPDATE_INTERVAL_MS:
@@ -409,29 +319,21 @@ class Ghost:
                 elif dy != 0: self.move_direction = (0, 1 if dy > 0 else -1)
                 else: self.move_direction = (0, 0)
             else: self.move_direction = (0, 0)
-
-        speed_pixels_per_sec = self.get_speed()
-        move_dist = speed_pixels_per_sec * dt
+        speed_pixels_per_sec = self.get_speed(); move_dist = speed_pixels_per_sec * dt
         target_center_px = (self.target_grid_pos[0] * self.grid_size + self.grid_size / 2, self.target_grid_pos[1] * self.grid_size + self.grid_size / 2)
         current_center_px = (self.pixel_pos[0] + self.grid_size / 2, self.pixel_pos[1] + self.grid_size / 2)
-        delta_px = target_center_px[0] - current_center_px[0]; delta_py = target_center_px[1] - current_center_px[1]
-        dist_to_target = (delta_px**2 + delta_py**2)**0.5
-
+        delta_px = target_center_px[0] - current_center_px[0]; delta_py = target_center_px[1] - current_center_px[1]; dist_to_target = (delta_px**2 + delta_py**2)**0.5
         if dist_to_target > 1:
             norm_dx = delta_px / dist_to_target; norm_dy = delta_py / dist_to_target
             self.pixel_pos[0] += norm_dx * move_dist; self.pixel_pos[1] += norm_dy * move_dist
             new_grid_x = int(self.pixel_pos[0] // self.grid_size); new_grid_y = int(self.pixel_pos[1] // self.grid_size)
             new_grid_x = max(0, min(CANVAS_GRID_WIDTH - 1, new_grid_x)); new_grid_y = max(0, min(CANVAS_GRID_HEIGHT - 1, new_grid_y))
             self.grid_pos = (new_grid_x, new_grid_y)
-
         if snake_body:
-             head_pos = snake_body[-1]
-             dist_sq = (head_pos[0] - self.grid_pos[0])**2 + (head_pos[1] - self.grid_pos[1])**2
+             head_pos = snake_body[-1]; dist_sq = (head_pos[0] - self.grid_pos[0])**2 + (head_pos[1] - self.grid_pos[1])**2
              if dist_sq <= GHOST_WARNING_DISTANCE_GRIDS**2: self.game.try_play_sound('ghost_warning', unique=True)
-
     def draw(self, surface, camera_offset=(0, 0)):
-        offset_x, offset_y = 0, 0
-        draw_x = self.pixel_pos[0] + offset_x; draw_y = self.pixel_pos[1] + offset_y
+        offset_x, offset_y = 0, 0; draw_x = self.pixel_pos[0] + offset_x; draw_y = self.pixel_pos[1] + offset_y
         if self.image: surface.blit(self.image, (draw_x, draw_y))
 
 # --- Blinky ---
@@ -440,37 +342,52 @@ class Blinky(Ghost):
         start_pos = (random.randint(0, CANVAS_GRID_WIDTH - 1), random.randint(0, CANVAS_GRID_HEIGHT - 1))
         super().__init__(game, start_pos, 'ghost_blinky.png', GHOST_BASE_SPEED_FACTOR)
         self.type = "Blinky"
+
     def update_target(self, snake_body):
+        """Blinky 的目标是蛇身的中点。"""
         if not snake_body: return
         mid_index = len(snake_body) // 2
-        if 0 <= mid_index < len(snake_body): self.target_grid_pos = snake_body[mid_index]
-        elif snake_body: self.target_grid_pos = snake_body[-1]
+        if 0 <= mid_index < len(snake_body):
+            self.target_grid_pos = snake_body[mid_index]
+        elif snake_body:
+             self.target_grid_pos = snake_body[-1]
 
 # --- Pinky ---
 class Pinky(Ghost):
     def __init__(self, game):
         spawn_ok = False; start_pos = (0,0); attempts = 0; max_attempts = 100
         while not spawn_ok and attempts < max_attempts:
-            attempts += 1
-            start_pos = (random.randint(0, CANVAS_GRID_WIDTH - 1), random.randint(0, CANVAS_GRID_HEIGHT - 1))
+            attempts += 1; start_pos = (random.randint(0, CANVAS_GRID_WIDTH - 1), random.randint(0, CANVAS_GRID_HEIGHT - 1))
             if game.snake is None or not hasattr(game.snake, 'body') or start_pos not in game.snake.body: spawn_ok = True
         if not spawn_ok: start_pos = (0,0); print("警告：未能为 Pinky 找到清晰的生成点，生成在 (0,0)")
-        super().__init__(game, start_pos, 'ghost_pinky.png', GHOST_BASE_SPEED_FACTOR)
-        self.type = "Pinky"
+        super().__init__(game, start_pos, 'ghost_pinky.png', GHOST_BASE_SPEED_FACTOR); self.type = "Pinky"
+# --- Pinky ---
+# ... (init 方法) ...
     def update_target(self, snake_body):
-        if not snake_body: return
-        head_pos = snake_body[-1]
+        """Pinky 的目标是蛇头前方一定格子数的位置。"""
+        if not snake_body: return # 如果蛇不存在或为空，不更新目标
+
+        # --- >>> 添加回这一行 <<< ---
+        head_pos = snake_body[-1] # 获取蛇头位置
+        # --- >>> 添加结束 <<< ---
+
+        # 获取蛇的方向
         if self.game.snake: head_dir = self.game.snake.direction
-        else: head_dir = RIGHT
-        target_x = head_pos[0] + head_dir[0] * PINKY_PREDICTION_DISTANCE; target_y = head_pos[1] + head_dir[1] * PINKY_PREDICTION_DISTANCE
-        target_x = max(0, min(CANVAS_GRID_WIDTH - 1, target_x)); target_y = max(0, min(CANVAS_GRID_HEIGHT - 1, target_y))
+        else: head_dir = RIGHT # 备用方向
+
+        # 计算目标位置
+        target_x = head_pos[0] + head_dir[0] * PINKY_PREDICTION_DISTANCE;
+        target_y = head_pos[1] + head_dir[1] * PINKY_PREDICTION_DISTANCE
+        # 限制目标在画布内
+        target_x = max(0, min(CANVAS_GRID_WIDTH - 1, target_x));
+        target_y = max(0, min(CANVAS_GRID_HEIGHT - 1, target_y));
+        # 设置目标格子坐标
         self.target_grid_pos = (target_x, target_y)
 
 # --- 粒子 类 ---
 class Particle:
     def __init__(self, game, pos_px, color, size_range=(1, 3), vel_range=(-1.5, 1.5), lifespan_ms=400):
-        self.game = game; self.x, self.y = pos_px; self.color = color
-        self.size = random.uniform(size_range[0], size_range[1])
+        self.game = game; self.x, self.y = pos_px; self.color = color; self.size = random.uniform(size_range[0], size_range[1])
         self.vx = random.uniform(vel_range[0], vel_range[1]) * 60; self.vy = random.uniform(vel_range[0], vel_range[1]) * 60
         self.creation_time = pygame.time.get_ticks(); self.lifespan = lifespan_ms; self.alpha = 255
     def update(self, dt):
@@ -481,10 +398,9 @@ class Particle:
         return True
     def draw(self, surface, camera_offset=(0,0)):
         if self.alpha <= 0 or self.size < 1: return
-        offset_x, offset_y = 0, 0
-        draw_x = int(self.x + offset_x); draw_y = int(self.y + offset_y); radius = max(1, int(self.size))
-        try:
-            particle_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-            pygame.draw.circle(particle_surf, (*self.color, int(self.alpha)), (radius, radius), radius)
-            surface.blit(particle_surf, (draw_x - radius, draw_y - radius))
-        except Exception as e: pass
+        offset_x, offset_y = 0, 0; draw_x = int(self.x + offset_x); draw_y = int(self.y + offset_y); radius = max(1, int(self.size))
+        try: particle_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA); pygame.draw.circle(particle_surf, (*self.color, int(self.alpha)), (radius, radius), radius); surface.blit(particle_surf, (draw_x - radius, draw_y - radius))
+        except Exception: pass
+
+# --- END OF FILE sprites.py ---
+
