@@ -333,90 +333,134 @@ class Ghost:
         pass # 基类不实现
 
     # --- 新增：A* 寻路方法 ---
+        # --- 新增：A* 寻路方法 ---
+    
+    # --- A* 寻路方法结束 ---
+        # --- 新增：A* 寻路方法 ---
+        # 在 Ghost 类中
+    # Inside Ghost class, find_path method...
+        # 在 Ghost 类中
     def find_path(self):
-        """使用 A* 算法计算到目标点的路径。"""
-        # 如果库不可用、无目标或已到达，则清空路径
+        """使用 A* 算法计算到目标点的路径。(修正目标点障碍问题)"""
         if not pathfinding_available or not self.target_grid_pos or self.grid_pos == self.target_grid_pos:
+            self.current_path = []; return
+
+        # --- 1. 创建障碍物矩阵 (0=可通行, 1=障碍) ---
+        matrix = [[0 for _ in range(CANVAS_GRID_WIDTH)] for _ in range(CANVAS_GRID_HEIGHT)]
+
+        # 获取当前的目标点，确保它有效
+        current_target = self.target_grid_pos
+        if not current_target: # 如果目标无效，则无法排除
+            print(f"[{self.type}] 警告：寻路时目标点无效！")
+            # 可以选择停止寻路或设置一个默认目标？暂时停止。
             self.current_path = []
             return
 
-        # 1. 创建障碍物矩阵 (0: 可通行, 1: 障碍)
-        matrix = [[0 for _ in range(CANVAS_GRID_WIDTH)] for _ in range(CANVAS_GRID_HEIGHT)]
-
-        # 标记蛇身和头为障碍
+        # 标记蛇身和头为障碍 (标记为 1)
         if self.game.snake and self.game.snake.body:
-            # 排除蛇尾？或者也作为障碍？作为障碍更安全
             for seg_x, seg_y in self.game.snake.body:
+                # 跳过鬼魂自身位置
+                if (seg_x, seg_y) == self.grid_pos:
+                    continue
+                # --- >>> 新增：跳过目标点 <<< ---
+                if (seg_x, seg_y) == current_target:
+                    continue # 目标点永远视为可通行
+                # --- >>> 新增结束 <<< ---
                 if 0 <= seg_y < CANVAS_GRID_HEIGHT and 0 <= seg_x < CANVAS_GRID_WIDTH:
                     matrix[seg_y][seg_x] = 1 # 1 表示障碍
 
-        # 标记尸体为障碍
+        # 标记尸体为障碍 (标记为 1)
         for corpse in self.game.corpses:
             for seg_x, seg_y in corpse.segments:
+                # 跳过鬼魂自身位置
+                if (seg_x, seg_y) == self.grid_pos:
+                    continue
+                # --- >>> 新增：跳过目标点 <<< ---
+                # (理论上目标点不会在尸体上，但以防万一)
+                if (seg_x, seg_y) == current_target:
+                    continue # 目标点永远视为可通行
+                # --- >>> 新增结束 <<< ---
                 if 0 <= seg_y < CANVAS_GRID_HEIGHT and 0 <= seg_x < CANVAS_GRID_WIDTH:
                     matrix[seg_y][seg_x] = 1 # 1 表示障碍
+        # --- 障碍标记结束 ---
 
-        # 2. 创建 Grid 对象
+        # 2. 创建 Grid 对象 和后续逻辑 (使用转换后的 matrix_for_grid)
         try:
-             # 注意：Grid 构造函数默认权重为1是可通行，但我们可以直接用 0/1 矩阵
-             # 然后在 find_path 时处理。更简单的方式是确认 Grid 如何处理 matrix。
-             # 查看文档或测试：如果 matrix 中 0 表示可通行，Grid 会正确处理。
-             grid = Grid(matrix=matrix)
+             # 创建符合 Grid 预期的 matrix (1=walk, 0=block)
+             matrix_for_grid = [[1 if matrix[y][x] == 0 else 0 for x in range(CANVAS_GRID_WIDTH)] for y in range(CANVAS_GRID_HEIGHT)]
+             grid = Grid(matrix=matrix_for_grid)
 
-             # 3. 定义起点和终点节点
-             start_node = grid.node(self.grid_pos[0], self.grid_pos[1])
+             # 检查起点和终点坐标是否有效 (代码同上，省略)
+             start_x, start_y = self.grid_pos
+             # ... (边界检查) ...
              target_x = max(0, min(CANVAS_GRID_WIDTH - 1, self.target_grid_pos[0]))
              target_y = max(0, min(CANVAS_GRID_HEIGHT - 1, self.target_grid_pos[1]))
-             end_node = grid.node(target_x, target_y)
+             # ... (边界检查) ...
 
-             # 检查起点是否在障碍物上
-             if not grid.is_walkable(start_node):
-                 # print(f"警告：鬼魂起点 {start_node.x},{start_node.y} 在障碍物上，尝试寻找邻近可走点。")
-                 # 简单的处理：暂时不移动，等待下一周期蛇移开
+             start_node = grid.node(start_x, start_y)
+             end_node = grid.node(target_x, target_y) # 目标节点
+
+             # 检查起点是否可行走
+             if not start_node.walkable:
+                 print(f"[{self.type}] 警告：起点 {start_node.x},{start_node.y} 在障碍物上，无法寻路。")
                  self.current_path = []
                  return
 
-             # 4. 创建 A* 查找器，不允许对角移动
-             finder = AStarFinder(diagonal_movement=DiagonalMovement.never)
+             # 检查目标点 (现在不应该被标记为障碍了)
+             # if not end_node.walkable: # 这行检查可以去掉了，因为我们强制目标点可通行
+             #     print(f"[{self.type}] 提示：目标点 {end_node.x},{end_node.y} 在障碍物上。A*将尝试寻找邻近点。")
 
-             # 5. 查找路径
+             finder = AStarFinder(diagonal_movement=DiagonalMovement.never)
              path, runs = finder.find_path(start_node, end_node, grid)
 
-             # 6. 处理路径结果
-             if path and len(path) > 1: # 确保路径存在且至少包含下一步
-                 # print(f"路径找到 ({self.type}): {[ (n.x, n.y) for n in path]}") # 调试信息
-                 self.current_path = [(node.x, node.y) for node in path[1:]] # 存储路径（去掉起点）
+             if path and len(path) > 1:
+                 self.current_path = [(node.x, node.y) for node in path[1:]]
+                 # print(f"[{self.type}] 路径找到({len(self.current_path)}步): {self.current_path[:5]}...")
              else:
-                 # print(f"未找到路径 ({self.type}) 从 {start_node} 到 {end_node}") # 调试信息
+                 fail_reason = "路径为空" if not path else "路径长度不足"
+                 print(f"[{self.type}] 未找到路径 ({fail_reason}) 从 {start_node.x},{start_node.y} 到 {end_node.x},{end_node.y}")
                  self.current_path = []
 
-        except Exception as e:
-             print(f"A* 寻路时发生错误 ({self.type}): {e}")
+        except IndexError:
+             print(f"[{self.type}] A* 寻路时发生索引错误 (坐标可能越界?) 起点:{self.grid_pos} 目标:{self.target_grid_pos}")
              self.current_path = []
+        except Exception as e:
+             print(f"[{self.type}] A* 寻路时发生错误: {e}")
+             self.current_path = []
+    # --- A* 寻路方法结束 ---
     # --- A* 寻路方法结束 ---
 
 
+        # 在 Ghost 类中
     def update(self, dt, snake_body):
         """更新鬼魂状态（目标、移动）。使用 A* (如果可用) 或简单逻辑。"""
         current_time = time.time()
+        path_updated_this_cycle = False # 标记本次循环是否更新了路径
 
-        # --- 修改：定期更新目标和路径 ---
+        # --- 定期更新目标和路径/方向 ---
         if current_time - self.last_path_time > GHOST_TARGET_UPDATE_INTERVAL_SECONDS:
-            self.last_path_time = current_time # 更新时间戳
-            if snake_body:
-                self.update_target(snake_body) # 1. 更新目标点
+            # print(f"[{self.type}] 尝试更新路径和目标...") # 调试
+            self.last_path_time = current_time
+            if snake_body: self.update_target(snake_body) # 1. 更新目标点
 
-            # --- 2. 调用 A* 寻路 (如果可用) 或简单逻辑确定方向 ---
+            path_updated_this_cycle = True # 标记本次更新了路径计算逻辑
+            old_move_direction = self.move_direction # 记录旧方向
+
             if pathfinding_available:
-                self.find_path() # 计算路径并存储在 self.current_path
-                if self.current_path: # 如果找到了路径
-                    next_step = self.current_path[0] # 获取路径的下一步
-                    self.move_direction = (next_step[0] - self.grid_pos[0],
-                                           next_step[1] - self.grid_pos[1])
-                else: # 没有找到路径或路径为空
-                    self.move_direction = (0, 0) # 停止移动
-            else:
-                # --- Fallback: 简单的直线移动逻辑 ---
+                self.find_path() # 计算路径
+                if self.current_path: # 有路径
+                    next_step = self.current_path[0]
+                    calculated_direction = (next_step[0] - self.grid_pos[0], next_step[1] - self.grid_pos[1])
+                    print(f"[{self.type}] A* 找到路径，下一步: {next_step}, 计算方向: {calculated_direction}") # <--- 打印路径和方向
+                    if calculated_direction in [(0,1), (0,-1), (1,0), (-1,0), (0,0)]:
+                        self.move_direction = calculated_direction
+                    else:
+                        print(f"[{self.type}] 警告: A* 计算出无效方向 {calculated_direction}, 保持不动。")
+                        self.move_direction = (0,0)
+                else: # 无路径
+                    print(f"[{self.type}] A* 未找到路径，停止移动。") # <--- 打印未找到路径
+                    self.move_direction = (0, 0)
+            else: # A* 不可用，简单逻辑
                 if self.target_grid_pos and self.target_grid_pos != self.grid_pos:
                     dx = self.target_grid_pos[0] - self.grid_pos[0]; dy = self.target_grid_pos[1] - self.grid_pos[1]
                     if abs(dx) > abs(dy): self.move_direction = (1 if dx > 0 else -1, 0)
@@ -424,52 +468,69 @@ class Ghost:
                     elif dx != 0: self.move_direction = (1 if dx > 0 else -1, 0)
                     elif dy != 0: self.move_direction = (0, 1 if dy > 0 else -1)
                     else: self.move_direction = (0, 0)
-                else:
-                    self.move_direction = (0, 0)
-        # --- 目标和路径/方向更新结束 ---
+                else: self.move_direction = (0, 0)
+                # print(f"[{self.type}] 简单逻辑方向: {self.move_direction}")
 
+            # --- 调试：比较新旧方向 ---
+            # if path_updated_this_cycle:
+            #     print(f"[{self.type}] 路径更新后方向: {self.move_direction} (旧: {old_move_direction})")
 
         # --- 移动鬼魂（像素级移动）---
-        if self.move_direction != (0, 0): # 只有在需要移动时才计算
+        if self.move_direction != (0, 0):
             speed_pixels_per_sec = self.get_speed()
             move_dist = speed_pixels_per_sec * dt
 
-            # 计算目标像素中心：下一个格子的中心
-            next_grid_center_px = ( (self.grid_pos[0] + self.move_direction[0]) * self.grid_size + self.grid_size / 2,
-                                    (self.grid_pos[1] + self.move_direction[1]) * self.grid_size + self.grid_size / 2 )
+            next_target_grid_x = self.grid_pos[0] + self.move_direction[0]
+            next_target_grid_y = self.grid_pos[1] + self.move_direction[1]
+            target_center_px = ( next_target_grid_x * self.grid_size + self.grid_size / 2,
+                                 next_target_grid_y * self.grid_size + self.grid_size / 2 )
             current_pixel_center = ( self.pixel_pos[0] + self.grid_size / 2,
                                      self.pixel_pos[1] + self.grid_size / 2 )
 
-            delta_px = next_grid_center_px[0] - current_pixel_center[0]
-            delta_py = next_grid_center_px[1] - current_pixel_center[1]
+            delta_px = target_center_px[0] - current_pixel_center[0]
+            delta_py = target_center_px[1] - current_pixel_center[1]
             dist_to_target_center = (delta_px**2 + delta_py**2)**0.5
 
-            if dist_to_target_center > 1: # 移动阈值
+            if dist_to_target_center > 1:
                 norm_dx = delta_px / dist_to_target_center
                 norm_dy = delta_py / dist_to_target_center
-
-                # 移动，最多移动到目标中心
                 actual_move = min(move_dist, dist_to_target_center)
                 self.pixel_pos[0] += norm_dx * actual_move
                 self.pixel_pos[1] += norm_dy * actual_move
+                # print(f"[{self.type}] 正在移动: 方向={self.move_direction}, 距离={actual_move:.2f}, 新像素={self.pixel_pos[0]:.1f},{self.pixel_pos[1]:.1f}") # <--- 打印移动细节
+            # else:
+                # print(f"[{self.type}] 已接近目标中心 {next_target_grid_x},{next_target_grid_y}")
+                pass
+        # else: # 如果移动方向为 (0,0)
+            # print(f"[{self.type}] 移动方向为 (0,0)，不执行像素移动。") # <--- 打印不动的原因
+            pass
 
-        # 根据像素位置更新格子位置 (保持不变)
+        # --- 根据像素位置更新格子位置 ---
         new_grid_x = int(self.pixel_pos[0] // self.grid_size)
         new_grid_y = int(self.pixel_pos[1] // self.grid_size)
         new_grid_x = max(0, min(CANVAS_GRID_WIDTH - 1, new_grid_x))
         new_grid_y = max(0, min(CANVAS_GRID_HEIGHT - 1, new_grid_y))
-        # --- 重要：只有当格子位置实际改变时才更新，防止像素移动未跨越格子边界时路径失效 ---
+
         if (new_grid_x, new_grid_y) != self.grid_pos:
-             self.grid_pos = (new_grid_x, new_grid_y)
-             # 如果使用了 A* 路径并且当前格子是路径中的下一步，则移除该步
-             if pathfinding_available and self.current_path and self.grid_pos == self.current_path[0]:
-                  self.current_path.pop(0)
-                  # 如果路径移除后还有下一步，预先计算方向，使得下次update时可以直接用
-                  if self.current_path:
-                      next_step = self.current_path[0]
-                      self.move_direction = (next_step[0] - self.grid_pos[0], next_step[1] - self.grid_pos[1])
-                  else: # 路径走完
-                      self.move_direction = (0,0)
+            old_grid_pos = self.grid_pos
+            self.grid_pos = (new_grid_x, new_grid_y)
+            print(f"[{self.type}] 格子位置更新: 从 {old_grid_pos} 到 {self.grid_pos}") # <--- 打印格子更新
+
+            if pathfinding_available and self.current_path and self.grid_pos == self.current_path[0]:
+                print(f"[{self.type}] 到达路径点 {self.current_path[0]}，消耗路径。剩余路径: {self.current_path[1:]}") # <--- 打印路径消耗
+                self.current_path.pop(0)
+                if self.current_path:
+                    next_step = self.current_path[0]
+                    self.move_direction = (next_step[0] - self.grid_pos[0], next_step[1] - self.grid_pos[1])
+                    print(f"[{self.type}] 设置下一方向: {self.move_direction} (前往 {next_step})") # <--- 打印下一方向
+                else:
+                    print(f"[{self.type}] A* 路径已完成。") # <--- 打印路径完成
+                    self.move_direction = (0,0)
+                    # 可选：对齐像素到格子
+                    # self.pixel_pos = [self.grid_pos[0] * self.grid_size, self.grid_pos[1] * self.grid_size]
+        # else: # 如果格子位置没有更新
+            # print(f"[{self.type}] 像素位置 {self.pixel_pos[0]:.1f},{self.pixel_pos[1]:.1f} 未导致格子位置 {self.grid_pos} 改变。") # <--- 调试：格子未改变
+            pass
 
 
         # 触发警告音效 (逻辑不变)
@@ -478,6 +539,9 @@ class Ghost:
              dist_sq = (head_pos[0] - self.grid_pos[0])**2 + (head_pos[1] - self.grid_pos[1])**2
              if dist_sq <= GHOST_WARNING_DISTANCE_GRIDS**2:
                  self.game.try_play_sound('ghost_warning', unique=True)
+
+
+    
 
     def draw(self, surface, camera_offset=(0, 0)):
         """绘制鬼魂。"""
