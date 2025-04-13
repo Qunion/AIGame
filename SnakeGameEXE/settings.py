@@ -42,7 +42,7 @@ GRID_COLOR = (200, 200, 200, 80) # 浅灰色，带透明度
 
 # --- 游戏机制 - 可调参数 (Game Mechanics - TUNABLE PARAMETERS) ---
 # 这些参数可以在这里方便地调整，用于测试和平衡游戏
-INITIAL_SNAKE_LENGTH = 4  # 蛇的初始长度（格子数）
+INITIAL_SNAKE_LENGTH = 14  # 蛇的初始长度（格子数）
 
 # --- 新增：初始果实数量 ---
 INITIAL_FRUIT_COUNT = 5    # 游戏开始时生成的初始果实数量 【调试编辑】
@@ -87,7 +87,7 @@ BOMB_FRUIT_DURATION_SECONDS = 30    # 炸弹果实（红黑色）的存在时间
 # 敌人（鬼魂）相关参数
 PINKY_SPAWN_LENGTH = 10    # 蛇达到多长时 Pinky 鬼魂出现 【调试编辑】
 GHOST_BASE_SPEED_FACTOR = 0.8 # 鬼魂的基础速度相对于蛇基础速度的倍率 (0.5 = 50%) 【调试编辑】
-GHOST_TARGET_UPDATE_INTERVAL_SECONDS = 0.5 # 鬼魂重新计算目标位置的时间间隔（秒） 【调试编辑】
+GHOST_TARGET_UPDATE_INTERVAL_SECONDS = 2 # 鬼魂重新计算目标位置的时间间隔（秒） 【调试编辑】
 PINKY_PREDICTION_DISTANCE = 4 # Pinky 预测蛇头前方多少格进行拦截 【调试编辑】
 GHOST_WARNING_DISTANCE_GRIDS = 2 # 鬼魂距离蛇头多少格以内触发警告音效 【调试编辑】
 

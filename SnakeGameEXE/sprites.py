@@ -294,11 +294,11 @@ class Fruit:
         if self.image: surface.blit(self.image, (pixel_x, pixel_y))
 
 # --- 鬼魂 基类 ---
-# === ADDED/MODIFIED SECTION START: Ghost Class with A* ===
+# === ADDED/MODIFIED SECTION START: Ghost Class with A* and Debug Prints ===
 try:
     from pathfinding.core.grid import Grid
     from pathfinding.finder.a_star import AStarFinder
-    from pathfinding.core.diagonal_movement import DiagonalMovement # 决定是否允许对角移动
+    from pathfinding.core.diagonal_movement import DiagonalMovement
     pathfinding_available = True
 except ImportError:
     print("警告：未找到 'pathfinding' 库。鬼魂将使用简单的直线移动逻辑。")
@@ -308,21 +308,22 @@ except ImportError:
 class Ghost:
     def __init__(self, game, start_pos, image_name, speed_factor):
         self.game = game
-        self.grid_pos = start_pos
-        self.pixel_pos = [start_pos[0] * GRID_SIZE, start_pos[1] * GRID_SIZE]
+        self.grid_pos = start_pos   # 当前格子坐标 (x, y)
+        self.pixel_pos = [start_pos[0] * GRID_SIZE, start_pos[1] * GRID_SIZE] # 精确像素坐标 [x, y]
         self.grid_size = GRID_SIZE
         self.image = load_image(image_name, size=self.grid_size)
-        if not self.image:
+        if not self.image: # 图像加载失败处理
              print(f"错误：未能加载 {image_name}"); self.image = pygame.Surface((self.grid_size, self.grid_size))
              if 'blinky' in image_name: self.image.fill(RED)
              elif 'pinky' in image_name: self.image.fill((255,182,193))
              else: self.image.fill(BLUE)
-        self.speed_factor = speed_factor
-        self.target_grid_pos = start_pos
-        # --- 修改：使用秒为单位记录上次路径计算时间 ---
-        self.last_path_time = 0.0 # 初始化为 0.0 秒
-        self.current_path = [] # 存储计算出的路径 [(x1, y1), (x2, y2), ...]
-        self.move_direction = (0, 0) # 当前格子移动方向
+        self.speed_factor = speed_factor       # 速度系数
+        self.target_grid_pos = start_pos     # 目标格子坐标
+        self.last_path_time = 0.0          # 上次计算路径的时间 (秒)
+        self.current_path = []             # 当前计算出的路径 [(x,y), ...]
+        self.move_direction = (0, 0)         # 当前帧要移动的方向 (dx, dy)
+        self.type = image_name.split('_')[1].split('.')[0].capitalize() # 从文件名获取类型 (Blinky/Pinky)
+        print(f"[{self.type}] 初始化于 {self.grid_pos}")
 
     def get_speed(self):
         """获取鬼魂当前的移动速度（像素/秒）。"""
@@ -330,218 +331,199 @@ class Ghost:
 
     def update_target(self, snake_body):
         """更新鬼魂的目标格子。由子类重写。"""
-        pass # 基类不实现
+        pass # 子类实现具体逻辑
 
-    # --- 新增：A* 寻路方法 ---
-        # --- 新增：A* 寻路方法 ---
-    
-    # --- A* 寻路方法结束 ---
-        # --- 新增：A* 寻路方法 ---
-        # 在 Ghost 类中
-    # Inside Ghost class, find_path method...
-        # 在 Ghost 类中
     def find_path(self):
-        """使用 A* 算法计算到目标点的路径。(修正目标点障碍问题)"""
+        """使用 A* 算法计算到目标点的路径。"""
+        # 基础检查
         if not pathfinding_available or not self.target_grid_pos or self.grid_pos == self.target_grid_pos:
-            self.current_path = []; return
-
-        # --- 1. 创建障碍物矩阵 (0=可通行, 1=障碍) ---
-        matrix = [[0 for _ in range(CANVAS_GRID_WIDTH)] for _ in range(CANVAS_GRID_HEIGHT)]
-
-        # 获取当前的目标点，确保它有效
-        current_target = self.target_grid_pos
-        if not current_target: # 如果目标无效，则无法排除
-            print(f"[{self.type}] 警告：寻路时目标点无效！")
-            # 可以选择停止寻路或设置一个默认目标？暂时停止。
-            self.current_path = []
+            # print(f"[{self.type}] 跳过寻路：Lib={pathfinding_available}, Target={self.target_grid_pos}, Pos={self.grid_pos}")
+            if self.current_path: # 如果之前有路径，清空它
+                 print(f"[{self.type}] 清空旧路径，因为已到达目标或目标无效。")
+                 self.current_path = []
             return
 
-        # 标记蛇身和头为障碍 (标记为 1)
-        if self.game.snake and self.game.snake.body:
-            for seg_x, seg_y in self.game.snake.body:
-                # 跳过鬼魂自身位置
-                if (seg_x, seg_y) == self.grid_pos:
-                    continue
-                # --- >>> 新增：跳过目标点 <<< ---
-                if (seg_x, seg_y) == current_target:
-                    continue # 目标点永远视为可通行
-                # --- >>> 新增结束 <<< ---
-                if 0 <= seg_y < CANVAS_GRID_HEIGHT and 0 <= seg_x < CANVAS_GRID_WIDTH:
-                    matrix[seg_y][seg_x] = 1 # 1 表示障碍
+        print(f"[{self.type}] 开始寻路: 从 {self.grid_pos} 到 {self.target_grid_pos}")
+        # 1. 创建障碍矩阵 (0=可走, 1=障碍)
+        matrix = [[0 for _ in range(CANVAS_GRID_WIDTH)] for _ in range(CANVAS_GRID_HEIGHT)]
+        current_target = self.target_grid_pos # 获取当前目标
 
-        # 标记尸体为障碍 (标记为 1)
-        for corpse in self.game.corpses:
-            for seg_x, seg_y in corpse.segments:
-                # 跳过鬼魂自身位置
-                if (seg_x, seg_y) == self.grid_pos:
-                    continue
-                # --- >>> 新增：跳过目标点 <<< ---
-                # (理论上目标点不会在尸体上，但以防万一)
-                if (seg_x, seg_y) == current_target:
-                    continue # 目标点永远视为可通行
-                # --- >>> 新增结束 <<< ---
-                if 0 <= seg_y < CANVAS_GRID_HEIGHT and 0 <= seg_x < CANVAS_GRID_WIDTH:
-                    matrix[seg_y][seg_x] = 1 # 1 表示障碍
-        # --- 障碍标记结束 ---
 
-        # 2. 创建 Grid 对象 和后续逻辑 (使用转换后的 matrix_for_grid)
+        # 标记蛇身和尸体为障碍，跳过自身和目标点
+        obstacles = set() # 使用集合存储障碍位置
+        if self.game.snake and self.game.snake.body: obstacles.update(self.game.snake.body)
+        for corpse in self.game.corpses: obstacles.update(corpse.segments)
+
+        # --- >>> 新增：将果实位置也加入障碍物 <<< ---
+        # 但要排除目标点是果实的情况吗？理论上鬼魂目标不是果实，可以不排除。
+        # 排除炸弹果实？还是所有果实都避开？目前设定是所有果实都避开。
+        for fruit in self.game.fruits:
+             obstacles.add(fruit.position)
+        # --- >>> 新增结束 <<< ---
+
+        for obs_x, obs_y in obstacles:
+            if (obs_x, obs_y) == self.grid_pos: continue # 跳过自身
+            if (obs_x, obs_y) == current_target: continue # 跳过目标
+            if 0 <= obs_y < CANVAS_GRID_HEIGHT and 0 <= obs_x < CANVAS_GRID_WIDTH:
+                matrix[obs_y][obs_x] = 1 # 标记为障碍
+
+        # 2. 创建 Grid 对象 (转换 matrix: 1=可走, 0=障碍)
         try:
-             # 创建符合 Grid 预期的 matrix (1=walk, 0=block)
              matrix_for_grid = [[1 if matrix[y][x] == 0 else 0 for x in range(CANVAS_GRID_WIDTH)] for y in range(CANVAS_GRID_HEIGHT)]
              grid = Grid(matrix=matrix_for_grid)
 
-             # 检查起点和终点坐标是否有效 (代码同上，省略)
+             # 检查起点和终点坐标
              start_x, start_y = self.grid_pos
-             # ... (边界检查) ...
-             target_x = max(0, min(CANVAS_GRID_WIDTH - 1, self.target_grid_pos[0]))
-             target_y = max(0, min(CANVAS_GRID_HEIGHT - 1, self.target_grid_pos[1]))
-             # ... (边界检查) ...
+             target_x = max(0, min(CANVAS_GRID_WIDTH - 1, current_target[0]))
+             target_y = max(0, min(CANVAS_GRID_HEIGHT - 1, current_target[1]))
+
+             # 确保坐标在 Grid 内部 (node 方法会检查，但提前检查更清晰)
+             if not grid.inside(start_x, start_y):
+                  print(f"[{self.type}] 错误: 起点 {start_x},{start_y} 超出 Grid 边界!")
+                  self.current_path = []; return
+             if not grid.inside(target_x, target_y):
+                  print(f"[{self.type}] 错误: 目标 {target_x},{target_y} 超出 Grid 边界!")
+                  self.current_path = []; return
 
              start_node = grid.node(start_x, start_y)
-             end_node = grid.node(target_x, target_y) # 目标节点
+             end_node = grid.node(target_x, target_y)
 
              # 检查起点是否可行走
              if not start_node.walkable:
-                 print(f"[{self.type}] 警告：起点 {start_node.x},{start_node.y} 在障碍物上，无法寻路。")
+                 print(f"[{self.type}] 警告：起点 {start_node.x},{start_node.y} 在障碍物上 (matrix_for_grid={matrix_for_grid[start_y][start_x]})，寻路失败。")
                  self.current_path = []
                  return
 
-             # 检查目标点 (现在不应该被标记为障碍了)
-             # if not end_node.walkable: # 这行检查可以去掉了，因为我们强制目标点可通行
-             #     print(f"[{self.type}] 提示：目标点 {end_node.x},{end_node.y} 在障碍物上。A*将尝试寻找邻近点。")
+             # 检查目标点是否可行走（理论上不会是障碍了）
+             # if not end_node.walkable:
+             #     print(f"[{self.type}] 提示：目标点 {end_node.x},{end_node.y} 在障碍物上。")
 
+             # 3. 寻路
              finder = AStarFinder(diagonal_movement=DiagonalMovement.never)
              path, runs = finder.find_path(start_node, end_node, grid)
 
-             if path and len(path) > 1:
-                 self.current_path = [(node.x, node.y) for node in path[1:]]
-                 # print(f"[{self.type}] 路径找到({len(self.current_path)}步): {self.current_path[:5]}...")
+             # 4. 处理结果
+             if path and len(path) > 1: # 需要至少包含起点和下一步
+                 self.current_path = [(node.x, node.y) for node in path[1:]] # 去掉起点
+                 print(f"[{self.type}] 路径找到 ({len(self.current_path)}步): {self.current_path[:5]}...")
              else:
                  fail_reason = "路径为空" if not path else "路径长度不足"
                  print(f"[{self.type}] 未找到路径 ({fail_reason}) 从 {start_node.x},{start_node.y} 到 {end_node.x},{end_node.y}")
                  self.current_path = []
 
-        except IndexError:
-             print(f"[{self.type}] A* 寻路时发生索引错误 (坐标可能越界?) 起点:{self.grid_pos} 目标:{self.target_grid_pos}")
+        except Exception as e: # 捕获所有可能的异常
+             print(f"[{self.type}] A* 寻路时发生严重错误: {e}")
+             import traceback
+             traceback.print_exc() # 打印详细的错误追踪信息
              self.current_path = []
-        except Exception as e:
-             print(f"[{self.type}] A* 寻路时发生错误: {e}")
-             self.current_path = []
-    # --- A* 寻路方法结束 ---
     # --- A* 寻路方法结束 ---
 
 
         # 在 Ghost 类中
+        # 在 Ghost 类中
     def update(self, dt, snake_body):
-        """更新鬼魂状态（目标、移动）。使用 A* (如果可用) 或简单逻辑。"""
+        """更新鬼魂状态（目标、移动）。改进格子更新和路径消耗逻辑。"""
         current_time = time.time()
-        path_updated_this_cycle = False # 标记本次循环是否更新了路径
+        path_recalculated = False
 
-        # --- 定期更新目标和路径/方向 ---
+        # --- 1. 定期更新目标和计算 A* 路径 (逻辑不变) ---
         if current_time - self.last_path_time > GHOST_TARGET_UPDATE_INTERVAL_SECONDS:
-            # print(f"[{self.type}] 尝试更新路径和目标...") # 调试
             self.last_path_time = current_time
-            if snake_body: self.update_target(snake_body) # 1. 更新目标点
-
-            path_updated_this_cycle = True # 标记本次更新了路径计算逻辑
-            old_move_direction = self.move_direction # 记录旧方向
-
+            if snake_body: self.update_target(snake_body)
             if pathfinding_available:
-                self.find_path() # 计算路径
-                if self.current_path: # 有路径
-                    next_step = self.current_path[0]
-                    calculated_direction = (next_step[0] - self.grid_pos[0], next_step[1] - self.grid_pos[1])
-                    print(f"[{self.type}] A* 找到路径，下一步: {next_step}, 计算方向: {calculated_direction}") # <--- 打印路径和方向
-                    if calculated_direction in [(0,1), (0,-1), (1,0), (-1,0), (0,0)]:
-                        self.move_direction = calculated_direction
-                    else:
-                        print(f"[{self.type}] 警告: A* 计算出无效方向 {calculated_direction}, 保持不动。")
-                        self.move_direction = (0,0)
-                else: # 无路径
-                    print(f"[{self.type}] A* 未找到路径，停止移动。") # <--- 打印未找到路径
-                    self.move_direction = (0, 0)
-            else: # A* 不可用，简单逻辑
-                if self.target_grid_pos and self.target_grid_pos != self.grid_pos:
-                    dx = self.target_grid_pos[0] - self.grid_pos[0]; dy = self.target_grid_pos[1] - self.grid_pos[1]
-                    if abs(dx) > abs(dy): self.move_direction = (1 if dx > 0 else -1, 0)
-                    elif abs(dy) > abs(dx): self.move_direction = (0, 1 if dy > 0 else -1)
-                    elif dx != 0: self.move_direction = (1 if dx > 0 else -1, 0)
-                    elif dy != 0: self.move_direction = (0, 1 if dy > 0 else -1)
-                    else: self.move_direction = (0, 0)
-                else: self.move_direction = (0, 0)
-                # print(f"[{self.type}] 简单逻辑方向: {self.move_direction}")
+                self.find_path()
+                path_recalculated = True
 
-            # --- 调试：比较新旧方向 ---
-            # if path_updated_this_cycle:
-            #     print(f"[{self.type}] 路径更新后方向: {self.move_direction} (旧: {old_move_direction})")
+        # --- 2. 每一帧根据当前路径确定移动方向 (逻辑不变) ---
+        current_move_direction = (0,0)
+        if pathfinding_available:
+            if self.current_path:
+                next_step = self.current_path[0]
+                calculated_direction = (next_step[0] - self.grid_pos[0], next_step[1] - self.grid_pos[1])
+                # print(f"[{self.type}] Update: Pos={self.grid_pos}, Path Next={next_step}, CalculatedDir={calculated_direction}")
+                if calculated_direction in [(0,1), (0,-1), (1,0), (-1,0)]: current_move_direction = calculated_direction
+                elif calculated_direction == (0,0): # 路径下一步是当前位置
+                     print(f"[{self.type}] 警告: 路径下一步等于当前位置 {self.grid_pos}，消耗并尝试再下一步。")
+                     self.current_path.pop(0)
+                     if self.current_path:
+                          next_step = self.current_path[0]
+                          calculated_direction = (next_step[0] - self.grid_pos[0], next_step[1] - self.grid_pos[1])
+                          if calculated_direction in [(0,1), (0,-1), (1,0), (-1,0)]: current_move_direction = calculated_direction; print(f"[{self.type}] 使用路径再下一步，方向: {current_move_direction}")
+                          else: print(f"[{self.type}] 警告: 再下一步方向仍无效 {calculated_direction}，停止。")
+                     else: print(f"[{self.type}] 路径在消耗无效步后为空，停止。")
+                else: print(f"[{self.type}] 警告: 根据路径计算出无效方向 {calculated_direction}，停止。")
+            # else: (无路径时保持 (0,0))
+        else: # A* 不可用时的简单逻辑
+             if self.target_grid_pos and self.target_grid_pos != self.grid_pos: dx = self.target_grid_pos[0] - self.grid_pos[0]; dy = self.target_grid_pos[1] - self.grid_pos[1]; current_move_direction = (1 if dx > 0 else -1, 0) if abs(dx) > abs(dy) else (0, 1 if dy > 0 else -1) if abs(dy) > abs(dx) else (1 if dx > 0 else -1, 0) if dx != 0 else (0, 1 if dy > 0 else -1) if dy != 0 else (0,0)
+             else: current_move_direction = (0, 0)
+        self.move_direction = current_move_direction
 
-        # --- 移动鬼魂（像素级移动）---
+
+        # --- 3. 移动鬼魂（像素级移动）---
         if self.move_direction != (0, 0):
             speed_pixels_per_sec = self.get_speed()
             move_dist = speed_pixels_per_sec * dt
 
-            next_target_grid_x = self.grid_pos[0] + self.move_direction[0]
-            next_target_grid_y = self.grid_pos[1] + self.move_direction[1]
-            target_center_px = ( next_target_grid_x * self.grid_size + self.grid_size / 2,
-                                 next_target_grid_y * self.grid_size + self.grid_size / 2 )
-            current_pixel_center = ( self.pixel_pos[0] + self.grid_size / 2,
-                                     self.pixel_pos[1] + self.grid_size / 2 )
+            # --- 计算目标格子 (下一个格子) 的精确像素坐标 (左上角) ---
+            next_grid_x = self.grid_pos[0] + self.move_direction[0]
+            next_grid_y = self.grid_pos[1] + self.move_direction[1]
+            target_pixel_pos = [next_grid_x * self.grid_size, next_grid_y * self.grid_size]
 
-            delta_px = target_center_px[0] - current_pixel_center[0]
-            delta_py = target_center_px[1] - current_pixel_center[1]
-            dist_to_target_center = (delta_px**2 + delta_py**2)**0.5
+            # 计算当前像素位置到目标格子左上角的向量
+            delta_px = target_pixel_pos[0] - self.pixel_pos[0]
+            delta_py = target_pixel_pos[1] - self.pixel_pos[1]
+            dist_to_target_pixel = (delta_px**2 + delta_py**2)**0.5
 
-            if dist_to_target_center > 1:
-                norm_dx = delta_px / dist_to_target_center
-                norm_dy = delta_py / dist_to_target_center
-                actual_move = min(move_dist, dist_to_target_center)
+            # --- 移动逻辑：直接朝目标格子的像素坐标移动 ---
+            if dist_to_target_pixel > 1: # 移动阈值
+                norm_dx = delta_px / dist_to_target_pixel
+                norm_dy = delta_py / dist_to_target_pixel
+                actual_move = min(move_dist, dist_to_target_pixel) # 最多移动到目标格子的像素位置
                 self.pixel_pos[0] += norm_dx * actual_move
                 self.pixel_pos[1] += norm_dy * actual_move
-                # print(f"[{self.type}] 正在移动: 方向={self.move_direction}, 距离={actual_move:.2f}, 新像素={self.pixel_pos[0]:.1f},{self.pixel_pos[1]:.1f}") # <--- 打印移动细节
-            # else:
-                # print(f"[{self.type}] 已接近目标中心 {next_target_grid_x},{next_target_grid_y}")
-                pass
-        # else: # 如果移动方向为 (0,0)
-            # print(f"[{self.type}] 移动方向为 (0,0)，不执行像素移动。") # <--- 打印不动的原因
-            pass
+                # print(f"[{self.type}] 像素移动: 方向={self.move_direction}, 距离={actual_move:.3f}, 新Pix={self.pixel_pos[0]:.2f},{self.pixel_pos[1]:.2f}, 目标Pix={target_pixel_pos[0]:.1f},{target_pixel_pos[1]:.1f}")
+            else:
+                # *** 到达或非常接近目标格子的像素位置 ***
+                # print(f"[{self.type}] 已到达目标格子像素位置附近 {next_grid_x},{next_grid_y}")
+                # --- 强制更新格子位置并消耗路径 ---
+                new_pos = (next_grid_x, next_grid_y)
+                if new_pos != self.grid_pos: # 确保格子位置确实改变了
+                    old_grid_pos = self.grid_pos
+                    self.grid_pos = new_pos # 更新格子位置
+                    print(f"[{self.type}] 格子位置更新 (到达目标像素): 从 {old_grid_pos} 到 {self.grid_pos}")
 
-        # --- 根据像素位置更新格子位置 ---
-        new_grid_x = int(self.pixel_pos[0] // self.grid_size)
-        new_grid_y = int(self.pixel_pos[1] // self.grid_size)
-        new_grid_x = max(0, min(CANVAS_GRID_WIDTH - 1, new_grid_x))
-        new_grid_y = max(0, min(CANVAS_GRID_HEIGHT - 1, new_grid_y))
+                    # 强制像素位置对齐，避免累积误差
+                    self.pixel_pos = [self.grid_pos[0] * self.grid_size, self.grid_pos[1] * self.grid_size]
+                    print(f"[{self.type}] 强制像素对齐到: {self.pixel_pos}")
 
-        if (new_grid_x, new_grid_y) != self.grid_pos:
-            old_grid_pos = self.grid_pos
-            self.grid_pos = (new_grid_x, new_grid_y)
-            print(f"[{self.type}] 格子位置更新: 从 {old_grid_pos} 到 {self.grid_pos}") # <--- 打印格子更新
-
-            if pathfinding_available and self.current_path and self.grid_pos == self.current_path[0]:
-                print(f"[{self.type}] 到达路径点 {self.current_path[0]}，消耗路径。剩余路径: {self.current_path[1:]}") # <--- 打印路径消耗
-                self.current_path.pop(0)
-                if self.current_path:
-                    next_step = self.current_path[0]
-                    self.move_direction = (next_step[0] - self.grid_pos[0], next_step[1] - self.grid_pos[1])
-                    print(f"[{self.type}] 设置下一方向: {self.move_direction} (前往 {next_step})") # <--- 打印下一方向
+                    # 消耗路径
+                    if pathfinding_available and self.current_path:
+                        if self.grid_pos == self.current_path[0]:
+                            print(f"[{self.type}] 到达路径点 {self.current_path[0]}，消耗路径。")
+                            self.current_path.pop(0)
+                            if not self.current_path:
+                                print(f"[{self.type}] A* 路径已完成。")
+                                self.move_direction = (0,0) # 路径走完，停止
+                        else: # 到达了格子，但不是路径期望的格子
+                             print(f"[{self.type}] 警告：到达格子 {self.grid_pos}，但路径期望 {self.current_path[0]}！路径失效。")
+                             self.current_path = []
+                             self.move_direction = (0,0)
                 else:
-                    print(f"[{self.type}] A* 路径已完成。") # <--- 打印路径完成
-                    self.move_direction = (0,0)
-                    # 可选：对齐像素到格子
-                    # self.pixel_pos = [self.grid_pos[0] * self.grid_size, self.grid_pos[1] * self.grid_size]
-        # else: # 如果格子位置没有更新
-            # print(f"[{self.type}] 像素位置 {self.pixel_pos[0]:.1f},{self.pixel_pos[1]:.1f} 未导致格子位置 {self.grid_pos} 改变。") # <--- 调试：格子未改变
-            pass
+                     # 如果计算出的新格子和当前格子一样（例如，移动方向是(0,0)但仍尝试移动），则停止
+                     self.move_direction = (0,0)
 
 
-        # 触发警告音效 (逻辑不变)
+        # --- 4. 根据像素位置更新格子位置 (这部分现在只用于显示/边界检查，主要逻辑在上面处理) ---
+        # (可以考虑移除或简化这部分，因为主要更新逻辑移到了像素移动部分)
+        # new_grid_x_check = int(self.pixel_pos[0] // self.grid_size)
+        # new_grid_y_check = int(self.pixel_pos[1] // self.grid_size)
+        # ... (边界检查) ...
+
+
+        # 触发警告音效
         if snake_body:
-             head_pos = snake_body[-1]
-             dist_sq = (head_pos[0] - self.grid_pos[0])**2 + (head_pos[1] - self.grid_pos[1])**2
-             if dist_sq <= GHOST_WARNING_DISTANCE_GRIDS**2:
-                 self.game.try_play_sound('ghost_warning', unique=True)
-
-
-    
+             head_pos = snake_body[-1]; dist_sq = (head_pos[0] - self.grid_pos[0])**2 + (head_pos[1] - self.grid_pos[1])**2
+             if dist_sq <= GHOST_WARNING_DISTANCE_GRIDS**2: self.game.try_play_sound('ghost_warning', unique=True)
 
     def draw(self, surface, camera_offset=(0, 0)):
         """绘制鬼魂。"""
@@ -550,47 +532,83 @@ class Ghost:
         draw_y = self.pixel_pos[1] + offset_y
         if self.image:
             surface.blit(self.image, (draw_x, draw_y))
-# === ADDED/MODIFIED SECTION END: Ghost Class with A* ===
 
-# --- Blinky ---
+# === ADDED/MODIFIED SECTION END: Ghost Class with A* and Debug Prints ===
+
+# --- Blinky, Pinky, Particle 类保持不变 (确保 Pinky.update_target 中 head_pos 定义存在) ---
+# ... (省略 Blinky, Pinky, Particle 的代码) ...
+# --- 辅助函数：检查格子是否被占用 ---
+def is_occupied(grid_pos, game):
+    """检查指定格子位置是否被蛇或尸体占用。"""
+    if not game: return False # 游戏对象不存在
+    # 检查蛇
+    if game.snake and game.snake.body and grid_pos in game.snake.body:
+        return True
+    # 检查尸体
+    for corpse in game.corpses:
+        if grid_pos in corpse.segments:
+            return True
+    return False
+
+# --- Blinky (红色鬼魂) ---
 class Blinky(Ghost):
     def __init__(self, game):
-        start_pos = (random.randint(0, CANVAS_GRID_WIDTH - 1), random.randint(0, CANVAS_GRID_HEIGHT - 1))
+        # --- 修改：添加出生点检查 ---
+        spawn_ok = False
+        start_pos = (0,0)
+        attempts = 0
+        max_attempts = 100
+        while not spawn_ok and attempts < max_attempts:
+            attempts += 1
+            start_pos = (random.randint(0, CANVAS_GRID_WIDTH - 1), random.randint(0, CANVAS_GRID_HEIGHT - 1))
+            # 使用辅助函数检查是否被占用
+            if not is_occupied(start_pos, game):
+                 spawn_ok = True
+        if not spawn_ok: # Fallback
+            start_pos = (0,0) # 或者选择一个已知安全的点
+            print("警告：未能为 Blinky 找到清晰的生成点，生成在 (0,0)")
+        # --- 修改结束 ---
         super().__init__(game, start_pos, 'ghost_blinky.png', GHOST_BASE_SPEED_FACTOR)
-        self.type = "Blinky"
+        # self.type = "Blinky" # type 会在父类__init__中根据文件名设置
 
     def update_target(self, snake_body):
         """Blinky 的目标是蛇身的中点。"""
-        if not snake_body: return
+        if not snake_body: return;
         mid_index = len(snake_body) // 2
-        if 0 <= mid_index < len(snake_body):
-            self.target_grid_pos = snake_body[mid_index]
-        elif snake_body:
-             self.target_grid_pos = snake_body[-1]
+        if 0 <= mid_index < len(snake_body): self.target_grid_pos = snake_body[mid_index]
+        elif snake_body: self.target_grid_pos = snake_body[-1]
 
-# --- Pinky ---
+# --- Pinky (粉色鬼魂) ---
 class Pinky(Ghost):
     def __init__(self, game):
-        spawn_ok = False; start_pos = (0,0); attempts = 0; max_attempts = 100
+        # --- 修改：使用辅助函数简化检查 ---
+        spawn_ok = False
+        start_pos = (0,0)
+        attempts = 0
+        max_attempts = 100
         while not spawn_ok and attempts < max_attempts:
-            attempts += 1; start_pos = (random.randint(0, CANVAS_GRID_WIDTH - 1), random.randint(0, CANVAS_GRID_HEIGHT - 1))
-            if game.snake is None or not hasattr(game.snake, 'body') or start_pos not in game.snake.body: spawn_ok = True
-        if not spawn_ok: start_pos = (0,0); print("警告：未能为 Pinky 找到清晰的生成点，生成在 (0,0)")
-        super().__init__(game, start_pos, 'ghost_pinky.png', GHOST_BASE_SPEED_FACTOR); self.type = "Pinky"
-# --- Pinky ---
-# ... (init 方法) ...
+            attempts += 1
+            start_pos = (random.randint(0, CANVAS_GRID_WIDTH - 1), random.randint(0, CANVAS_GRID_HEIGHT - 1))
+            # 使用辅助函数检查
+            if not is_occupied(start_pos, game):
+                 spawn_ok = True
+        if not spawn_ok: # Fallback
+            start_pos = (0,0)
+            print("警告：未能为 Pinky 找到清晰的生成点，生成在 (0,0)")
+        # --- 修改结束 ---
+        super().__init__(game, start_pos, 'ghost_pinky.png', GHOST_BASE_SPEED_FACTOR)
+        # self.type = "Pinky"
+
     def update_target(self, snake_body):
         """Pinky 的目标是蛇头前方一定格子数的位置。"""
-        if not snake_body: return # 如果蛇不存在或为空，不更新目标
-
+        if not snake_body: return; head_pos = snake_body[-1]
         # --- >>> 添加回这一行 <<< ---
         head_pos = snake_body[-1] # 获取蛇头位置
         # --- >>> 添加结束 <<< ---
 
         # 获取蛇的方向
         if self.game.snake: head_dir = self.game.snake.direction
-        else: head_dir = RIGHT # 备用方向
-
+        else: head_dir = RIGHT
         # 计算目标位置
         target_x = head_pos[0] + head_dir[0] * PINKY_PREDICTION_DISTANCE;
         target_y = head_pos[1] + head_dir[1] * PINKY_PREDICTION_DISTANCE
