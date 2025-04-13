@@ -80,6 +80,13 @@ FRENZY_RAMP_UP_SECONDS = 2     # 达到最大加成所需时间（秒） 【调�
 FRENZY_RAMP_DOWN_SECONDS = 2   # 从最大加成恢复到正常所需时间（秒） 【调试编辑】
 
 # 果实生成相关参数
+
+# 在 settings.py 的 --- Game Mechanics - TUNABLE PARAMETERS --- 部分添加：
+FRUIT_DISAPPEAR_WARNING_TIME = 10  # 果实消失前多少秒开始预警 【调试编辑】
+FRUIT_FLICKER_DURATION = 2       # 预警开始后闪烁的持续时间（秒） 【调试编辑】
+FRUIT_FLICKER_INTERVAL = 0.5     # 闪烁间隔（秒） 【调试编辑】
+FRUIT_FADE_END_ALPHA_PERCENT = 0.6 # 淡出结束时的透明度百分比 (0.0-1.0) 【调试编辑】
+
 FRUIT_SPAWN_INTERVAL_SECONDS = 3 # 每隔多少秒生成一个新果实 【调试编辑】
 MAX_FRUITS = 10            # 屏幕上允许存在的最大果实数量 【调试编辑】
 HEALTHY_FRUIT_DURATION_SECONDS = 30 # 健康果实（绿色）的存在时间（秒） 【调试编辑】

@@ -553,14 +553,19 @@ class Game:
                                       non_contact_end[1] - prev_to_non_contact[1])
                      print(f"计算新方向: 从 {prev_to_non_contact} -> {non_contact_end} = {new_direction}")
                  # else: (如果无法计算，则使用备用逻辑)
+                
+                
+                #  补上丢失的一格！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
+                 new_body_list = snake_body_without_head2 + new_body_list
+                 print(f"再次融合！：{new_body_list} ，尾巴: {snake_body_without_head2}")
 
-                 if merge_at_first: # 蛇头接触尸体首段
-                    new_body_list = snake_body_without_head2 + new_body_list
-                    print(f"再次融合！：{new_body_list} ，尾巴: {snake_body_without_head2}")
-                 else:
-                    new_body_list = snake_body_without_head2 + new_body_list
-                    # new_body_list = new_body_list + snake_body_without_head2
-                    print(f"再次融合！：{new_body_list} ，尾巴: {snake_body_without_head2}")
+                #  if merge_at_first: # 蛇头接触尸体首段
+                #     new_body_list = snake_body_without_head2 + new_body_list
+                #     print(f"再次融合！：{new_body_list} ，尾巴: {snake_body_without_head2}")
+                #  else:
+                #     new_body_list = snake_body_without_head2 + new_body_list
+                #     # new_body_list = new_body_list + snake_body_without_head2
+                #     print(f"再次融合！：{new_body_list} ，尾巴: {snake_body_without_head2}")
 
 
                  if new_direction is None or new_direction == (0,0):
@@ -653,23 +658,42 @@ class Game:
 
     def draw_ui(self, surface):
         """绘制用户界面元素。"""
+        # --- 获取字体 ---
+        # 使用中等字体来显示操作提示，会比小的 timer/length 字体大
+        font_action_prompt = self.font_medium # 例如使用 36号字体
+
         mins, secs = divmod(int(self.game_timer), 60)
         timer_text = f"时长: {mins:01d}:{secs:02d}"
-        timer_surf = self.font_small.render(timer_text, True, WHITE)
+        timer_surf = self.font_medium.render(timer_text, True, WHITE)
         surface.blit(timer_surf, (10 + self.draw_offset_x, 10 + self.draw_offset_y))
 
         length = self.snake.length if self.snake else 0
         length_text = f"长度: {length}"
-        length_surf = self.font_small.render(length_text, True, WHITE)
+        length_surf = self.font_medium.render(length_text, True, WHITE)
         length_rect = length_surf.get_rect(topright=(self.draw_offset_x + CANVAS_WIDTH_PX - 10, 10 + self.draw_offset_y))
         surface.blit(length_surf, length_rect)
 
+        # --- 修改：操作提示 (左下角) ---
+        # 1. 绘制分裂提示 (使用中等字体)
         split_available = self.snake.split_available if self.snake else False
         split_color = WHITE if split_available else GREY
-        split_text = "分裂[空格]"
-        split_surf = self.font_small.render(split_text, True, split_color)
+        split_text = "分裂 [空格]" # 稍微调整下格式
+        split_surf = font_action_prompt.render(split_text, True, split_color)
+        # 获取分裂文本的高度，用于定位加速文本
+        split_text_height = split_surf.get_height()
+        # 定位分裂文本在左下角
         split_rect = split_surf.get_rect(bottomleft=(10 + self.draw_offset_x, self.draw_offset_y + CANVAS_HEIGHT_PX - 10))
         surface.blit(split_surf, split_rect)
+
+        # 2. 绘制加速提示 (在分裂提示上方)
+        # 加速提示通常一直显示，颜色可以固定为白色，或者根据是否按下 Shift 变化？(暂时固定白色)
+        accelerate_color = WHITE
+        accelerate_text = "加速 [Shift]"
+        accelerate_surf = font_action_prompt.render(accelerate_text, True, accelerate_color)
+        # 定位加速文本，使其底部与分裂文本的顶部对齐，并留一点间距
+        accelerate_rect = accelerate_surf.get_rect(bottomleft=(split_rect.left, split_rect.top - 5)) # 5 是间距像素
+        surface.blit(accelerate_surf, accelerate_rect)
+        # --- 操作提示修改结束 ---
 
     def draw_game_over_screen(self, surface):
         """绘制游戏结束结算界面。"""

@@ -277,23 +277,125 @@ class Corpse:
         except IndexError: return None, None
 
 # --- 果实 基类 ---
+# 在 sprites.py 中
+
+# --- 果实 基类 ---
 class Fruit:
-    def __init__(self, game, position, fruit_type, image_name, lifespan=None):
-        self.game = game; self.position = position; self.type = fruit_type; self.grid_size = GRID_SIZE
-        self.image = load_image(image_name, size=self.grid_size)
-        if not self.image:
-             print(f"错误：未能加载 {image_name}"); self.image = pygame.Surface((self.grid_size, self.grid_size))
-             if self.type == 'healthy': self.image.fill(GREEN)
-             elif self.type == 'bomb': self.image.fill(RED)
-             elif self.type == 'super_growth': self.image.fill(PURPLE) # <--- 添加新类型判断
-             else: self.image.fill(WHITE)
-        self.lifespan = lifespan; self.creation_time = time.time(); self.is_special = fruit_type != 'normal'
+    def __init__(self, game, position, fruit_type, image_name, lifespan=None): # 传递图像文件名而不是表面
+        self.game = game
+        self.position = position # 格子坐标 (x, y)
+        self.type = fruit_type # 'normal', 'healthy', 'bomb', 'super_growth'
+        self.grid_size = GRID_SIZE
+        self.image_orig = load_image(image_name, size=self.grid_size) # 加载原始图像
+        self.image = self.image_orig # 当前用于绘制的图像 (可能会被修改透明度)
+
+        # 图像加载失败检查和后备颜色
+        if not self.image_orig:
+             print(f"错误：未能加载 {image_name}"); self.image_orig = pygame.Surface((self.grid_size, self.grid_size))
+             if self.type == 'healthy': self.image_orig.fill(GREEN)
+             elif self.type == 'bomb': self.image_orig.fill(RED)
+             elif self.type == 'super_growth': self.image_orig.fill(PURPLE)
+             else: self.image_orig.fill(WHITE)
+             self.image = self.image_orig # 确保 image 有值
+
+        self.lifespan = lifespan # 生命周期（秒），None 表示无限
+        self.creation_time = time.time() # 创建时的墙上时间
+        self.is_special = fruit_type != 'normal'
+
+        # --- 新增：用于消失效果的状态变量 ---
+        self.is_disappearing = False      # 是否处于消失过程中 (最后10秒)
+        self.visible = True               # 当前是否可见 (用于闪烁)
+        self.alpha = 255                  # 当前透明度 (255为不透明)
+        self.disappear_warning_time = FRUIT_DISAPPEAR_WARNING_TIME  # 消失前多少秒开始预警 【调试编辑】
+        self.flicker_duration = FRUIT_FLICKER_DURATION         # 预警开始后闪烁的持续时间（秒） 【调试编辑】
+        self.flicker_interval = FRUIT_FLICKER_INTERVAL       # 闪烁间隔（秒） 【调试编辑】 (每秒闪烁两次)
+        self.fade_start_offset = self.flicker_duration # 闪烁结束后开始淡出
+        self.fade_end_alpha_percent = FRUIT_FADE_END_ALPHA_PERCENT # 淡出结束时的透明度百分比 (60%) 【调试编辑】
+        self.last_flicker_toggle_time = 0 # 上次闪烁状态切换时间
+        # ----------------------------------
+
     def update(self):
-        if self.lifespan is not None and time.time() - self.creation_time > self.lifespan: return False
-        return True
+        """更新果实状态（检查生命周期和消失效果）。"""
+        # 如果没有生命周期限制，或者还没有图像，则直接返回 True
+        if self.lifespan is None or not self.image_orig:
+            return True
+
+        current_time = time.time()
+        time_elapsed = current_time - self.creation_time
+        time_left = self.lifespan - time_elapsed
+
+        # 检查是否完全消失
+        if time_left <= 0:
+            return False # 返回 False 表示可以移除
+
+        # 检查是否进入消失预警阶段 (最后10秒)
+        self.is_disappearing = time_left <= self.disappear_warning_time
+
+        if self.is_disappearing:
+            time_into_warning = self.disappear_warning_time - time_left # 进入预警阶段多久了
+
+            # 1. 处理闪烁阶段 (前2秒)
+            if time_into_warning <= self.flicker_duration:
+                # 基于时间间隔切换可见性
+                if current_time - self.last_flicker_toggle_time >= self.flicker_interval:
+                    self.visible = not self.visible
+                    self.last_flicker_toggle_time = current_time
+                self.alpha = 255 # 闪烁时保持不透明
+            # 2. 处理淡出阶段 (后8秒)
+            else:
+                self.visible = True # 淡出时始终可见
+                # 计算淡出进度 (0.0 to 1.0)
+                # 淡出总时长 = 预警总时长 - 闪烁时长
+                fade_duration = self.disappear_warning_time - self.flicker_duration
+                # 已经淡出的时间 = 进入预警时间 - 闪烁时长
+                time_fading = time_into_warning - self.flicker_duration
+
+                if fade_duration > 0: # 防止除零
+                    fade_progress = min(1.0, time_fading / fade_duration) # 进度限制在 0 到 1
+                else:
+                    fade_progress = 1.0 # 如果淡出时间为0，则立即完成
+
+                # 计算透明度：从 100% (255) 线性降低到 fade_end_alpha_percent (例如 60%)
+                end_alpha = 255 * self.fade_end_alpha_percent
+                self.alpha = int(255 - (255 - end_alpha) * fade_progress)
+                self.alpha = max(0, min(255, self.alpha)) # 确保 alpha 在 0-255 范围内
+
+                # --- 更新用于绘制的 image (带透明度) ---
+                # 仅在 alpha 变化时更新，或在进入淡出时首次更新
+                # 使用一个临时变量记录上次的alpha，或者简单地每次都创建副本
+                try:
+                    # 每次都创建带透明度的副本可能效率稍低，但逻辑简单
+                    self.image = self.image_orig.copy()
+                    self.image.set_alpha(self.alpha)
+                except Exception as e:
+                     print(f"Error setting fruit alpha: {e}")
+                     self.image = self.image_orig # 出错时恢复原图
+        else:
+            # 不在消失阶段，保持可见和不透明
+            self.visible = True
+            if self.alpha != 255: # 如果之前是半透明，恢复不透明
+                 self.alpha = 255
+                 self.image = self.image_orig # 恢复原始图像
+
+        return True # 果实仍然活动
+
     def draw(self, surface, camera_offset=(0, 0)):
-        offset_x, offset_y = 0, 0; pixel_x = self.position[0] * self.grid_size + offset_x; pixel_y = self.position[1] * self.grid_size + offset_y
-        if self.image: surface.blit(self.image, (pixel_x, pixel_y))
+        """根据当前的可见性和透明度绘制果实。"""
+        if not self.visible: # 如果闪烁时不可见，则不绘制
+            return
+
+        offset_x, offset_y = 0, 0
+        pixel_x = self.position[0] * self.grid_size + offset_x
+        pixel_y = self.position[1] * self.grid_size + offset_y
+
+        # 使用 self.image 进行绘制，它的透明度已经在 update 中设置好了
+        if self.image:
+            try:
+                surface.blit(self.image, (pixel_x, pixel_y))
+            except Exception as e:
+                print(f"Error drawing fruit: {e}")
+                # 可以绘制一个占位符
+                pygame.draw.rect(surface, WHITE, (pixel_x, pixel_y, self.grid_size, self.grid_size), 1)
 
 # --- 鬼魂 基类 ---
 # === ADDED/MODIFIED SECTION START: Ghost Class with A* and Debug Prints ===
