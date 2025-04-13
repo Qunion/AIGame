@@ -36,13 +36,14 @@ YELLOW = (255, 255, 0)   # 黄色
 BRIGHT_YELLOW = (255, 220, 0) # 一个比较亮的黄色
 DARK_YELLOW = (200, 200, 0) # 暗黄色，用作蛇的基础色
 GREY = (128, 128, 128)   # 灰色
+PURPLE = (150, 0, 150) # 为新果实定义一个颜色 (例如紫色)
 # 网格线的颜色，使用 RGBA 定义，最后一个值是 Alpha 透明度 (0-255)
 # 为较小的格子调整了透明度，使其不那么显眼
 GRID_COLOR = (200, 200, 200, 80) # 浅灰色，带透明度
 
 # --- 游戏机制 - 可调参数 (Game Mechanics - TUNABLE PARAMETERS) ---
 # 这些参数可以在这里方便地调整，用于测试和平衡游戏
-INITIAL_SNAKE_LENGTH = 14  # 蛇的初始长度（格子数）
+INITIAL_SNAKE_LENGTH = 4  # 蛇的初始长度（格子数）
 
 # --- 新增：初始果实数量 ---
 INITIAL_FRUIT_COUNT = 5    # 游戏开始时生成的初始果实数量 【调试编辑】
@@ -84,6 +85,18 @@ MAX_FRUITS = 10            # 屏幕上允许存在的最大果实数量 【调�
 HEALTHY_FRUIT_DURATION_SECONDS = 30 # 健康果实（绿色）的存在时间（秒） 【调试编辑】
 BOMB_FRUIT_DURATION_SECONDS = 30    # 炸弹果实（红黑色）的存在时间（秒） 【调试编辑】
 
+# --- 新增：特殊果实整体生成概率 ---
+SPECIAL_FRUIT_OVERALL_CHANCE = 0.6 # 生成一个果实时，它是特殊果实的总概率 (0.0 到 1.0) 【调试编辑】
+# ---------------------------------
+
+# --- 新增：超级增长果实参数 ---
+SUPER_GROWTH_FRUIT_DURATION_SECONDS = 10 # 存在时间（秒） 【调试编辑】
+SUPER_GROWTH_FRUIT_LENGTH_BONUS = 4      # 吃掉后增加的长度 【调试编辑】
+SUPER_GROWTH_FRUIT_SPAWN_CHANCE = 0.3    # 生成特殊果实时，有多大几率是超级增长果实 (0.1 = 10%) 【调试编辑】
+# ------------------------------
+HEALTHY_FRUIT_SPAWN_CHANCE = 0.4   # 生成特殊果实时，有多大几率是健康果实 (0.1 = 10%) 【调试编辑】
+BOMB_FRUIT_SPAWN_CHANCE = 1-SUPER_GROWTH_FRUIT_SPAWN_CHANCE-HEALTHY_FRUIT_SPAWN_CHANCE # 生成特殊果实时，剩余概率是炸弹果实
+
 # 敌人（鬼魂）相关参数
 PINKY_SPAWN_LENGTH = 10    # 蛇达到多长时 Pinky 鬼魂出现 【调试编辑】
 GHOST_BASE_SPEED_FACTOR = 0.8 # 鬼魂的基础速度相对于蛇基础速度的倍率 (0.5 = 50%) 【调试编辑】
@@ -101,6 +114,8 @@ MERGE_IMMUNITY_SECONDS = 0.15 # 分裂后尸体短暂的融合免疫时间（秒
 ASSET_DIR = os.path.join(os.path.dirname(__file__), 'assets') # assets 文件夹路径 (假设与脚本在同一目录下)
 IMG_DIR = os.path.join(ASSET_DIR, 'images')                   # images 子文件夹路径
 SOUND_DIR = os.path.join(ASSET_DIR, 'sounds')                 # sounds 子文件夹路径
+
+FRUIT_SUPER_GROWTH_IMG = 'fruit_super_growth.png' # 假设的图片文件名
 
 # --- 游戏状态常量 (Game States) ---
 # 定义不同的游戏状态，方便管理逻辑流程

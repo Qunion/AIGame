@@ -75,7 +75,10 @@ class Game:
             'death': load_sound('death.wav'),
             'rewind': load_sound('rewind.wav'),
             'ghost_warning': load_sound('ghost_warning.wav'),
+            # 在 Game.load_assets 方法内的 self.sounds 字典中添加
+            'pickup_super': load_sound('pickup_super.wav'), # 加载新音效
             'speedup': load_sound('speedup.wav')
+
         }
         # 检查加速音效是否加载成功
         if not self.sounds['speedup']:
@@ -215,8 +218,9 @@ class Game:
              self.frenzy_active = False
              print("狂热时刻结束!")
 
+        # 在 Game 类中
     def spawn_fruit(self, count=1, force_special=False):
-        """在画布上生成指定数量的果实。"""
+        """在画布上生成指定数量的果实，加入超级增长果实。"""
         spawned_count = 0
         attempts = 0
         max_attempts = CANVAS_GRID_WIDTH * CANVAS_GRID_HEIGHT
@@ -236,18 +240,35 @@ class Game:
                 fruit_type = 'normal'
                 lifespan = None
                 img_name = 'fruit_normal.png'
+                pickup_sound = 'pickup_normal' # 默认普通音效
 
                 is_special = False
                 if force_special and spawned_count == 0: is_special = True
-                elif random.random() < 0.3: is_special = True
+                elif random.random() < SPECIAL_FRUIT_OVERALL_CHANCE: # --- 可以微调生成特殊果实的整体概率 ---
+                    is_special = True
 
                 if is_special:
-                    choice = random.choice(['healthy', 'bomb'])
-                    if choice == 'healthy':
-                        fruit_type = 'healthy'; lifespan = HEALTHY_FRUIT_DURATION_SECONDS; img_name = 'fruit_healthy.png'
-                    else:
-                         fruit_type = 'bomb'; lifespan = BOMB_FRUIT_DURATION_SECONDS; img_name = 'fruit_bomb.png'
+                    # --- 修改：在特殊果实中选择类型 ---
+                    rand_num = random.random() # 生成一个 0到1 的随机数
+                    if rand_num < SUPER_GROWTH_FRUIT_SPAWN_CHANCE: # 按概率生成超级增长果实
+                        fruit_type = 'super_growth'
+                        lifespan = SUPER_GROWTH_FRUIT_DURATION_SECONDS
+                        img_name = FRUIT_SUPER_GROWTH_IMG # 使用 settings.py 中定义的文件名
+                        pickup_sound = 'pickup_super' # 假设有这个音效
+                        print(f"生成了 超级增长 果实于 {pos}") # 调试信息
+                    elif rand_num < SUPER_GROWTH_FRUIT_SPAWN_CHANCE + HEALTHY_FRUIT_SPAWN_CHANCE: # 超级果实+健康果实的区间
+                        fruit_type = 'healthy'
+                        lifespan = HEALTHY_FRUIT_DURATION_SECONDS
+                        img_name = 'fruit_healthy.png'
+                        pickup_sound = 'pickup_healthy'
+                    else: # 剩余概率生成炸弹
+                         fruit_type = 'bomb'
+                         lifespan = BOMB_FRUIT_DURATION_SECONDS
+                         img_name = 'fruit_bomb.png'
+                         pickup_sound = 'pickup_bomb' # 炸弹音效在碰撞时处理
+                    # --- 修改结束 ---
 
+                # 创建果实对象
                 new_fruit = Fruit(self, pos, fruit_type, img_name, lifespan)
                 self.fruits.append(new_fruit)
                 current_occupancies.add(pos)
@@ -376,20 +397,33 @@ class Game:
             self.save_state_for_rewind()
             self.frames_since_last_snapshot = 0
 
+        # 在 Game 类中
     def check_fruit_collisions(self):
-        """检查蛇头是否与果实发生碰撞。"""
+        """检查蛇头是否与果实发生碰撞，加入超级增长果实的处理。"""
         if not self.snake or not self.snake.alive: return
         head_pos = self.snake.get_head_position()
         eaten_fruit_index = -1
+
         for i, fruit in enumerate(self.fruits):
             if fruit.position == head_pos:
                 eaten_fruit_index = i
-                if fruit.type == 'normal': self.snake.grow(1); self.play_sound('pickup_normal')
-                elif fruit.type == 'healthy': self.snake.grow(2); self.play_sound('pickup_healthy')
-                elif fruit.type == 'bomb': self.trigger_game_over("炸弹果实")
-                break
-        if eaten_fruit_index != -1:
-            if eaten_fruit_index < len(self.fruits): del self.fruits[eaten_fruit_index]
+                # --- 修改：增加新果实类型的处理 ---
+                if fruit.type == 'normal':
+                    self.snake.grow(1)
+                    self.play_sound('pickup_normal')
+                elif fruit.type == 'healthy':
+                    self.snake.grow(2)
+                    self.play_sound('pickup_healthy')
+                elif fruit.type == 'super_growth': # <--- 新增类型判断
+                    self.snake.grow(SUPER_GROWTH_FRUIT_LENGTH_BONUS) # 使用 settings 中的参数
+                    self.play_sound('pickup_super') # 播放新音效 (如果已添加)
+                elif fruit.type == 'bomb':
+                     self.trigger_game_over("炸弹果实") # 游戏结束
+                # --- 修改结束 ---
+                break # 每步只吃一个
+
+        if eaten_fruit_index != -1 and eaten_fruit_index < len(self.fruits):
+            del self.fruits[eaten_fruit_index]
 
 # ===============================================
     # ======= 修正后的 check_ghost_collisions =======

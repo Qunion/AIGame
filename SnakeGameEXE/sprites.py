@@ -284,6 +284,7 @@ class Fruit:
              print(f"错误：未能加载 {image_name}"); self.image = pygame.Surface((self.grid_size, self.grid_size))
              if self.type == 'healthy': self.image.fill(GREEN)
              elif self.type == 'bomb': self.image.fill(RED)
+             elif self.type == 'super_growth': self.image.fill(PURPLE) # <--- 添加新类型判断
              else: self.image.fill(WHITE)
         self.lifespan = lifespan; self.creation_time = time.time(); self.is_special = fruit_type != 'normal'
     def update(self):
@@ -490,16 +491,16 @@ class Ghost:
                 if new_pos != self.grid_pos: # 确保格子位置确实改变了
                     old_grid_pos = self.grid_pos
                     self.grid_pos = new_pos # 更新格子位置
-                    print(f"[{self.type}] 格子位置更新 (到达目标像素): 从 {old_grid_pos} 到 {self.grid_pos}")
+                    # print(f"[{self.type}] 格子位置更新 (到达目标像素): 从 {old_grid_pos} 到 {self.grid_pos}")
 
                     # 强制像素位置对齐，避免累积误差
                     self.pixel_pos = [self.grid_pos[0] * self.grid_size, self.grid_pos[1] * self.grid_size]
-                    print(f"[{self.type}] 强制像素对齐到: {self.pixel_pos}")
+                    # print(f"[{self.type}] 强制像素对齐到: {self.pixel_pos}")
 
                     # 消耗路径
                     if pathfinding_available and self.current_path:
                         if self.grid_pos == self.current_path[0]:
-                            print(f"[{self.type}] 到达路径点 {self.current_path[0]}，消耗路径。")
+                            # print(f"[{self.type}] 到达路径点 {self.current_path[0]}，消耗路径。")
                             self.current_path.pop(0)
                             if not self.current_path:
                                 print(f"[{self.type}] A* 路径已完成。")
