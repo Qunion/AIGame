@@ -163,6 +163,7 @@ class Snake:
 
         split_index = len(self.body) // 2
         corpse_segments = deque(list(self.body)[split_index:]) # 头部部分成为尸体
+        # print("测试它是个啥！！！：：："+{corpse_segments})
 
         # 1. 获取尾部段列表 (成为新蛇的部分)
         tail_part_list = list(self.body)[:split_index]
@@ -344,7 +345,7 @@ class Ghost:
                  self.current_path = []
             return
 
-        print(f"[{self.type}] 开始寻路: 从 {self.grid_pos} 到 {self.target_grid_pos}")
+        # print(f"[{self.type}] 开始寻路: 从 {self.grid_pos} 到 {self.target_grid_pos}")
         # 1. 创建障碍矩阵 (0=可走, 1=障碍)
         matrix = [[0 for _ in range(CANVAS_GRID_WIDTH)] for _ in range(CANVAS_GRID_HEIGHT)]
         current_target = self.target_grid_pos # 获取当前目标
@@ -406,7 +407,7 @@ class Ghost:
              # 4. 处理结果
              if path and len(path) > 1: # 需要至少包含起点和下一步
                  self.current_path = [(node.x, node.y) for node in path[1:]] # 去掉起点
-                 print(f"[{self.type}] 路径找到 ({len(self.current_path)}步): {self.current_path[:5]}...")
+                #  print(f"[{self.type}] 路径找到 ({len(self.current_path)}步): {self.current_path[:5]}...")
              else:
                  fail_reason = "路径为空" if not path else "路径长度不足"
                  print(f"[{self.type}] 未找到路径 ({fail_reason}) 从 {start_node.x},{start_node.y} 到 {end_node.x},{end_node.y}")

@@ -6,6 +6,8 @@ from collections import deque
 from settings import * # 导入设置
 from sprites import Snake, Fruit, Corpse, Blinky, Pinky, Particle # 导入精灵类
 
+snake_body_without_head2 = None
+
 class Game:
     def __init__(self):
         pygame.init()
@@ -59,6 +61,8 @@ class Game:
 
         self.draw_offset_x = (SCREEN_WIDTH - CANVAS_WIDTH_PX) // 2
         self.draw_offset_y = (SCREEN_HEIGHT - CANVAS_HEIGHT_PX) // 2
+        # snake_body_list2 = list(self.snake.body)
+
 
     def load_assets(self):
         """加载游戏所需的图像和声音资源。"""
@@ -310,7 +314,7 @@ class Game:
                             # 检查通道和音效是否存在
                             if self.speedup_channel and self.sounds['speedup']:
                                 try:
-                                    print("播放加速音效...") # 调试信息
+                                    # print("播放加速音效...") # 调试信息
                                     self.speedup_channel.play(self.sounds['speedup'], loops=-1)
                                 except pygame.error as e:
                                      print(f"播放加速音效失败: {e}") # 打印错误
@@ -334,7 +338,7 @@ class Game:
                          if self.snake.is_accelerating: # 仅当之前在加速时才停止
                              self.snake.is_accelerating = False
                              if self.speedup_channel:
-                                 print("停止加速音效...") # 调试信息
+                                #  print("停止加速音效...") # 调试信息
                                  self.speedup_channel.stop()
                      # -------------------------
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -358,6 +362,9 @@ class Game:
         moved_this_frame = False
         if current_time - self.last_move_time >= move_interval:
              if self.snake:
+                 snake_body_list2 = list(self.snake.body)
+                 global snake_body_without_head2
+                 snake_body_without_head2 = snake_body_list2[:1]
                  self.snake.update()
                  self.last_move_time = current_time
                  moved_this_frame = True
@@ -466,6 +473,8 @@ class Game:
              contact_point = None
              non_contact_end = None
              merge_at_first = False
+            #  snake_body_Final_Tail = None
+             
 
              if head_pos == first_seg:
                  contact_point = first_seg
@@ -489,23 +498,44 @@ class Game:
                  # -------->>>  修改点 1 开始 <<<-----------
                  # 先将 deque 转换为 list，再进行切片
                  snake_body_list = list(self.snake.body)
+                 snake_body_list2 = list(self.snake.body)
+                 
+                #  self.body.appendleft((segment_x, segment_y))
+                
+
+                #  snake_body_Final_Tail = []
+                # #  snake_body_Final_Tail2 = list(deque())[-1] 
+                #  snake_body_Final_Tail = [[snake_body_list2[-1]]]
+                #  snake_segments_set = set(tuple(segment) for segment in snake_body_Final_Tail)
+                #  corpse_segments2 = deque(list(self.snake.body)[-1]) 
+
+
+                #  print("测试它是个啥！！！：：："+str(snake_body_Final_Tail[0]))
+                 
+                #  print("测试它是个啥！！！：：："+{corpse_segments2})
+
+                #  print("snake_body_Final_Tail")
                  snake_body_without_head = snake_body_list[:-1] if snake_body_list else []
                  # -------->>>  修改点 1 结束 <<<-----------
+                 snake_body_without_head3 = snake_body_list[:1]
+                 print(f"测测他是啥{snake_body_without_head2}")
 
 
                  if merge_at_first: # 蛇头接触尸体首段
                      # -------->>>  修改点 2 开始 <<<-----------
                      # 使用转换后的列表进行拼接
                      new_body_list = snake_body_without_head + original_corpse_list
+                    #  new_body_list = snake_body_without_head + original_corpse_list+ snake_body_Final_Tail
                      # -------->>>  修改点 2 结束 <<<-----------
-                     print(f"融合方式：蛇头接触首段。拼接前蛇身: {snake_body_without_head}, 尸体: {original_corpse_list}")
+                     print(f"融合方式：蛇头接触首段。拼接前蛇身: {snake_body_without_head}, 尸体: {original_corpse_list}, 尾巴: {snake_body_without_head2}")
                  else: # 蛇头接触尸体末段
                      original_corpse_list.reverse() # 反转尸体段
                      # -------->>>  修改点 3 开始 <<<-----------
                      # 使用转换后的列表进行拼接
                      new_body_list = snake_body_without_head + original_corpse_list
+                    #  new_body_list = snake_body_without_head + original_corpse_list+ snake_body_Final_Tail
                      # -------->>>  修改点 3 结束 <<<-----------
-                     print(f"融合方式：蛇头接触末段。拼接前蛇身: {snake_body_without_head}, 反转后尸体: {original_corpse_list}")
+                     print(f"融合方式：蛇头接触末段。拼接前蛇身: {snake_body_without_head}, 反转后尸体: {original_corpse_list}, 尾巴: {snake_body_without_head2}")
 
                  # 安全检查
                  if not new_body_list:
@@ -523,6 +553,15 @@ class Game:
                                       non_contact_end[1] - prev_to_non_contact[1])
                      print(f"计算新方向: 从 {prev_to_non_contact} -> {non_contact_end} = {new_direction}")
                  # else: (如果无法计算，则使用备用逻辑)
+
+                 if merge_at_first: # 蛇头接触尸体首段
+                    new_body_list = snake_body_without_head2 + new_body_list
+                    print(f"再次融合！：{new_body_list} ，尾巴: {snake_body_without_head2}")
+                 else:
+                    new_body_list = snake_body_without_head2 + new_body_list
+                    # new_body_list = new_body_list + snake_body_without_head2
+                    print(f"再次融合！：{new_body_list} ，尾巴: {snake_body_without_head2}")
+
 
                  if new_direction is None or new_direction == (0,0):
                       print(f"警告：无法根据尸体计算有效方向，保持融合前方向 {self.snake.last_move_direction}")
