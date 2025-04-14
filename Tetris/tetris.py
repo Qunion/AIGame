@@ -97,28 +97,22 @@ except Exception as e:
 # --- 规则文本和行高 ---
 RULES_TEXT = [
     "[基础操作]",
-    " ← / → : 左右移动方块",
-    " ↑     : 旋转方块 (顺时针)",
-    " ↓     : 加速下落 (软降)",
-    " 空格  : 瞬间下落 (硬降) / [关卡7] 时空切换",
-    " P     : 暂停 / 继续游戏",
-    " R     : (暂停/结束后) 重新开始本关",
-    " ESC   : 退出游戏",
+    " ← / →  : 左右移动方块",
+    " ↑      : 旋转方块 (顺时针)",
+    " ↓      : 加速下落 (软降)",
+    " 空格   : 瞬间下落 (硬降) ",
+    " P      : 暂停 / 继续游戏",
+    " R      : (暂停/结束后) 重新开始本关",
+    " ESC    : 退出游戏",
+    " L_SHIFT: [关卡7] 时空切换",
     "",
     "[通用规则]",
-    "- 场地: 10格宽 x 20格高",
     "- 目标: 在限定时间内获得尽可能高的分数",
-    "- 失败条件:",
-    "  * 方块堆叠触顶 (新方块无法生成)",
-    "  * [关卡6] 方块触碰炸弹格子",
-    "  * 失败后不记录本关分数",
-    "- 消除与得分:",
-    "  * 填满整行即可消除该行方块",
-    "  * 基础分: 每消除1个小方块得 1 分",
-    "  * 额外奖励 (单次结算取最高项):",
-    "    ≥ 20块: 额外 +10分",
-    "    ≥ 30块: 额外 +20分",
-    "    ≥ 40块: 额外 +40分",
+    "- 一次性消除的方块越多",
+    "- 获得的额外分数越多！",
+    "---    ≥ 20块: 额外 +10分",
+    "---    ≥ 30块: 额外 +20分",
+    "---    ≥ 40块: 额外 +40分",
     "  * 额外分数会以 (+N) 形式显示",
     "- 关卡进度:",
     "  * 完成关卡 (时间到) 后，若分数达到要求，则解锁下一关",
@@ -259,7 +253,7 @@ LOG_AREA_POS = (0, LOG_AREA_Y)
 
 # --- 屏幕创建 (初始大小) ---
 screen = pygame.display.set_mode((INITIAL_WINDOW_WIDTH, WINDOW_HEIGHT))
-pygame.display.set_caption("多关卡俄罗斯方块 V2 - 优化布局")
+pygame.display.set_caption("赛博方块")
 
 # --- 背景图片加载 ---
 background_image = None
@@ -573,13 +567,13 @@ class Level:
 
 # Unlock scores adjusted slightly for potentially longer games
 LEVELS = [
-    Level(id=1, name="关卡 1：新手上路", initial_blocks=5, unlock_score=100),
-    Level(id=2, name="关卡 2：障碍挑战", initial_blocks=10, unlock_score=120),
-    Level(id=3, name="关卡 3：极速狂飙", speed_increase_factor=0.03, unlock_score=150),
-    Level(id=4, name="关卡 4：王的凝视 I", gaze_cells=10, unlock_score=200),
-    Level(id=5, name="关卡 5：王的凝视 II", gaze_cells=15, unlock_score=300),
-    Level(id=6, name="关卡 6：步步惊心", bomb_count=3, unlock_score=400),
-    Level(id=7, name="关卡 7：时空穿梭", dual_board=True, unlock_score=500, time_limit=180) # Longer time for dual board?
+    Level(id=1, name="关卡1   初入遗迹", initial_blocks=5, unlock_score=100),
+    Level(id=2, name="关卡1   遗迹挑战", initial_blocks=10, unlock_score=120),
+    Level(id=3, name="关卡2   极速狂飙", speed_increase_factor=0.03, unlock_score=150),
+    Level(id=4, name="关卡4   王的凝视I", gaze_cells=10, unlock_score=200),
+    Level(id=5, name="关卡5   王的凝视II", gaze_cells=15, unlock_score=300),
+    Level(id=6, name="关卡6   步步惊心", bomb_count=3, unlock_score=400),
+    Level(id=7, name="关卡7   时空穿梭(WIP)", dual_board=True, unlock_score=500, time_limit=180) # Longer time for dual board?
 ]
 NUM_LEVELS = len(LEVELS) # Ensure NUM_LEVELS matches LEVELS list
 
@@ -816,7 +810,7 @@ def draw_diamond(surface, color, center_x, center_y, size, border_color=None, bo
         (center_x, center_y - half_size), (center_x + half_size, center_y),
         (center_x, center_y + half_size), (center_x - half_size, center_y)
     ]
-    # Ensure points are integers for drawing
+    # Ensure points are integers for drawing确保绘制点为整数
     int_points = [(int(p[0]), int(p[1])) for p in points]
 
     if filled:
@@ -934,59 +928,72 @@ def draw_clear_animation(surface, rows, progress, offset_x=0, offset_y=0):
 # --- Updated Area Drawing Functions ---
 
 def draw_overview_area(surface, game_state):
+    # 声明需要修改或访问的全局变量
     global button_rects, level_selector_diamond_rects
-    # Full width for background/rule button positioning
+
+    # 获取当前窗口的总宽度（根据规则说明区域是否可见而变化）
     full_width = get_window_width(game_state.rules_visible)
+    # 定义整个总览区域的矩形范围
     area_rect = pygame.Rect(OVERVIEW_AREA_POS, (full_width, OVERVIEW_AREA_HEIGHT))
-    # Content should be relative to the fixed part of the window
+    # 定义内容固定的区域宽度（游戏区域1 + 游戏区域2），这部分宽度不随规则区域展开而改变
     fixed_content_width = GAME_AREA1_WIDTH + GAME_AREA2_WIDTH
 
-    # 1. Game Name (Smaller Font, Centered in Fixed Width)
-    draw_text(surface, "多关卡俄罗斯方块", FONT_LARGE, COLOR_NEON_BLUE, # Use XLARGE instead of XXLARGE
-              center=(fixed_content_width // 2, area_rect.y + 40))
+    # 1. 绘制游戏名称 (使用较小的字体 FONT_LARGE, 在固定内容区域内水平居中)
+    draw_text(surface, "赛博方块", FONT_LARGE, COLOR_NEON_BLUE, # 使用 FONT_LARGE 字号
+              center=(fixed_content_width // 2, area_rect.y + 40)) # 垂直位置在区域顶部下方 40 像素
 
-    # 2. Level Selector (Positioned below title, Centered in Fixed Width)
-    selector_y = area_rect.y + 90 # Lowered position
-    # --- Base selector calculations on fixed_content_width ---
-    selector_total_width = fixed_content_width * 0.5 # Use 50% of fixed width
-    selector_center_x = fixed_content_width // 2
-    level_spacing = selector_total_width / max(1, NUM_LEVELS)
+    # 2. 绘制关卡选择器 (位于标题下方, 在固定内容区域内水平居中)
+    selector_y = area_rect.y + 90 # 确定选择器的垂直位置 (更靠下)
+    # --- 基于固定内容宽度计算选择器的参数 ---
+    selector_total_width = fixed_content_width * 0.7 # 选择器线条的总宽度占固定内容区域的 50%
+    selector_center_x = fixed_content_width // 2 # 固定内容区域的中心 X 坐标
+    level_spacing = selector_total_width / max(1, NUM_LEVELS) # 计算每个关卡菱形之间的水平间距
+    # 计算第一个关卡菱形中心的起始 X 坐标
     selector_start_x = selector_center_x - selector_total_width / 2 + level_spacing / 2
 
-    # Draw connecting line (relative to fixed width calculations)
-    line_start_x = selector_start_x - level_spacing / 2
-    line_end_x = selector_start_x + (NUM_LEVELS - 1.5) * level_spacing
-    pygame.draw.line(surface, COLOR_LIGHT_GRAY, (line_start_x, selector_y), (line_end_x, selector_y), 3) # Thicker line
+    # 绘制连接关卡菱形的线条 (坐标基于固定内容区域的计算结果)
+    line_start_x = selector_start_x - level_spacing / 2 # 线条起点的 X 坐标
+    line_end_x = selector_start_x + (NUM_LEVELS - 0.5) * level_spacing # 线条终点的 X 坐标
+    pygame.draw.line(surface, COLOR_LIGHT_GRAY, (line_start_x, selector_y), (line_end_x, selector_y), 3) # 绘制线条，宽度为 3 像素
 
-    level_selector_diamond_rects = []
+    level_selector_diamond_rects = [] # 初始化一个列表，用于存储每个关卡菱形的 Rect 对象 (用于点击检测)
+    # 遍历所有关卡
     for i in range(NUM_LEVELS):
-        level_x = selector_start_x + i * level_spacing
-        level_state = game_state.level_states[i]
-        is_selected = (i == game_state.selected_level_index)
+        level_x = selector_start_x + i * level_spacing # 计算当前关卡菱形的中心 X 坐标
+        level_state = game_state.level_states[i] # 获取当前关卡的状态 (锁定, 解锁, 完成)
+        is_selected = (i == game_state.selected_level_index) # 判断当前关卡是否为选中状态
 
-        diamond_color = COLOR_LEVEL_LOCKED
-        if level_state == UNLOCKED: diamond_color = COLOR_LEVEL_UNLOCKED
-        elif level_state == COMPLETED: diamond_color = COLOR_LEVEL_COMPLETED
+        # 根据关卡状态确定菱形的填充颜色
+        diamond_color = COLOR_LEVEL_LOCKED # 默认为锁定颜色 (灰色)
+        if level_state == UNLOCKED: diamond_color = COLOR_LEVEL_UNLOCKED # 解锁状态为黄色
+        elif level_state == COMPLETED: diamond_color = COLOR_LEVEL_COMPLETED # 完成状态为绿色
 
-        diamond_size = 24 # Base size
-        border_color = None
-        border_width = 2
+        diamond_size = 24 # 菱形的默认基础尺寸
+        border_color = None # 默认无边框颜色
+        border_width = 2 # 默认边框宽度
+        # 如果当前关卡被选中
         if is_selected:
-            diamond_size = 36 # Larger when selected
-            border_color = COLOR_LEVEL_SELECTED_BORDER
-            border_width = 3
+            diamond_size = 36 # 选中的菱形尺寸更大
+            border_color = COLOR_LEVEL_SELECTED_BORDER # 选中时边框为白色
+            border_width = 3 # 选中时边框更粗
 
+        # 绘制菱形，并获取其 Rect 对象
         diamond_rect = draw_diamond(surface, diamond_color, int(level_x), selector_y, diamond_size, border_color=border_color, border_width=border_width)
+        # 将菱形的 Rect 对象添加到列表中
         level_selector_diamond_rects.append(diamond_rect)
-        # Draw level number inside diamond
+
+        # 在菱形内部绘制关卡编号
+        # 根据菱形颜色确定文字颜色（锁定状态用白色，其他用黑色）
         text_color = COLOR_BLACK if diamond_color != COLOR_LEVEL_LOCKED else COLOR_WHITE
+        # 根据是否选中确定文字的字体大小
         num_font = FONT_SMALL if not is_selected else FONT_NORMAL
+        # 绘制关卡编号文本，使其在菱形内部居中
         draw_text(surface, str(i + 1), num_font, text_color, center=diamond_rect.center)
 
-    # Arrows (Positioned relative to the fixed line ends)
-    arrow_size = 30
-    arrow_y = selector_y
-    arrow_offset = 20 # Distance from line ends
+    # 绘制左右选择箭头的逻辑 (位置相对于固定线条的两端)
+    arrow_size = 30         # 箭头按钮的尺寸 (正方形边长)
+    arrow_y = selector_y    # 箭头的垂直位置与选择器线条对齐
+    arrow_offset = 20       # 箭头距离选择器线条两端的水平距离
 
     left_arrow_x = line_start_x - arrow_offset - arrow_size / 2
     right_arrow_x = line_end_x + arrow_offset + arrow_size / 2
@@ -1083,8 +1090,8 @@ def draw_game_area1(surface, board, current_tetromino, game_timer, level_time_li
     start_pause_x = controls_rect.x + gap
     restart_x = start_pause_x + btn_width + gap
 
-    start_pause_rect = pygame.Rect(start_pause_x, btn_y, btn_width, btn_height)
-    restart_rect = pygame.Rect(restart_x, btn_y, btn_width, btn_height)
+    start_pause_rect = pygame.Rect(start_pause_x, btn_y-7, btn_width, btn_height)
+    restart_rect = pygame.Rect(restart_x, btn_y-7, btn_width, btn_height)
 
     # Draw buttons with appropriate text and color (Logic remains the same)
     btn_radius = 8
@@ -1188,19 +1195,19 @@ def draw_game_area2(surface, level_name, current_score, high_score, next_tetromi
     if score_anim_state['active']:
         # Simple blink effect
         if int(score_anim_state['timer'] * 10) % 2 == 0: score_color = COLOR_NEON_YELLOW
-    draw_text(surface, "当前得分", FONT_NORMAL, COLOR_NEON_PINK, center=(area_rect.centerx, current_y))
+    draw_text(surface, "当前得分", FONT_NORMAL, COLOR_NEON_PINK, center=(area_rect.centerx, current_y-30))
     current_y += 40
-    draw_text(surface, str(current_score), score_font, score_color, center=(area_rect.centerx, current_y))
+    draw_text(surface, str(current_score), score_font, score_color, center=(area_rect.centerx, current_y-30))
     current_y += score_font.get_height() + y_padding + 30
 
     # Next Tetromino
-    draw_text(surface, "下一个", FONT_LARGE, COLOR_NEON_GREEN, center=(area_rect.centerx, current_y))
+    draw_text(surface, "下一个", FONT_LARGE, COLOR_NEON_GREEN, center=(area_rect.centerx, current_y-50))
     current_y += FONT_LARGE.get_height() + 20 # Space before preview box
 
     # Draw a box for the next piece preview
     preview_box_size = BLOCK_SIZE * 5 # Make box large enough for I piece
     preview_box_rect = pygame.Rect(0, 0, preview_box_size, preview_box_size)
-    preview_box_rect.center = (area_rect.centerx, current_y + preview_box_size / 2)
+    preview_box_rect.center = (area_rect.centerx, current_y + preview_box_size / 2-50)
     pygame.draw.rect(surface, COLOR_DARK_GRAY, preview_box_rect, border_radius=10)
     pygame.draw.rect(surface, COLOR_GRID, preview_box_rect, width=2, border_radius=10) # Border
 
@@ -1666,6 +1673,25 @@ def main_game_loop():
 
                     elif event.key == pygame.K_SPACE: # Hard Drop or Level 7 Switch
                         moved = True # Space always counts as an action
+                        # --- Normal Hard Drop ---
+                        op_char = '░' # Hard drop symbol
+                        drop_distance = 0
+                        while current_board_instance.is_valid_position(current_tetromino, offset_y=1):
+                            current_tetromino.move(0, 1)
+                            drop_distance += 1
+
+                        if drop_distance == 0 and not current_board_instance.is_valid_position(current_tetromino):
+                                # If hard drop immediately invalid (e.g., piece already blocked)
+                                # This shouldn't happen if logic is right, but as a failsafe:
+                                log_message("硬降失败 - 位置无效")
+                                op_char = ''
+                                moved = False
+                        else:
+                                # Force lock timer to expire after hard drop
+                                fall_time = fall_speed # Trigger lock check immediately
+
+                    elif event.key == pygame.K_LSHIFT: # Hard Drop or Level 7 Switch
+                        moved = True # Space always counts as an action
                         if current_level_data.dual_board:
                              # --- Level 7: Time-Space Switch ---
                              log_message("尝试时空切换...", is_operation=False)
@@ -1693,24 +1719,6 @@ def main_game_loop():
                                      log_message("切换失败：目标位置冲突且无法上移！")
                                      op_char = '' # Indicate failure
                                      moved = False # Action failed
-
-                        else:
-                            # --- Normal Hard Drop ---
-                            op_char = '░' # Hard drop symbol
-                            drop_distance = 0
-                            while current_board_instance.is_valid_position(current_tetromino, offset_y=1):
-                                current_tetromino.move(0, 1)
-                                drop_distance += 1
-
-                            if drop_distance == 0 and not current_board_instance.is_valid_position(current_tetromino):
-                                 # If hard drop immediately invalid (e.g., piece already blocked)
-                                 # This shouldn't happen if logic is right, but as a failsafe:
-                                 log_message("硬降失败 - 位置无效")
-                                 op_char = ''
-                                 moved = False
-                            else:
-                                 # Force lock timer to expire after hard drop
-                                 fall_time = fall_speed # Trigger lock check immediately
 
                     # Log the operation character if an action occurred
                     if moved and op_char:
