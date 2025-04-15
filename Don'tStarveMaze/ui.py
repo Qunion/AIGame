@@ -45,21 +45,65 @@ def draw_text(surface: pygame.Surface, text: str, size: int, x: int, y: int,
 
 def draw_player_hud(surface: pygame.Surface, player: 'Player', assets: 'AssetManager'):
     """绘制玩家状态信息的 HUD (Heads-Up Display)。"""
+
     # --- 绘制饱食度 ---
-    hunger_icon = assets.get_image('ui_hunger')
-    if hunger_icon: # 确保图标已加载
-        icon_rect = hunger_icon.get_rect()
-        # 定位在屏幕顶部中线的左侧
+    hunger_icon_base = assets.get_image('ui_hunger') # 获取饱食度图标底图
+    if hunger_icon_base:
+        icon_rect = hunger_icon_base.get_rect()
         icon_rect.top = UI_PADDING
         icon_rect.right = WIDTH // 2 - UI_PADDING * 2 # 在中线左边留出一些间距
-        surface.blit(hunger_icon, icon_rect)
 
-        # 在图标旁边绘制饱食度百分比文字
-        hunger_percent = int(player.hunger / PLAYER_MAX_HUNGER * 100)
-        color = WHITE if hunger_percent > PLAYER_HUNGER_WARN_THRESHOLD else RED # 低于阈值显示红色
-        draw_text(surface, f"{hunger_percent}%", UI_FONT_SIZE,
-                  icon_rect.left - UI_PADDING, icon_rect.centery, # 在图标左侧，垂直居中对齐
-                  color=color, align="midright") # 右对齐文本
+        # --- 修改开始: 使用单独的图层进行混合 ---
+        # 1. 创建最终要绘制到屏幕上的复合 Surface (SRCALPHA 以支持最终的整体透明度)
+        hunger_composite_surface = pygame.Surface(icon_rect.size, pygame.SRCALPHA)
+        hunger_composite_surface.fill((0, 0, 0, 0)) # 透明背景
+
+        # 2. 将原始图标绘制到复合 Surface 上 (作为最底层)
+        hunger_composite_surface.blit(hunger_icon_base, (0, 0))
+
+        # 3. 创建一个 *单独* 的 Surface 用于绘制进度条本身 (SRCALPHA)
+        progress_bar_layer = pygame.Surface(icon_rect.size, pygame.SRCALPHA)
+        progress_bar_layer.fill((0, 0, 0, 0)) # 透明背景
+
+        # 4. 计算进度条填充比例和高度 (垂直，从下往上填充)
+        fill_ratio = max(0.0, min(1.0, player.hunger / PLAYER_MAX_HUNGER))
+        fill_height = int(icon_rect.height * fill_ratio)
+
+        # 5. 定义 *完全不透明* 的进度条颜色 (稍后通过设置 Surface alpha 实现透明)
+        HUNGER_COLOR_FG = (185, 165, 0) # 橙色
+        HUNGER_COLOR_BG = GREY         # 灰色
+
+        # 6. 在 *进度条图层* 上绘制 *不透明* 的进度条矩形
+        # 背景/消耗部分 (在顶部)
+        rect_bg = pygame.Rect(0, 0, icon_rect.width, icon_rect.height - fill_height)
+        # 填充部分 (在底部)
+        rect_fg = pygame.Rect(0, icon_rect.height - fill_height, icon_rect.width, fill_height)
+
+        pygame.draw.rect(progress_bar_layer, HUNGER_COLOR_BG, rect_bg)
+        pygame.draw.rect(progress_bar_layer, HUNGER_COLOR_FG, rect_fg)
+
+        # 7. 设置这个 *进度条图层* 的整体透明度为 50% (实现方案 B)
+        progress_bar_layer.set_alpha(128)
+
+        # 8. 将这个半透明的进度条图层 *blit* 到复合 Surface 上 (覆盖在图标之上)
+        #    blit 会正确地将半透明的进度条与下方的图标进行混合
+        hunger_composite_surface.blit(progress_bar_layer, (0, 0))
+
+        # 9. 设置这个 *复合后* 的 Surface (图标 + 半透明进度条) 的整体透明度为 80%
+        overall_alpha = int(255 * 0.8) # 约 204
+        hunger_composite_surface.set_alpha(overall_alpha)
+
+        # 10. 将最终处理过的、整体半透明的组合元素绘制到主屏幕
+        surface.blit(hunger_composite_surface, icon_rect.topleft)
+
+        # 11. 在 *主屏幕* 上，位于 UI 元素位置的正中间，绘制 *不透明* 的饱食度数值文本
+        hunger_value = int(player.hunger)
+        text_color = WHITE # 数值用白色
+        draw_text(surface, f"{hunger_value}", UI_FONT_SIZE + 10, # 文本大小
+                  icon_rect.centerx, icon_rect.centery,         # 文本中心位置
+                  color=text_color, align="center")             # 文本对齐方式
+        # --- 修改结束 ---
+        # --- 修改结束 ---
 
     # --- 绘制火柴 ---
     match_icon = assets.get_image('ui_match')

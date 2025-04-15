@@ -18,6 +18,9 @@ class Player(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self, self.groups)
         self.game = game # 游戏主对象的引用
 
+        self.footstep_timer: float = 0.0  # 脚步声计时器 (秒)
+        self.footstep_interval: float = 0.2 # 基础脚步声间隔 (秒)
+
         # 加载玩家图片，处理加载失败的情况
         self.image_orig = game.asset_manager.get_image('player')
         if self.image_orig is None: # 备用图像
@@ -236,6 +239,28 @@ class Player(pygame.sprite.Sprite):
                   self.game.asset_manager.play_sound('hunger_growl') # 播放咕咕叫音效
                   # 在这里添加视觉效果，例如一个短暂的波纹特效精灵
                   # print("肚子咕咕叫...") # 调试信息
+
+        # --- 添加脚步声逻辑 ---
+        is_moving = self.vel.length_squared() > 0 # 判断玩家是否在移动
+
+        if is_moving:
+            self.footstep_timer += dt # 累加时间增量 (dt 是秒)
+            # 计算当前脚步声间隔 (考虑加速效果)
+            # speed_boost_factor 默认为 1.0, 加速时 > 1.0
+            current_interval = self.footstep_interval / self.speed_boost_factor
+
+            # 如果计时器超过了当前间隔
+            if self.footstep_timer >= current_interval:
+                self.game.asset_manager.play_sound('step') # 播放脚步声
+                # 重置计时器 (减去间隔比直接清零更准确，避免累积误差)
+                self.footstep_timer -= current_interval
+                # 或者简单清零: self.footstep_timer = 0.0
+        else:
+            # 如果玩家停止移动，重置计时器，避免下次移动立即播放
+            self.footstep_timer = 0.0
+        # --- 脚步声逻辑结束 ---
+
+
 
     def update_hunger(self, dt: float):
         """更新饱食度。"""
