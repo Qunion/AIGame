@@ -322,6 +322,10 @@ class Player(pygame.sprite.Sprite):
 
         print(f"拾取到一根火柴。总火柴数: {len(self.matches)}")
 
+    def get_total_remaining_burn_frames(self) -> float:
+        """计算所有火柴的总剩余燃烧时间（帧）。"""
+        # 直接对 self.matches 列表中的所有剩余时间求和
+        return sum(self.matches)
 
     def add_weapon(self, weapon_item: 'WeaponItem'):
         """将拾取的武器添加到玩家库存。"""

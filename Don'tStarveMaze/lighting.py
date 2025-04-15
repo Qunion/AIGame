@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Set, Tuple, Dict
 
 if TYPE_CHECKING:
     from main import Game
-    from player import Player
-    from camera import Camera
+from player import Player
+from camera import Camera
 
 class Lighting:
     """管理游戏中的光照效果、视野计算和战争迷雾（记忆）系统。"""
@@ -117,11 +117,11 @@ class Lighting:
         # 1. 检查瓦片是否当前可见
         if pos in self.visible_tiles:
             # 获取当前火柴状态
-            remaining_frames = player.get_current_match_remaining_frames()
+            total_remaining_frames  = player.get_total_remaining_burn_frames()  
             total_frames = MATCH_BURN_TIME_FRAMES
 
             # 如果没有光（火柴烧尽），亮度为 0
-            if remaining_frames <= 0:
+            if total_remaining_frames  <= 0:
                 # 特例：如果玩家脚下瓦片是唯一可见的，给个极低亮度避免全黑？
                 # if pos == (int(player.pos.x // TILE_SIZE), int(player.pos.y // TILE_SIZE)):
                 #     return 0.01
@@ -129,9 +129,11 @@ class Lighting:
 
             # 计算基础亮度 (根据火柴剩余时间)
             base_brightness = 1.0
+
+            # if len(Player.matches) <= 1:
             # 查找第一个满足的低亮度阈值
             for i in range(len(MATCH_LOW_THRESHOLDS_FRAMES)):
-                if remaining_frames <= MATCH_LOW_THRESHOLDS_FRAMES[i]:
+                if total_remaining_frames  <= MATCH_LOW_THRESHOLDS_FRAMES[i]:
                     base_brightness = MATCH_LOW_BRIGHTNESS[i]
                     break # 使用第一个达到的阈值对应的亮度
 
@@ -187,7 +189,7 @@ class Lighting:
             age_frames = age_ms / (1000 / FPS)
 
             # 检查玩家当前火柴是否过低，如果过低则暂时隐藏记忆效果
-            if player.get_current_match_remaining_frames() < MATCH_MEMORY_FADE_THRESHOLD_FRAMES:
+            if player.get_total_remaining_burn_frames() < MATCH_MEMORY_FADE_THRESHOLD_FRAMES:
                  return 0.0 # 临时隐藏记忆
 
             # 计算记忆亮度衰减

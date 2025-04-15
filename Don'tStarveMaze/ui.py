@@ -86,18 +86,32 @@ def draw_player_hud(surface: pygame.Surface, player: 'Player', assets: 'AssetMan
 
             # 如果这是当前正在燃烧的火柴，绘制进度条覆盖
             if i == burning_match_display_index:
-                 # 计算进度条的高度
-                 progress_height = int(match_rect.height * current_burn_percent)
-                 # 定义前景（剩余部分）和背景（消耗部分）的矩形
-                 # 进度条从上往下减少，所以前景在上方
-                 progress_rect_fg = pygame.Rect(match_rect.left, match_rect.top,
-                                                match_rect.width, progress_height)
-                 progress_rect_bg = pygame.Rect(match_rect.left, match_rect.top + progress_height,
-                                                match_rect.width, match_rect.height - progress_height)
+                # --- 修改开始: 使用临时 Surface 实现透明度和新方向 ---
+                # 创建一个与火柴图标同样大小，支持 alpha 通道的临时 Surface
+                progress_surface = pygame.Surface(match_rect.size, pygame.SRCALPHA)
+                progress_surface.fill((0, 0, 0, 0)) # 填充完全透明背景
 
-                 # 绘制前景和背景矩形
-                 pygame.draw.rect(surface, UI_MATCH_PROGRESS_COLOR_FG, progress_rect_fg)
-                 pygame.draw.rect(surface, UI_MATCH_PROGRESS_COLOR_BG, progress_rect_bg)
+                # 计算已消耗部分（灰色）的高度，从顶部开始
+                consumed_height = int(match_rect.height * (1.0 - current_burn_percent))
+                # 计算剩余部分（绿色）的高度
+                remaining_height = match_rect.height - consumed_height
+
+                # 定义灰色和绿色矩形在 *临时 Surface* 上的位置
+                # 灰色矩形 (已消耗)，在顶部
+                rect_consumed = pygame.Rect(0, 0, match_rect.width, consumed_height)
+                # 绿色矩形 (剩余)，在灰色下方
+                rect_remaining = pygame.Rect(0, consumed_height, match_rect.width, remaining_height)
+
+                # 在临时 Surface 上绘制不透明的进度条颜色
+                pygame.draw.rect(progress_surface, UI_MATCH_PROGRESS_COLOR_BG, rect_consumed) # 灰色
+                pygame.draw.rect(progress_surface, UI_MATCH_PROGRESS_COLOR_FG, rect_remaining) # 绿色
+
+                # 设置整个临时 Surface 的透明度为 50% (128 / 255)
+                progress_surface.set_alpha(128)
+
+                # 将半透明的进度条 Surface 绘制到主屏幕上，覆盖在火柴底图之上
+                surface.blit(progress_surface, match_rect.topleft)
+                # --- 修改结束 ---
 
     # --- 绘制武器指示器 (可选) ---
     if player.inventory['weapons']: # 如果玩家有武器
