@@ -1,274 +1,270 @@
 import pygame
 import math
 from settings import *
+from typing import TYPE_CHECKING, Set, Tuple, Dict
+
+if TYPE_CHECKING:
+    from main import Game
+    from player import Player
+    from camera import Camera
 
 class Lighting:
-    def __init__(self, game):
-        self.game = game
-        self.visible_tiles = set() # Tiles currently lit (x, y)
-        # Memory: Stores (x, y) -> (timestamp, initial_brightness)
-        self.memory_tiles = {}
-        self.light_walls = FOV_LIGHT_WALLS
-        self.num_rays = FOV_NUM_RAYS
-        self.fov_surface = pygame.Surface((WIDTH, HEIGHT)).convert_alpha() # For darkness overlay
+    """管理游戏中的光照效果、视野计算和战争迷雾（记忆）系统。"""
+    def __init__(self, game: 'Game'):
+        self.game = game # 游戏主对象的引用
+        # 存储当前帧可见的瓦片坐标集合 {(x, y), ...}
+        self.visible_tiles: Set[Tuple[int, int]] = set()
+        # 存储被探索过的瓦片记忆信息
+        # 格式: {(x, y): (timestamp, initial_brightness), ...}
+        # timestamp 是最后一次看到该瓦片的时间戳 (毫秒)
+        # initial_brightness 是刚进入记忆状态时的亮度 (通常是 FOW_MEMORY_BRIGHTNESS)
+        self.memory_tiles: Dict[Tuple[int, int], Tuple[float, float]] = {}
+        self.light_walls: bool = FOV_LIGHT_WALLS # 是否照亮墙壁本身
+        self.num_rays: int = FOV_NUM_RAYS # 视野计算使用的光线数量
+        # 用于绘制整体黑暗效果的表面 (可选的高级效果)
+        # self.fov_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA).convert_alpha()
 
-    def calculate_fov(self, player):
-        self.visible_tiles.clear()
+    def calculate_fov(self, player: 'Player'):
+        """使用射线投射算法计算玩家当前的可见瓦片范围。"""
+        self.visible_tiles.clear() # 每帧开始时清空可见集合
+        # 获取玩家中心点和所在的瓦片坐标
         player_tile_x = int(player.pos.x // TILE_SIZE)
         player_tile_y = int(player.pos.y // TILE_SIZE)
-        cx, cy = player.pos.x, player.pos.y # Center of light source (player center)
+        cx, cy = player.pos.x, player.pos.y # 光源中心 (玩家中心)
 
+        # 获取当前火柴数量和状态
         current_match_count = player.get_total_match_count()
-        if current_match_count == 0: # No light if no matches burning
+        remaining_frames = player.get_current_match_remaining_frames()
+
+        # 如果没有火柴或火柴已烧尽，则没有视野
+        if current_match_count == 0 or remaining_frames <= 0:
+             # 确保玩家脚下的格子仍然在"可见"范围内（亮度为0），这样地图不会完全消失
+             self.visible_tiles.add((player_tile_x, player_tile_y))
              return
 
-        radius = MATCH_RADIUS_LARGE_PX if current_match_count >= MATCH_COUNT_THRESHOLD_RADIUS else MATCH_RADIUS_SMALL_PX
+        # 根据火柴数量决定基础照明半径
+        radius_px = MATCH_RADIUS_LARGE_PX if current_match_count >= MATCH_COUNT_THRESHOLD_RADIUS else MATCH_RADIUS_SMALL_PX
+        # 检查火柴魔法是否激活 (当前未使用)
         magic_active = player.has_magic_match_active()
 
-        # Always add player's own tile
+        # 玩家脚下的瓦片总是可见的
         self.visible_tiles.add((player_tile_x, player_tile_y))
 
-        # Ray Casting
+        # --- 射线投射 ---
+        # 从玩家位置向四周发射光线
         for i in range(self.num_rays):
-            angle = (i / self.num_rays) * 2 * math.pi
-            dx = math.cos(angle)
-            dy = math.sin(angle)
+            angle = (i / self.num_rays) * 2 * math.pi # 计算当前光线的角度
+            dx = math.cos(angle) # 光线方向的 x 分量
+            dy = math.sin(angle) # 光线方向的 y 分量
 
-            x, y = cx, cy # Start ray from player center
-
-            for step in range(int(radius)): # Iterate steps along the ray up to radius
-                x += dx
-                y += dy
+            # 沿光线方向步进，检查每个经过的瓦片
+            for step in range(int(radius_px)): # 步进距离最远为半径
+                # 计算当前步进点在世界坐标中的位置
+                x = cx + dx * step
+                y = cy + dy * step
+                # 将世界坐标转换为瓦片坐标
                 tile_x = int(x // TILE_SIZE)
                 tile_y = int(y // TILE_SIZE)
 
-                # Check bounds
+                # 检查瓦片坐标是否在地图边界内
                 if not (0 <= tile_x < GRID_WIDTH and 0 <= tile_y < GRID_HEIGHT):
-                    break # Ray went out of bounds
+                    break # 光线超出地图范围，停止这条光线
 
-                # Add tile to visible set
+                # 将当前瓦片添加到可见集合
                 self.visible_tiles.add((tile_x, tile_y))
 
-                # Check for wall collision (unless magic is active)
+                # 检查是否撞到墙壁 (除非魔法激活)
                 if not magic_active and self.game.maze.is_wall(tile_x, tile_y):
-                    if self.light_walls: # If we light walls, add it and stop
-                         self.visible_tiles.add((tile_x, tile_y))
-                    break # Stop ray if it hits a wall
+                    # 如果设置了照亮墙壁本身
+                    if self.light_walls:
+                        # 将墙壁瓦片也加入可见集合
+                        self.visible_tiles.add((tile_x, tile_y))
+                    break # 光线被墙壁阻挡，停止这条光线
 
     def update_memory(self):
-        current_time = pygame.time.get_ticks()
-        # Add newly visible tiles to memory
+        """更新战争迷雾（记忆）信息，将新看到的瓦片加入记忆，并处理旧记忆的遗忘。"""
+        current_time = pygame.time.get_ticks() # 获取当前时间戳 (毫秒)
+
+        # 将当前可见的瓦片添加到记忆中，或更新其时间戳
         for tile_pos in self.visible_tiles:
-            # Update timestamp even if already in memory, keep it fresh
-             self.memory_tiles[tile_pos] = (current_time, FOW_MEMORY_BRIGHTNESS) # Store initial memory brightness
+            # 即使瓦片已在记忆中，也更新时间戳，表示最近刚看到
+            # 存储进入记忆时的基础亮度
+            self.memory_tiles[tile_pos] = (current_time, FOW_MEMORY_BRIGHTNESS)
 
-        # Decay and remove old memory tiles
-        to_remove = []
+        # 检查并移除过期的记忆瓦片
+        to_remove = [] # 存储需要移除的瓦片坐标
         for pos, (timestamp, initial_brightness) in self.memory_tiles.items():
-            if pos not in self.visible_tiles: # Only decay tiles not currently visible
-                age = current_time - timestamp
-                if age >= FOW_FORGET_TIME_FRAMES * 1000: # Convert frames to ms
-                    to_remove.append(pos)
-                # Brightness decay calculation happens in get_tile_brightness
+            # 只处理当前不可见的记忆瓦片
+            if pos not in self.visible_tiles:
+                age_ms = current_time - timestamp # 计算记忆经过的时间 (毫秒)
+                # FOW_FORGET_TIME_FRAMES 需要转换为毫秒进行比较
+                if age_ms >= FOW_FORGET_TIME_FRAMES * (1000 / FPS):
+                    to_remove.append(pos) # 超过遗忘时间，标记为待移除
+                # 亮度的衰减逻辑在 get_tile_brightness 中处理
 
+        # 从记忆字典中移除过期的瓦片
         for pos in to_remove:
-            del self.memory_tiles[pos]
+            if pos in self.memory_tiles: # 再次检查以防万一
+                 del self.memory_tiles[pos]
 
 
-    def get_tile_brightness(self, x, y):
-        """Returns the brightness level (0.0 to 1.0) for a given tile."""
+    def get_tile_brightness(self, x: int, y: int) -> float:
+        """获取指定瓦片的亮度值 (0.0 到 1.0)，考虑当前光照和记忆效果。"""
         pos = (x, y)
-        current_time = pygame.time.get_ticks()
+        current_time = pygame.time.get_ticks() # 当前时间戳 (毫秒)
         player = self.game.player
 
-        # 1. Check if currently visible
+        # 1. 检查瓦片是否当前可见
         if pos in self.visible_tiles:
-            # Calculate brightness based on match status
+            # 获取当前火柴状态
             remaining_frames = player.get_current_match_remaining_frames()
             total_frames = MATCH_BURN_TIME_FRAMES
 
-            if remaining_frames <= 0: # No light source
+            # 如果没有光（火柴烧尽），亮度为 0
+            if remaining_frames <= 0:
+                # 特例：如果玩家脚下瓦片是唯一可见的，给个极低亮度避免全黑？
+                # if pos == (int(player.pos.x // TILE_SIZE), int(player.pos.y // TILE_SIZE)):
+                #     return 0.01
                 return 0.0
 
+            # 计算基础亮度 (根据火柴剩余时间)
             base_brightness = 1.0
-            # Apply brightness reduction based on remaining time
+            # 查找第一个满足的低亮度阈值
             for i in range(len(MATCH_LOW_THRESHOLDS_FRAMES)):
                 if remaining_frames <= MATCH_LOW_THRESHOLDS_FRAMES[i]:
                     base_brightness = MATCH_LOW_BRIGHTNESS[i]
-                    break # Use the first threshold met
+                    break # 使用第一个达到的阈值对应的亮度
 
-            # Apply distance gradient effect
+            # 计算从光源中心到瓦片中心的距离
             dist_sq = (player.pos.x - (x * TILE_SIZE + TILE_SIZE / 2))**2 + \
                       (player.pos.y - (y * TILE_SIZE + TILE_SIZE / 2))**2
+            # 获取当前光源的最大半径
             max_radius = MATCH_RADIUS_LARGE_PX if player.get_total_match_count() >= MATCH_COUNT_THRESHOLD_RADIUS else MATCH_RADIUS_SMALL_PX
+
+            # 如果最大半径为0（理论上不应发生），距离比例为0
             dist_ratio = min(1.0, math.sqrt(dist_sq) / max_radius) if max_radius > 0 else 0
 
-            brightness_reduction = 1.0 - base_brightness
-            gradient_multiplier = 0.0
-
+            # --- 应用光照梯度效果 ---
+            # 计算亮度需要减少的总量 (1.0 - base_brightness)
+            total_brightness_reduction = 1.0 - base_brightness
+            # 根据距离比例和 LIGHT_GRADIENT_STOPS 计算当前距离应该应用的亮度减少比例 (gradient_multiplier)
+            gradient_multiplier = 0.0 # 0 表示不减少，1 表示完全减少
             last_radius_ratio = 0.0
             last_reduction_ratio = 0.0
             for radius_ratio_thresh, reduction_ratio_thresh in LIGHT_GRADIENT_STOPS:
                  if dist_ratio <= radius_ratio_thresh:
-                      # Linear interpolation within this segment
-                      segment_dist_ratio = (dist_ratio - last_radius_ratio) / (radius_ratio_thresh - last_radius_ratio) if (radius_ratio_thresh - last_radius_ratio) > 0 else 0
-                      gradient_multiplier = last_reduction_ratio + segment_dist_ratio * (reduction_ratio_thresh - last_reduction_ratio)
-                      break
+                      # 在当前段内进行线性插值
+                      segment_range = radius_ratio_thresh - last_radius_ratio
+                      reduction_range = reduction_ratio_thresh - last_reduction_ratio
+                      # 处理分母为零的情况
+                      if segment_range > 0:
+                           ratio_in_segment = (dist_ratio - last_radius_ratio) / segment_range
+                           gradient_multiplier = last_reduction_ratio + ratio_in_segment * reduction_range
+                      else: # 如果段范围为0（例如只有一个点），直接使用该点的减少比例
+                           gradient_multiplier = reduction_ratio_thresh
+                      break # 找到所在区间后停止
                  last_radius_ratio = radius_ratio_thresh
                  last_reduction_ratio = reduction_ratio_thresh
-            else: # If distance is beyond the last stop (shouldn't happen if radius check done right)
-                 gradient_multiplier = 1.0
+            else: # 如果距离超过了所有定义的梯度停止点（理论上在半径内不应发生）
+                 gradient_multiplier = 1.0 # 应用完全的亮度减少
 
+            # 计算最终亮度：基础亮度 - (总减少量 * 梯度减少比例)
+            # 或者：最终亮度 = 1.0 - (总减少量 * 梯度减少比例) ? 不对
+            # 正确逻辑： 最终亮度 = 基础亮度 + (1.0 - 基础亮度) * (1.0 - gradient_multiplier)
+            # 这样当 gradient_multiplier=0 时, 亮度=基础; gradient_multiplier=1 时, 亮度 = 基础 + (1-基础)*0 = 基础? 也不对
+            # 应该是：最终亮度 = 1.0 - 亮度减少量 * 梯度比例
+            final_brightness = 1.0 - total_brightness_reduction * gradient_multiplier # 这个似乎合理
 
-            final_brightness = base_brightness + (1.0 - base_brightness) * (1.0 - gradient_multiplier) # Apply reduction based on gradient
-            # final_brightness = base_brightness * (1.0 - gradient_multiplier * brightness_reduction_factor) # Alternative approach
+            # 确保亮度在 0.0 到 1.0 之间
             return max(0.0, min(1.0, final_brightness))
 
 
-        # 2. Check if in memory
+        # 2. 如果瓦片不在当前视野，检查是否在记忆中
         elif pos in self.memory_tiles:
             timestamp, initial_brightness = self.memory_tiles[pos]
-            age_ms = current_time - timestamp
-            age_frames = age_ms / (1000 / FPS) # Convert ms age to frames age
+            age_ms = current_time - timestamp # 记忆经过的时间 (毫秒)
+            # 将毫秒转换为帧数，用于与设置中的帧数比较
+            age_frames = age_ms / (1000 / FPS)
 
-            # Check if player match is too low, suppressing memory
+            # 检查玩家当前火柴是否过低，如果过低则暂时隐藏记忆效果
             if player.get_current_match_remaining_frames() < MATCH_MEMORY_FADE_THRESHOLD_FRAMES:
-                 return 0.0 # Temporarily hide memory
+                 return 0.0 # 临时隐藏记忆
 
-            # Calculate decay based on age
-            current_mem_brightness = initial_brightness
+            # 计算记忆亮度衰减
+            current_mem_brightness = initial_brightness # 从进入记忆时的亮度开始
+            # 查找适用的最暗的衰减级别
             for i in range(len(FOW_DECAY_TIMES_FRAMES)):
                  if age_frames >= FOW_DECAY_TIMES_FRAMES[i]:
                       current_mem_brightness = FOW_DECAY_BRIGHTNESS[i]
-                      # Don't break, find the latest applicable decay level
-            # Linearly interpolate between decay steps? More complex, maybe not needed.
+                      # 注意：这里没有 break，所以会应用最后一个满足条件的（最暗的）亮度级别
 
-            # Check if completely forgotten
+            # 再次检查是否已完全遗忘 (时间超过最大遗忘时间)
             if age_frames >= FOW_FORGET_TIME_FRAMES:
                 return 0.0
 
-            return max(0.0, min(1.0, current_mem_brightness)) # Clamp brightness
+            # 返回计算出的记忆亮度
+            return max(0.0, min(1.0, current_mem_brightness)) # 限制在 0.0 到 1.0
 
 
-        # 3. Not visible and not in memory
+        # 3. 如果瓦片既不可见也不在记忆中，亮度为 0
         else:
             return 0.0
 
-    def draw_darkness(self, surface, camera, player):
-         """Draws the overall darkness effect, potentially replacing tile-by-tile brightness."""
-         # This is an alternative/complementary way to handle overall dimming
-         # Simpler approach: Just rely on get_tile_brightness for tile rendering alpha.
+    def draw_darkness(self, surface: pygame.Surface, camera: 'Camera', player: 'Player'):
+        """(可选实现) 绘制一个覆盖全屏的黑暗层，模拟光照衰减。
+           这是一种替代或补充瓦片亮度控制的方法。
+           当前实现依赖于 get_tile_brightness 来控制每个瓦片的 alpha。
+           如果需要更平滑的圆形光照，可以在这里绘制。
+        """
+        # 简单的实现：依赖瓦片自身的 alpha 透明度，这里什么都不做
+        pass
 
-         # More complex: Draw a large overlay surface centered on player
-         self.fov_surface.fill((0, 0, 0, 255)) # Start fully dark
+        # --- 复杂实现示例：绘制渐变黑暗遮罩 ---
+        # self.fov_surface.fill((0, 0, 0, 255)) # 从完全黑暗开始
 
-         # Get current light parameters
-         remaining_frames = player.get_current_match_remaining_frames()
-         if remaining_frames <= 0:
-              surface.blit(self.fov_surface, (0,0)) # Full darkness if no light
-              return
+        # # 获取当前光照参数
+        # remaining_frames = player.get_current_match_remaining_frames()
+        # if remaining_frames <= 0:
+        #      surface.blit(self.fov_surface, (0,0)) # 如果没光，直接全黑
+        #      return
 
-         max_radius = MATCH_RADIUS_LARGE_PX if player.get_total_match_count() >= MATCH_COUNT_THRESHOLD_RADIUS else MATCH_RADIUS_SMALL_PX
-         base_brightness = 1.0
-         for i in range(len(MATCH_LOW_THRESHOLDS_FRAMES)):
-              if remaining_frames <= MATCH_LOW_THRESHOLDS_FRAMES[i]:
-                   base_brightness = MATCH_LOW_BRIGHTNESS[i]
-                   break
+        # max_radius = MATCH_RADIUS_LARGE_PX if player.get_total_match_count() >= MATCH_COUNT_THRESHOLD_RADIUS else MATCH_RADIUS_SMALL_PX
+        # base_brightness = 1.0
+        # for i in range(len(MATCH_LOW_THRESHOLDS_FRAMES)):
+        #      if remaining_frames <= MATCH_LOW_THRESHOLDS_FRAMES[i]:
+        #           base_brightness = MATCH_LOW_BRIGHTNESS[i]
+        #           break
 
-         # Calculate the screen position of the player
-         player_screen_pos = camera.apply_sprite(player).center
+        # # 获取玩家在屏幕上的坐标
+        # player_screen_pos = camera.apply_sprite(player).center
 
-         # --- Gradient Darkness Implementation ---
-         # Draw concentric circles of decreasing transparency (increasing darkness)
-         # This simulates the LIGHT_GRADIENT_STOPS logic on a full surface
+        # # 计算最大黑暗度 (alpha)
+        # max_darkness_alpha = int((1.0 - base_brightness) * 255 * 0.8) # *0.8 让最暗处也稍微有点透
 
-         max_alpha = int((1.0 - base_brightness) * 255) # Max darkness alpha
+        # # 绘制从外到内的渐变圆
+        # num_gradient_steps = 30 # 步数越多越平滑
+        # for i in range(num_gradient_steps, -1, -1):
+        #     dist_ratio = i / num_gradient_steps # 当前圆的半径比例 (0 到 1)
+        #     current_radius = int(dist_ratio * max_radius)
 
-         last_radius_ratio = 0.0
-         last_reduction_ratio = 0.0
-         num_gradient_steps = 20 # More steps = smoother gradient
+        #     if current_radius <= 0: continue
 
-         current_full_radius = max_radius # The actual lit radius in pixels
+        #     # 计算此半径比例对应的黑暗度比例 (gradient_multiplier)
+        #     gradient_multiplier = 0.0
+        #     # ... (此处省略根据 LIGHT_GRADIENT_STOPS 计算 gradient_multiplier 的逻辑) ...
 
-         # Draw the gradient from outside in
-         for i in range(num_gradient_steps, -1, -1):
-              dist_ratio = i / num_gradient_steps # Ratio from 0 to 1
+        #     # 计算当前圆的 alpha 值 (越往外越不透明)
+        #     current_alpha = int(gradient_multiplier * max_darkness_alpha)
+        #     current_alpha = max(0, min(255, current_alpha))
 
-              # Find the corresponding darkness multiplier based on design
-              gradient_multiplier = 0.0
-              _last_r = 0.0
-              _last_red = 0.0
-              for r_thresh, red_thresh in LIGHT_GRADIENT_STOPS:
-                   if dist_ratio <= r_thresh:
-                        seg_dist_ratio = (dist_ratio - _last_r) / (r_thresh - _last_r) if (r_thresh - _last_r) > 0 else 0
-                        gradient_multiplier = _last_red + seg_dist_ratio * (red_thresh - _last_red)
-                        break
-                   _last_r = r_thresh
-                   _last_red = red_thresh
-              else:
-                   gradient_multiplier = 1.0 # Full reduction multiplier outside last stop
+        #     # 在 fov_surface 上绘制一个有透明度的黑色圆
+        #     pygame.draw.circle(self.fov_surface, (0, 0, 0, current_alpha), player_screen_pos, current_radius)
 
-              # Calculate alpha for this circle (higher multiplier = darker)
-              current_alpha = int(gradient_multiplier * max_alpha)
-              current_radius = int(dist_ratio * current_full_radius)
-
-              if current_radius > 0 and current_alpha > 0:
-                  # Draw a transparent circle - erasing darkness
-                  # Use SRCALPHA blend mode? Or just draw alpha circle?
-                  # Let's try drawing solid color circle with alpha onto the darkness surface
-                   circle_color = (0, 0, 0, 255 - int(base_brightness * (1-gradient_multiplier) * 255)) # Problematic calculation?
-                   # Alternative: Calculate the needed alpha to *reveal* underlying layer
-                   # Alpha = 255 means opaque overlay, 0 means transparent overlay
-                   # We want overlay alpha to be high far away, low near center
-                   overlay_alpha = int(gradient_multiplier * max_alpha)
-                   overlay_alpha = max(0, min(255, overlay_alpha))
-
-                   # Draw a circle with this overlay alpha on the FOV surface
-                   # Need a temporary surface for the circle itself?
-                   temp_circle_surf = pygame.Surface((current_radius*2, current_radius*2), pygame.SRCALPHA)
-                   pygame.draw.circle(temp_circle_surf, (0, 0, 0, overlay_alpha), (current_radius, current_radius), current_radius)
-                   # Blit this circle centered onto the main fov_surface, but need to erase darkness...
-
-         # --- Simpler approach: Draw a light circle ---
-         # Create a temporary surface for the light circle
-         light_radius = int(max_radius)
-         light_surf = pygame.Surface((light_radius * 2, light_radius * 2), pygame.SRCALPHA)
-         # Draw gradient light on this surface (transparent center, opaque edges?) No, opaque center, transparent edges
-         for i in range(light_radius, 0, -5): # Draw from out to in, radius i
-              dist_ratio = i / light_radius
-              # Calculate brightness at this radius (inverse of darkness multiplier)
-              gradient_multiplier = 0.0
-              _last_r = 0.0
-              _last_red = 0.0
-              for r_thresh, red_thresh in LIGHT_GRADIENT_STOPS:
-                   if dist_ratio <= r_thresh:
-                        seg_dist_ratio = (dist_ratio - _last_r) / (r_thresh - _last_r) if (r_thresh - _last_r) > 0 else 0
-                        gradient_multiplier = _last_red + seg_dist_ratio * (red_thresh - _last_red)
-                        break
-                   _last_r = r_thresh
-                   _last_red = red_thresh
-              else:
-                   gradient_multiplier = 1.0
-
-              # Brightness = base * (1 - gradient_multiplier * (1-base)/base) ? Simpler:
-              current_brightness = base_brightness + (1.0 - base_brightness) * (1.0 - gradient_multiplier)
-              alpha = int(current_brightness * 255)
-              alpha = max(0, min(255, alpha))
-              pygame.draw.circle(light_surf, (255, 255, 255, alpha), (light_radius, light_radius), i)
+        # # 最后将带有透明渐变圆的 fov_surface 绘制到主屏幕上
+        # surface.blit(self.fov_surface, (0, 0))
 
 
-         # Blit the light circle onto the dark surface using BLEND_RGBA_MULT ? or just draw it?
-         # Draw black everywhere
-         self.fov_surface.fill((0, 0, 0, 255))
-         # Cut out the light circle
-         light_rect = light_surf.get_rect(center=player_screen_pos)
-         self.fov_surface.blit(light_surf, light_rect, special_flags=pygame.BLEND_RGBA_SUB) # Subtract light alpha from darkness
-
-
-         # Finally, blit the resulting fov_surface onto the main screen
-         surface.blit(self.fov_surface, (0,0))
-
-
-    def update(self, player):
+    def update(self, player: 'Player'):
+        """每帧更新光照系统：计算视野并更新记忆。"""
         self.calculate_fov(player)
         self.update_memory()
