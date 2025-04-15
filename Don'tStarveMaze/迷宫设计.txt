@@ -45,3 +45,15 @@ tStarveMaze/
 光照/视野: lighting.py会实现基于射线投射（Ray Casting）的视野计算，并管理记忆（Fog of War）效果。这部分逻辑相对复杂。
 代码量: 这会是一个相对较大的项目，代码量会比较多。我会尽量保证结构清晰和注释充分。
 "没有漏洞": 编写完全没有漏洞的代码是非常困难的，尤其是在复杂的游戏中。我会尽力按照设计实现，但实际运行中可能需要调试和优化。
+
+
+如何运行:
+确保环境: 确认已安装 Python 3, pygame, 和 pathfinding-visual.
+文件结构: 将以上所有 Python 文件 (main.py, settings.py, player.py, etc.) 放在同一个文件夹（例如 Don'tStarveMaze）中。
+资源: 在该文件夹内创建 assets 文件夹，并在其中创建 images 和 sounds 子文件夹。将所有必需的 .png 图片放入 images，将音效文件放入 sounds。确保文件名与 settings.py 中的 IMAGE_FILES 和 SOUND_FILES 字典匹配。
+运行: 打开命令行/终端，导航到 Don'tStarveMaze 文件夹，然后运行主文件： python main.py
+控制:
+WASD / 方向键：移动
+空格键：暂停/继续
+ESC：退出游戏
+这个代码库提供了一个相对完整的框架。由于游戏逻辑的复杂性，特别是光照、视野和怪物AI部分，可能仍然需要进一步的调试和优化才能达到完美的效果。但它应该为你提供了一个坚实的基础来开始游戏！
