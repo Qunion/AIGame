@@ -6,9 +6,9 @@ from typing import Tuple # 导入需要用到的类型提示
 
 if TYPE_CHECKING:
     from main import Game
-    from items import WeaponItem
-    from monster import Monster
-    from items import Item
+from items import WeaponItem
+from monster import Monster
+from items import Item
 
 class Player(pygame.sprite.Sprite):
     """代表玩家角色。"""

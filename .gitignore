@@ -1,3 +1,4 @@
 build/
 dist/
 tetris.spec
+Don'tStarveMaze/savegame.pkl
