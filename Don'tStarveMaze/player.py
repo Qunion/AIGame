@@ -372,13 +372,14 @@ class Player(pygame.sprite.Sprite):
     # --- 新增方法：尝试放置标记物 ---
     def try_place_marker(self) -> bool:
         """尝试将持有的最右侧标记物放置在当前格子上。"""
+        print(f"--- try_place_marker called at time: {pygame.time.get_ticks()} ---") # 添加这行
         if not self.markers: # 如果没有标记物可放置
             print("玩家没有可放置的标记物。")
             # 可以加一个失败音效 self.game.asset_manager.play_sound('place_marker_fail')
             return False
 
         # 获取并移除最右侧（最早获得）的标记物
-        marker_id_to_place = self.markers.pop()
+        marker_id_to_place = self.markers.pop(0)
 
         # 获取玩家当前所在的瓦片坐标
         player_tile_x = int(self.pos.x // TILE_SIZE)

@@ -227,10 +227,10 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT: # 点击关闭按钮
                 self.running = False
-            if event.type == pygame.KEYDOWN: # 按下键盘按键
+            elif event.type == pygame.KEYDOWN: # 按下键盘按键
                 if event.key == pygame.K_ESCAPE: # 按下 ESC 键
                     self.running = False
-                if event.key == pygame.K_f:
+                elif event.key == pygame.K_f:
                     # --- 修改：区分暂停和放置标记物 ---
                     if self.game_over or self.game_won: # 如果游戏结束，空格无效
                          pass
@@ -238,25 +238,12 @@ class Game:
                         self.paused = False
                         pygame.mixer.music.unpause()
                         print("游戏已恢复")
-                    else: # 如果非暂停状态，空格尝试放置标记物，然后才切换暂停
-                        if hasattr(self, 'player'):
-                            placed = self.player.try_place_marker()
-                            # 如果不想放置标记物后自动暂停，去掉下面的暂停逻辑
-                            # if not placed: # 如果放置失败 (没标记物), 切换暂停? (可选行为)
-                            #      self.paused = True
-                            #      pygame.mixer.music.pause()
-                            #      print("游戏已暂停 (无标记物可放)")
-                        # else: # 如果放置成功，或者没有玩家对象（理论上不应发生），则切换暂停
-                        #      self.paused = True
-                        #      pygame.mixer.music.pause()
-                        #      print("游戏已暂停")
-                    # --- 简化：空格只用于放置标记物，暂停用 P 键？ ---
-                    # 或者：如果玩家有标记物，空格是放置；如果没有，空格是暂停？
-                    # 决定：保持原设计，空格 *只* 尝试放置标记物。暂停用单独的键（例如 P）。
-                    # --- 恢复：空格只尝试放置标记物 ---
-                    if hasattr(self, 'player') and not self.paused and not self.game_over and not self.game_won:
+                    # else: # 如果非暂停状态，空格尝试放置标记物，然后才切换暂停
+                    #     if hasattr(self, 'player'):
+                    #         placed = self.player.try_place_marker()
+                    elif hasattr(self, 'player') and not self.paused and not self.game_over and not self.game_won:
                          self.player.try_place_marker()
-                if event.key == pygame.K_SPACE: # 按下空格键
+                elif event.key == pygame.K_SPACE: # 按下空格键
                     if not self.game_over and not self.game_won: # 结束后不能暂停
                         self.paused = not self.paused # 切换暂停状态
                         if self.paused:

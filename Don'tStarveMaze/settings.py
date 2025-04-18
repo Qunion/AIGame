@@ -37,7 +37,7 @@ MESSAGE_FONT_SIZE = 50
 
 # --- 玩家设置 ---
 PLAYER_START_POS = None # 由迷宫生成后随机设置
-PLAYER_SPEED = 4.0 * TILE_SIZE / FPS # 2 m/s (单位: 像素/帧) #玩家移动速度 #测试改成4m，默认应该为2m
+PLAYER_SPEED = 3.0 * TILE_SIZE / FPS # 2 m/s (单位: 像素/帧) #玩家移动速度 #测试改成4m，默认应该为2m
 PLAYER_RADIUS_M = 0.3 # 半径 0.3m
 PLAYER_RADIUS_PX = int(PLAYER_RADIUS_M * TILE_SIZE) # 像素半径
 PLAYER_HIT_RECT = pygame.Rect(0, 0, int(PLAYER_RADIUS_PX * 1.8), int(PLAYER_RADIUS_PX * 1.8)) # 碰撞矩形简化处理# 这个现在可能只用于初始位置? 碰撞用圆形
@@ -176,9 +176,15 @@ WEAPON_GOOD_USES = 2
 # 确保总格子数 > 物品数 + 怪物数 + 玩家 + 出口
 TOTAL_TILES = GRID_WIDTH * GRID_HEIGHT
 MATCH_SPAWN_COUNT = 16
-FOOD_BREAD_COUNT = 12
-FOOD_MEAT_COUNT = 4
+FOOD_BREAD_COUNT = 12  
+FOOD_MEAT_COUNT = 4  
 WEAPON_SPAWN_COUNT = 2 # 1 broken, 1 good
+
+# MATCH_SPAWN_COUNT = 16
+# FOOD_BREAD_COUNT = 44  
+# FOOD_MEAT_COUNT = 20  
+# WEAPON_SPAWN_COUNT = 4 # 1 broken, 1 good
+
 
 # --- UI 设置 ---
 UI_PANEL_HEIGHT = 150 # 顶部UI区域高度 (预留，可以不用)
