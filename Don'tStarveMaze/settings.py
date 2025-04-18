@@ -30,7 +30,7 @@ YELLOW = (255, 255, 0)
 FOW_MEMORY_COLOR = (100, 100, 100) # 记忆区域的基础颜色 (会被亮度调整)
 
 # --- 字体 ---
-FONT_NAME = pygame.font.match_font('arial') # 或者指定一个 .ttf 文件路径
+FONT_NAME = pygame.font.match_font('Microsoft YaHei') # 或者指定一个 .ttf 文件路径 原来是arial
 UI_FONT_SIZE = 30
 MESSAGE_FONT_SIZE = 50
 
@@ -79,7 +79,7 @@ FOOD_MEAT_BOOST_DURATION_FRAMES = FOOD_MEAT_BOOST_DURATION_SEC * FPS
 
 # --- 黑暗迷雾 (FoW) 设置 ---
 FOW_MEMORY_BRIGHTNESS = 0.6 # 离开后记忆区域的基础亮度 (60%)
-FOW_FORGET_TIME_SEC = 30
+FOW_FORGET_TIME_SEC = 20 #遗忘时间：30s
 FOW_FORGET_TIME_FRAMES = FOW_FORGET_TIME_SEC * FPS
 # 亮度衰减时间点 (秒, 相对于进入记忆状态) 和 对应的亮度倍数 (基于FOW_MEMORY_BRIGHTNESS)
 # 设计案描述有点歧义，这里采用：20s时降为初始记忆的1/3，25s时再降为初始记忆的1/3 (即变为2/3的衰减量) -> 似乎不太对
