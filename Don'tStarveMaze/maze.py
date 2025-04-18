@@ -1,9 +1,12 @@
 import pygame
 import random
+import noise # 导入噪声库
+
 from settings import *
 from pathfinding.core.grid import Grid # 导入寻路库的 Grid 类
 from pathfinding.finder.a_star import AStarFinder # 导入 A* 寻路算法
-from typing import Optional, Tuple, List,TYPE_CHECKING # 导入需要用到的类型提示
+# 导入类型提示
+from typing import Optional, Tuple, List, Dict, TYPE_CHECKING, Any # 添加 Dict, Any # 导入需要用到的类型提示
 
 # --- 添加或修改这部分 ---
 if TYPE_CHECKING:
@@ -13,7 +16,21 @@ if TYPE_CHECKING:
     from lighting import Lighting
 # --- 结束添加/修改部分 ---
 
+# --- Sprite for Decorations --- (新类) ---
+class Decoration(pygame.sprite.Sprite):
+    """代表地图上的装饰物（如杂草）的精灵。"""
+    def __init__(self, game: 'Game', pos: Tuple[float, float], image: pygame.Surface):
+        self._layer = DECORATION_LAYER # 设置装饰物图层
+        # 只加入 all_sprites 组，不需要其他交互组
+        self.groups = game.all_sprites
+        pygame.sprite.Sprite.__init__(self, self.groups)
+        self.game = game
+        self.image = image
+        self.rect = self.image.get_rect()
+        self.pos = pygame.Vector2(pos) # 使用瓦片中心作为位置
+        self.rect.center = self.pos
 
+# --- 修改 Tile 类 ---
 class Tile:
     """代表迷宫中的一个格子。"""
     def __init__(self, x: int, y: int, is_wall: bool):
@@ -23,7 +40,11 @@ class Tile:
         # 格子的像素矩形区域
         self.rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
         # FoW（战争迷雾）相关的属性将由 Lighting 类管理
+        # 新增属性
+        self.biome_id: int = DEFAULT_BIOME_ID # 地形 ID
+        self.decoration_id: Optional[str] = None # 装饰物 ID (例如 'weed_1')
 
+# --- 修改 Maze 类 ---
 class Maze:
     """管理迷宫的生成、绘制和寻路。"""
     def __init__(self, game: 'Game', width: int, height: int):
@@ -33,11 +54,15 @@ class Maze:
         # 初始化网格，所有格子默认为墙
         self.grid_cells = [[Tile(x, y, True) for y in range(height)] for x in range(width)]
         self.exit_pos: Optional[Tuple[int, int]] = None   # 出口位置 (网格坐标)
-        self.player_start_pos: Optional[Tuple[int, int]] = None # 玩家起始位置 (世界坐标)
+        # self.player_start_pos: Optional[Tuple[int, int]] = None # 玩家起始位置 (世界坐标)
+        self.player_start_pos: Optional[Tuple[float, float]] = None # 世界坐标
 
-        self._generate_maze()   # 调用迷宫生成算法
+        self._generate_maze()   # 调用迷宫生成算法  # 1. 生成基本路径
         # 随机移除一些墙壁以增加循环路径，提高复杂度 (例如移除 5% 的墙)
-        self._add_loops(int(width * height * 0.05))
+        self._add_loops(int(width * height * 0.05)) # 2. 增加循环
+        self._assign_biomes()   # 3. 分配地形区域
+        self._place_decorations() # 4. 放置装饰物 (杂草)
+
         # 创建用于 pathfinding 库的矩阵 (0=墙, 1=路)
         self.pathfinding_grid_matrix = self._create_pathfinding_matrix()
         # 创建 pathfinding 的 Grid 对象
@@ -45,9 +70,9 @@ class Maze:
         # 初始化 A* 寻路器
         self.finder = AStarFinder()
         # 放置出口
-        self.place_exit()
+        self.place_exit()  # 5. 放置出口 (现在使用加权逻辑)
         # 获取一个随机的地面格子作为玩家出生点（世界坐标）
-        self.player_start_pos = self.get_random_floor_tile()
+        self.player_start_pos = self.get_random_floor_tile()[1] # get_random_floor_tile 现在返回 (tile_coords, world_coords)
 
     def _is_valid(self, x: int, y: int) -> bool:
         """检查给定的网格坐标是否在迷宫范围内。"""
@@ -124,6 +149,103 @@ class Maze:
                      added += 1 # 成功添加一个循环
         print(f"成功添加 {added} 个循环路径。")
 
+    def _assign_biomes(self):
+        """使用 Perlin 噪声为每个格子分配地形 ID。"""
+        print("正在分配地形区域...")
+        # 对每个格子计算噪声值并分配 biome_id
+        for x in range(self.width):
+            for y in range(self.height):
+                # 使用 noise.pnoise2 生成噪声值
+                # / NOISE_SCALE 控制噪声的“缩放”或频率
+                # octaves 控制细节层次
+                # persistence 控制高频细节的幅度
+                # lacunarity 控制频率倍增
+                # base 是种子，确保每次运行生成不同但内部连续的噪声
+                noise_val = noise.pnoise2(x / NOISE_SCALE,
+                                          y / NOISE_SCALE,
+                                          octaves=NOISE_OCTAVES,
+                                          persistence=NOISE_PERSISTENCE,
+                                          lacunarity=NOISE_LACUNARITY,
+                                          base=NOISE_SEED)
+
+                assigned_biome = DEFAULT_BIOME_ID # 默认地形
+                # 根据阈值分配地形 ID (从低到高检查)
+                biome_ids_sorted = sorted(BIOME_THRESHOLDS.keys()) # 获取排序后的 biome ID
+                thresholds_sorted = sorted(BIOME_THRESHOLDS.items(), key=lambda item: item[1]) # 按阈值排序
+
+                last_biome_id = DEFAULT_BIOME_ID
+                found = False
+                for biome_id, threshold in thresholds_sorted:
+                    if noise_val < threshold:
+                        assigned_biome = biome_id
+                        found = True
+                        break
+                    last_biome_id = biome_id # 记录最后一个检查的biome ID
+
+                # 如果噪声值大于所有阈值，则分配最高 ID 的地形（或下一个 ID？）
+                if not found:
+                     # 假设 ID 是连续的，分配最后一个检查的 ID + 1？
+                     # 或者直接分配 NUM_BIOMES？
+                     # 确保 NUM_BIOMES 与 BIOME_THRESHOLDS 键的数量匹配
+                     # 如果 BIOME_THRESHOLDS = {1: -0.1, 2: 0.2}, 那么 ID 应该是 1, 2, 3
+                     # 找到最后一个阈值对应的 ID
+                     if thresholds_sorted:
+                         highest_threshold_id = thresholds_sorted[-1][0]
+                         # 假设 ID 连续
+                         if highest_threshold_id < NUM_BIOMES:
+                              assigned_biome = highest_threshold_id + 1
+                         else: # 如果阈值定义覆盖了所有 ID，就用最后一个
+                              assigned_biome = highest_threshold_id
+                     else: # 如果没有定义阈值，全部用默认
+                          assigned_biome = DEFAULT_BIOME_ID
+
+
+                self.grid_cells[x][y].biome_id = assigned_biome
+        print("地形区域分配完毕。")
+
+    def _place_decorations(self):
+        """在地板上随机放置装饰物（如杂草）。"""
+        print("正在放置装饰物...")
+        if not WEED_FILES or not WEED_TYPE_WEIGHTS: # 如果没有定义杂草，直接返回
+            print("未定义杂草类型，跳过放置。")
+            return
+
+        weed_types = list(WEED_TYPE_WEIGHTS.keys())
+        weed_weights = list(WEED_TYPE_WEIGHTS.values())
+
+        if not weed_types or sum(weed_weights) <= 0: # 确保有类型且权重有效
+             print("杂草类型或权重无效，跳过放置。")
+             return
+
+        for x in range(self.width):
+            for y in range(self.height):
+                tile = self.grid_cells[x][y]
+                # 只在地板上放置
+                if not tile.is_wall:
+                    biome_id = tile.biome_id
+                    # 获取当前地形生成杂草的概率
+                    spawn_chance = WEED_SPAWN_CHANCE_PER_BIOME.get(biome_id, 0)
+                    # 如果随机数小于概率
+                    if random.random() < spawn_chance:
+                        try:
+                             # 根据权重随机选择一种杂草类型
+                            chosen_weed_id = random.choices(weed_types, weights=weed_weights, k=1)[0]
+                            tile.decoration_id = chosen_weed_id # 记录装饰物 ID
+                            # --- 创建 Decoration 精灵 ---
+                            # 获取对应的图片
+                            weed_image = self.game.asset_manager.get_image(chosen_weed_id)
+                            if weed_image:
+                                # 计算放置位置 (瓦片中心)
+                                pos_world = (tile.rect.centerx, tile.rect.centery)
+                                Decoration(self.game, pos_world, weed_image)
+                            # --------------------------
+                        except IndexError:
+                             # random.choices 返回空列表的情况（理论上权重有效时不应发生）
+                             print(f"警告：为坐标 {(x,y)} 选择杂草时出错。")
+
+        print("装饰物放置完毕。")
+
+
 
     def is_wall(self, x: int, y: int) -> bool:
         """检查指定网格坐标是否是墙。超出边界也视为墙。"""
@@ -137,8 +259,9 @@ class Maze:
             return None
         return self.grid_cells[x][y]
 
+    # --- 修改绘制逻辑 ---
     def draw(self, surface: pygame.Surface, camera: 'Camera', lighting: 'Lighting'):
-        """绘制迷宫地图，考虑相机视角和光照/记忆效果。"""
+        """绘制迷宫地图，考虑相机、光照、地形和装饰物。"""
         cam_rect = camera.get_view_rect() # 获取相机在世界坐标中的可见矩形
         # 根据相机视野确定需要绘制的瓦片范围
         start_col = max(0, int(cam_rect.left // TILE_SIZE))
@@ -146,9 +269,9 @@ class Maze:
         start_row = max(0, int(cam_rect.top // TILE_SIZE))
         end_row = min(self.height, int((cam_rect.bottom + TILE_SIZE - 1) // TILE_SIZE))
 
-        # 从资源管理器获取图片
-        wall_img = self.game.asset_manager.get_image('wall')
-        floor_img = self.game.asset_manager.get_image('floor')
+        # 默认图片键名 (如果获取失败)
+        default_floor_key = f'{BIOME_FLOOR_BASENAME}{DEFAULT_BIOME_ID}'
+        default_wall_key = f'{BIOME_WALL_BASENAME}{DEFAULT_BIOME_ID}'
         exit_img = self.game.asset_manager.get_image('exit')
 
         # 遍历可见范围内的瓦片
@@ -165,16 +288,43 @@ class Maze:
                     is_currently_visible = (x, y) in lighting.visible_tiles # 是否当前被照亮
 
                     img_to_draw = None # 要绘制的图片
+                    biome_id = tile.biome_id # 获取当前瓦片的地形 ID
 
                     if tile.is_wall:
-                        # 只有当允许照亮墙壁或墙壁当前可见时才绘制墙壁
+                        # --- 判断墙体类型 ---
+                        wall_biome_id = DEFAULT_BIOME_ID # 默认墙体类型
+                        # 检查相邻地板 (优先级: 下 > 右 > 左 > 上)
+                        prioritized_neighbors = [(x, y + 1), (x + 1, y), (x - 1, y), (x, y - 1)]
+                        found_floor_neighbor = False
+                        for nx, ny in prioritized_neighbors:
+                             if self._is_valid(nx, ny):
+                                 neighbor_tile = self.grid_cells[nx][ny]
+                                 if not neighbor_tile.is_wall: # 如果邻居是地板
+                                     wall_biome_id = neighbor_tile.biome_id # 墙体使用该地板的类型
+                                     found_floor_neighbor = True
+                                     break # 找到第一个地板邻居就停止
+
+                        wall_key = f'{BIOME_WALL_BASENAME}{wall_biome_id}'
+                        # ------------------
                         if lighting.light_walls or is_currently_visible:
-                            img_to_draw = wall_img
+                            img_to_draw = self.game.asset_manager.get_image(wall_key)
+                            if img_to_draw is None: # 处理获取失败
+                                img_to_draw = self.game.asset_manager.get_image(default_wall_key)
+
                     else: # 是地板
-                        img_to_draw = floor_img
-                        # 如果是出口位置，并且有出口图片，则绘制出口图片
+                        floor_key = f'{BIOME_FLOOR_BASENAME}{biome_id}'
+                        img_to_draw = self.game.asset_manager.get_image(floor_key)
+                        if img_to_draw is None: # 处理获取失败
+                            img_to_draw = self.game.asset_manager.get_image(default_floor_key)
+
+                        # 检查是否是出口
                         if (x, y) == self.exit_pos and exit_img:
-                            img_to_draw = exit_img
+                            # --- 绘制出口图片 ---
+                            # 如果需要出口图片覆盖地板，在这里绘制出口图片
+                            # 如果出口图片本身带透明度，效果会更好
+                            # 也可以先绘制地板，再绘制出口
+                            # 决定：先绘制地板，再绘制出口（如果出口图片半透明）
+                            pass # 先让下面的逻辑绘制地板
 
                     if img_to_draw:
                         # 应用亮度/记忆效果 (通过 alpha 透明度)
@@ -189,44 +339,91 @@ class Maze:
                         temp_surf.set_alpha(alpha)
                         surface.blit(temp_surf, screen_pos.topleft) # 绘制到屏幕
 
-                # 可选：为完全未探索的区域绘制纯黑色块（如果需要）
-                # else:
-                #     pygame.draw.rect(surface, BLACK, (screen_pos.x, screen_pos.y, TILE_SIZE, TILE_SIZE))
+                    # --- 绘制出口（如果地板已绘制）---
+                    if not tile.is_wall and (x, y) == self.exit_pos and exit_img:
+                        # 假设出口图片需要应用同样的亮度/alpha
+                        exit_surf = exit_img.copy()
+                        exit_alpha = int(brightness * 255)
+                        exit_surf.set_alpha(exit_alpha)
+                        surface.blit(exit_surf, screen_pos.topleft)
 
+                    # --- 绘制装饰物 (在地板之上，但在精灵之下) ---
+                    # 这部分逻辑移到 Decoration 精灵类中，让主循环绘制精灵
 
-    def get_random_floor_tile(self) -> Tuple[float, float]:
-        """随机获取一个非墙壁格子的中心世界坐标。"""
-        while True:
+    # 修改：返回瓦片坐标和世界坐标
+    def get_random_floor_tile(self) -> Tuple[Tuple[int, int], Tuple[float, float]]:
+        """随机获取一个非墙壁格子的瓦片坐标和中心世界坐标。"""
+        attempts = 0
+        while attempts < self.width * self.height:
             x = random.randint(0, self.width - 1)
             y = random.randint(0, self.height - 1)
             if not self.grid_cells[x][y].is_wall:
-                # 返回该格子中心的像素坐标 (世界坐标)
-                return (x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2)
+                tile_coords = (x, y)
+                world_coords = (x * TILE_SIZE + TILE_SIZE / 2, y * TILE_SIZE + TILE_SIZE / 2)
+                return tile_coords, world_coords
+            attempts += 1
+        # 极端情况处理
+        print("错误：无法找到任何地面瓦片！")
+        return (0, 0), (TILE_SIZE / 2, TILE_SIZE / 2)
 
+    # --- 修改出口放置逻辑 ---
     def place_exit(self):
-        """在迷宫的边缘随机选择一个非墙壁格子作为出口。"""
-        edge_tiles = [] # 存储所有边缘上的通路格子坐标
-        # 检查上边缘和下边缘
+        """根据权重在不同区域（边缘、外围、中间）随机选择一个非墙壁格子作为出口。"""
+        print("正在放置出口...")
+        edge_tiles = []
+        outer_ring_tiles = []
+        middle_tiles = []
+
+        # 遍历所有格子进行分类
         for x in range(self.width):
-            if not self.grid_cells[x][0].is_wall: edge_tiles.append((x, 0))
-            if not self.grid_cells[x][self.height - 1].is_wall: edge_tiles.append((x, self.height - 1))
-        # 检查左边缘和右边缘 (不包括角点，因为上面已检查过)
-        for y in range(1, self.height - 1):
-            if not self.grid_cells[0][y].is_wall: edge_tiles.append((0, y))
-            if not self.grid_cells[self.width - 1][y].is_wall: edge_tiles.append((self.width - 1, y))
+            for y in range(self.height):
+                if not self.grid_cells[x][y].is_wall: # 只考虑非墙壁格子
+                    coords = (x, y)
+                    # 判断是否在边缘
+                    is_edge = (x == 0 or x == self.width - 1 or y == 0 or y == self.height - 1)
+                    # 判断是否在外围 (距离边缘 <= N)
+                    dist_to_edge = min(x, self.width - 1 - x, y, self.height - 1 - y)
+                    is_outer = (not is_edge) and (dist_to_edge <= EXIT_OUTER_RING_DISTANCE)
+
+                    if is_edge:
+                        edge_tiles.append(coords)
+                    elif is_outer:
+                        outer_ring_tiles.append(coords)
+                    else: # 否则是中间
+                        middle_tiles.append(coords)
+
+        # 构建候选列表和权重列表
+        all_candidates = []
+        weights = []
 
         if edge_tiles:
-            # 如果找到边缘通路，随机选择一个作为出口
-            self.exit_pos = random.choice(edge_tiles)
-            print(f"出口已放置在网格坐标: {self.exit_pos}")
+            all_candidates.extend(edge_tiles)
+            weights.extend([EXIT_ZONE_WEIGHTS['edge']] * len(edge_tiles))
+        if outer_ring_tiles:
+            all_candidates.extend(outer_ring_tiles)
+            weights.extend([EXIT_ZONE_WEIGHTS['outer']] * len(outer_ring_tiles))
+        if middle_tiles:
+            all_candidates.extend(middle_tiles)
+            weights.extend([EXIT_ZONE_WEIGHTS['middle']] * len(middle_tiles))
+
+        # 进行加权随机选择
+        if all_candidates:
+            # 检查权重列表是否为空或总和为0
+            if not weights or sum(weights) <= 0:
+                print("警告：出口候选区域权重无效，将使用等概率选择。")
+                self.exit_pos = random.choice(all_candidates)
+            else:
+                 # 使用 random.choices 进行加权选择
+                 try:
+                    self.exit_pos = random.choices(all_candidates, weights=weights, k=1)[0]
+                    print(f"出口已根据权重放置在: {self.exit_pos}")
+                 except ValueError as e:
+                      print(f"警告：加权选择出口时出错 ({e})，将使用等概率选择。")
+                      self.exit_pos = random.choice(all_candidates)
         else:
-            # 极端情况：如果边缘没有通路（例如全封闭迷宫）
-            print("警告: 未能在迷宫边缘找到有效的出口位置！将在随机地面位置放置出口。")
-            # 后备方案：在任意一个地面格子放置出口
-            random_pos_world = self.get_random_floor_tile()
-            # 将世界坐标转换回网格坐标
-            self.exit_pos = (int(random_pos_world[0] // TILE_SIZE), int(random_pos_world[1] // TILE_SIZE))
-            print(f"出口已随机放置在网格坐标: {self.exit_pos}")
+            # 极端情况：找不到任何非墙壁格子
+            print("错误：找不到任何有效的出口位置！")
+            self.exit_pos = None # 设置为 None，让游戏处理此情况
 
 
     def get_exit_rect(self) -> Optional[pygame.Rect]:

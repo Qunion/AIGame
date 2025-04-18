@@ -1,5 +1,6 @@
 import pygame
 import os
+import random # 需要导入 random 用于生成噪声种子
 
 # --- 基本设置 ---
 GAME_TITLE = "饥荒迷宫"
@@ -39,18 +40,23 @@ PLAYER_START_POS = None # 由迷宫生成后随机设置
 PLAYER_SPEED = 4.0 * TILE_SIZE / FPS # 2 m/s (单位: 像素/帧) #玩家移动速度 #测试改成4m，默认应该为2m
 PLAYER_RADIUS_M = 0.3 # 半径 0.3m
 PLAYER_RADIUS_PX = int(PLAYER_RADIUS_M * TILE_SIZE) # 像素半径
-PLAYER_HIT_RECT = pygame.Rect(0, 0, int(PLAYER_RADIUS_PX * 1.8), int(PLAYER_RADIUS_PX * 1.8)) # 碰撞矩形简化处理
+PLAYER_HIT_RECT = pygame.Rect(0, 0, int(PLAYER_RADIUS_PX * 1.8), int(PLAYER_RADIUS_PX * 1.8)) # 碰撞矩形简化处理# 这个现在可能只用于初始位置? 碰撞用圆形
 PLAYER_START_HUNGER = 50
 PLAYER_MAX_HUNGER = 100
 PLAYER_HUNGER_DECAY_RATE = 1 # 每多少秒降低1点饱食度
 PLAYER_HUNGER_DECAY_INTERVAL = 2 * FPS # 饱食度降低间隔（帧）
 PLAYER_HUNGER_WARN_THRESHOLD = 10 # 10%
 PLAYER_HUNGER_WARN_INTERVAL = 8 * FPS # 警告间隔（帧）
+# 新增：奔跑相关设置
+PLAYER_RUN_SPEED_MULTIPLIER = 2.0 # 奔跑时速度变为基础的多少倍
+PLAYER_RUN_HUNGER_MULTIPLIER = 2.0 # 奔跑时饱食度消耗变为基础的多少倍
+PLAYER_RUN_MATCH_BURN_MULTIPLIER = 2.0 # 奔跑时火柴燃烧速度变为基础的多少倍
+
 
 # --- 火柴设置 ---
 MATCH_INITIAL_COUNT = 3  #初始火柴数量
 MATCH_BURN_TIME_SECONDS = 30 #每根燃烧持续时间
-MATCH_BURN_TIME_FRAMES = MATCH_BURN_TIME_SECONDS * FPS
+MATCH_BURN_TIME_FRAMES = MATCH_BURN_TIME_SECONDS * FPS # 基础燃烧时间（帧）
 MATCH_RADIUS_SMALL_M = 4
 MATCH_RADIUS_LARGE_M = 6
 MATCH_RADIUS_SMALL_PX = MATCH_RADIUS_SMALL_M * TILE_SIZE
@@ -60,11 +66,17 @@ MATCH_OUT_DEATH_TIMER_SECONDS = 3
 MATCH_OUT_DEATH_TIMER_FRAMES = MATCH_OUT_DEATH_TIMER_SECONDS * FPS
 # 火柴低亮度阈值 (秒)
 MATCH_LOW_THRESHOLDS_SEC = [15, 10, 5]
-MATCH_LOW_THRESHOLDS_FRAMES = [t * FPS for t in MATCH_LOW_THRESHOLDS_SEC]
+# MATCH_LOW_THRESHOLDS_FRAMES = [t * FPS for t in MATCH_LOW_THRESHOLDS_SEC]
+MATCH_LOW_THRESHOLDS_FRAMES = [t * FPS * MATCH_INITIAL_COUNT for t in MATCH_LOW_THRESHOLDS_SEC] # *粗略* 调整阈值以反映总时间 (这里逻辑需要更精确，可能需要运行时动态计算总时间阈值)
+# 或者更简单的做法：将亮度衰减的阈值改为总火柴数量？例如低于 3 根开始衰减？
+# 暂时保持基于总时间的帧数，但需要知道这个阈值可能需要根据实际火柴数调整
+# --- 修正：还是让阈值基于 *比例* 更合理 ---
+# 例如：总时间低于满状态的 75%, 50%, 25% 时降低亮度？
+# 暂时保留基于绝对帧数的逻辑，但标记为可能需要调整
 # 对应的亮度百分比 (1.0 = 100%)
 MATCH_LOW_BRIGHTNESS = [0.85, 0.70, 0.55]
 # 亮度 < 5s 时，记忆效果消失
-MATCH_MEMORY_FADE_THRESHOLD_FRAMES = 5 * FPS
+MATCH_MEMORY_FADE_THRESHOLD_FRAMES = 5 * FPS # 这个仍基于 *当前* 火柴
 
 # 火柴魔法道具
 MATCH_MAGIC_DURATION_SEC = 10
@@ -76,6 +88,46 @@ FOOD_MEAT_VALUE = 50
 FOOD_MEAT_SPEED_BOOST_FACTOR = 1.5 # 速度变为原来的1.5倍
 FOOD_MEAT_BOOST_DURATION_SEC = 10
 FOOD_MEAT_BOOST_DURATION_FRAMES = FOOD_MEAT_BOOST_DURATION_SEC * FPS
+
+# --- 地形/生物群系 (Biomes) 设置 ---
+NUM_BIOMES = 3 # 当前地形种类数量
+# 地形图片文件基础名 (代码会自动添加 biome_id 和 .png)
+BIOME_FLOOR_BASENAME = "floor_"
+BIOME_WALL_BASENAME = "wall_"
+# Perlin Noise 参数 (需要 pip install noise)
+NOISE_SCALE = 20.0 # 噪声缩放比例，越大区域越大越平滑
+NOISE_OCTAVES = 4     # 噪声细节层次
+NOISE_PERSISTENCE = 0.5 # 噪声持续性/幅度衰减
+NOISE_LACUNARITY = 2.0  # 噪声频率倍增
+NOISE_SEED = random.randint(0, 100) # 随机种子，用于生成不同地图
+# 噪声值到地形 ID 的映射阈值 (从低到高)
+# 噪声值范围通常在 -1 到 1 之间，需要根据实际效果调整阈值
+BIOME_THRESHOLDS = {
+    # biome_id: max_noise_value (低于此值为该 biome)
+    1: -0.1, # 如果 noise < -0.1，则为 biome 1
+    2: 0.2,  # 如果 -0.1 <= noise < 0.2，则为 biome 2
+             # 其他情况（noise >= 0.2）则为 biome 3
+}
+DEFAULT_BIOME_ID = 1 # 默认地形ID（例如用于孤立的墙）
+
+# --- 杂草装饰设置 ---
+# 杂草图片文件基础名列表 (可扩展)
+WEED_FILES = ['weed_1', 'weed_2']
+# 各地形生成杂草的基础概率 (可扩展)
+WEED_SPAWN_CHANCE_PER_BIOME = {
+    1: 0.15, # 地形1有 15% 概率生成杂草
+    2: 0.30, # 地形2有 30% 概率生成杂草
+    3: 0.05, # 地形3有 5% 概率生成杂草
+    # 如果有更多地形，在这里添加
+}
+# 生成杂草时，选择不同类型杂草的权重 (字典方便按名字扩展)
+WEED_TYPE_WEIGHTS = {
+    'weed_1': 1, # 权重为 1
+    'weed_2': 1, # 权重为 1 (默认等概率)
+    # 'weed_3': 2, # 如果有 weed_3.png, 权重可以不同
+}
+WEED_IMAGE_SIZE = (int(TILE_SIZE * 0.8), int(TILE_SIZE * 0.8)) # 杂草显示大小 (可选)
+
 
 # --- 黑暗迷雾 (FoW) 设置 ---
 FOW_MEMORY_BRIGHTNESS = 0.6 # 离开后记忆区域的基础亮度 (60%)
@@ -138,6 +190,10 @@ UI_MATCH_PROGRESS_COLOR_FG = GREEN
 UI_MATCH_PROGRESS_COLOR_BG = GREY
 UI_MATCH_SPACING = 5 # 火柴图标间距
 
+# --- 出口放置设置 (新) ---
+EXIT_ZONE_WEIGHTS = {'edge': 6, 'outer': 3, 'middle': 1} # 边缘:外围:中间 的权重
+EXIT_OUTER_RING_DISTANCE = 10 # 外围区域定义为距离边缘 <= 10 格
+
 # --- 图层 ---
 WALL_LAYER = 1
 PLAYER_LAYER = 3
@@ -145,11 +201,13 @@ ITEM_LAYER = 2
 MONSTER_LAYER = 3
 EFFECT_LAYER = 4
 FOG_LAYER = 5
+DECORATION_LAYER = 2.5 # 新增：装饰物图层 (在地面之上，物品之下/同层？)
 
-# --- 图片文件名 (需要与 assets/images/ 文件夹中的文件名对应) ---
+# --- 图片文件名 (扩展地形和杂草) ---
+# 主字典现在可以移除具体地形/杂草，由代码根据配置动态生成 key
 IMAGE_FILES = {
-    'wall': 'wall.png',
-    'floor': 'floor.png',
+    # 'wall': 'wall.png', # 移除旧的单一地形
+    # 'floor': 'floor.png',
     'player': 'player.png',
     'monster_warrior_1': 'monster_warrior_1.png',
     'monster_warrior_2': 'monster_warrior_2.png',
@@ -165,6 +223,8 @@ IMAGE_FILES = {
     'exit': 'exit.png', # 假设有个出口的图片
     'effect_hunger': 'effect_hunger_wave.png' # 假设饥饿波纹有图片
 }
+# 地形和杂草文件名会在 AssetManager 中根据配置动态添加到加载列表
+
 # 物品/怪物图片大小建议 (加载后可以缩放)
 # 可以根据实际图片调整
 ITEM_IMAGE_SIZE = (int(TILE_SIZE * 0.6), int(TILE_SIZE * 0.6))

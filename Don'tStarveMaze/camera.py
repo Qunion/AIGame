@@ -39,17 +39,17 @@ class Camera:
         y = -target.rect.centery + int(HEIGHT / 2)
 
         # --- 限制摄像机滚动范围，防止看到地图外的区域 ---
-        map_width_pixels = GRID_WIDTH * TILE_SIZE   # 地图总宽度（像素）
-        map_height_pixels = GRID_HEIGHT * TILE_SIZE # 地图总高度（像素）
+        # map_width_pixels = GRID_WIDTH * TILE_SIZE   # 地图总宽度（像素）
+        # map_height_pixels = GRID_HEIGHT * TILE_SIZE # 地图总高度（像素）
 
-        # 防止摄像机向左滚动超过地图边界 (x 应该 <= 0)
-        x = min(0, x)
-        # 防止摄像机向上滚动超过地图边界 (y 应该 <= 0)
-        y = min(0, y)
-        # 防止摄像机向右滚动超过地图边界 (x 应该 >= -(地图宽 - 屏幕宽))
-        x = max(-(map_width_pixels - WIDTH), x)
-        # 防止摄像机向下滚动超过地图边界 (y 应该 >= -(地图高 - 屏幕高))
-        y = max(-(map_height_pixels - HEIGHT), y)
+        # # 防止摄像机向左滚动超过地图边界 (x 应该 <= 0)
+        # x = min(0, x)
+        # # 防止摄像机向上滚动超过地图边界 (y 应该 <= 0)
+        # y = min(0, y)
+        # # 防止摄像机向右滚动超过地图边界 (x 应该 >= -(地图宽 - 屏幕宽))
+        # x = max(-(map_width_pixels - WIDTH), x)
+        # # 防止摄像机向下滚动超过地图边界 (y 应该 >= -(地图高 - 屏幕高))
+        # y = max(-(map_height_pixels - HEIGHT), y)
 
         # 更新摄像机的偏移量
         self.camera_rect.topleft = (x, y)

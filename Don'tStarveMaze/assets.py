@@ -16,55 +16,81 @@ class AssetManager:
         """加载所有在 settings.py 中定义的图片和音效。"""
         print("正在加载资源...")
         # 加载图片
-        for key, filename in IMAGE_FILES.items():
+        # --- 动态构建图片加载列表 ---
+        files_to_load = IMAGE_FILES.copy() # 复制基础图片字典
+
+        # 添加地形图片
+        for i in range(1, NUM_BIOMES + 1):
+            floor_key = f'floor_{i}'
+            wall_key = f'wall_{i}'
+            files_to_load[floor_key] = f'{BIOME_FLOOR_BASENAME}{i}.png'
+            files_to_load[wall_key] = f'{BIOME_WALL_BASENAME}{i}.png'
+
+        # 添加杂草图片
+        for weed_base_name in WEED_FILES:
+             files_to_load[weed_base_name] = f'{weed_base_name}.png'
+        # --- 结束动态构建 ---
+
+
+        # --- 开始加载 ---
+        for key, filename in files_to_load.items(): # 使用新的完整列表
             path = os.path.join(IMAGE_FOLDER, filename)
             try:
                 image = pygame.image.load(path)
                 # 优化性能：如果图片没有 alpha 通道，使用 convert()
                 # 如果有 alpha 通道（透明度），使用 convert_alpha()
                 # 地板和墙壁可能不需要 convert_alpha()，取决于你的图片
-                if image.get_alpha() is None and key not in ['wall', 'floor']:
+                if image.get_alpha() is None and 'floor' not in key and 'wall' not in key:
                      image = image.convert()
                 else:
                      image = image.convert_alpha()
 
-                # 根据 settings 中的定义调整图片大小
-                if 'item' in key or 'food' in key or 'weapon' in key:
-                     image = pygame.transform.scale(image, ITEM_IMAGE_SIZE)
+                # --- 调整大小 ---
+                target_size = None # 默认不缩放
+                if 'item' in key or 'food' in key or 'weapon' in key and 'sword' in key: # weapon_sword_...
+                    target_size = ITEM_IMAGE_SIZE
                 elif 'monster' in key:
-                     image = pygame.transform.scale(image, MONSTER_IMAGE_SIZE)
+                    target_size = MONSTER_IMAGE_SIZE
                 elif key == 'player':
-                     image = pygame.transform.scale(image, PLAYER_IMAGE_SIZE)
+                    target_size = PLAYER_IMAGE_SIZE
                 elif key == 'ui_hunger':
-                     image = pygame.transform.scale(image, (UI_ICON_SIZE, UI_ICON_SIZE))
+                    target_size = (UI_ICON_SIZE, UI_ICON_SIZE)
                 elif key == 'ui_match':
-                     image = pygame.transform.scale(image, (UI_MATCH_WIDTH, UI_MATCH_HEIGHT))
-                # 可以为其他图片添加缩放逻辑，例如 'exit'
+                    target_size = (UI_MATCH_WIDTH, UI_MATCH_HEIGHT)
+                elif key in WEED_FILES: # 检查是否是杂草文件
+                     target_size = WEED_IMAGE_SIZE
+                # 地形瓦片默认使用 TILE_SIZE x TILE_SIZE，通常不需要缩放，除非图片源尺寸不同
+                # elif 'floor' in key or 'wall' in key:
+                #      if image.get_width() != TILE_SIZE or image.get_height() != TILE_SIZE:
+                #           target_size = (TILE_SIZE, TILE_SIZE)
+
+                if target_size:
+                    image = pygame.transform.scale(image, target_size)
+                # --- 结束调整大小 ---
 
                 self.images[key] = image
-                print(f"已加载图片: {filename}")
+                print(f"已加载图片: {filename} (Key: {key})")
             except pygame.error as e:
                 print(f"加载图片 {filename} 时出错: {e}")
                 # 提供一个备用的 Surface 对象，防止游戏因缺少图片而崩溃
-                size = TILE_SIZE # 默认备用大小
-                if 'item' in key or 'food' in key or 'weapon' in key: size = ITEM_IMAGE_SIZE[0]
-                elif 'monster' in key: size = MONSTER_IMAGE_SIZE[0]
-                elif key == 'player': size = PLAYER_IMAGE_SIZE[0]
-                elif key == 'ui_hunger': size = UI_ICON_SIZE
-                elif key == 'ui_match': size = UI_MATCH_WIDTH
+                # 确定备用图像的大小
+                fallback_size = TILE_SIZE # 默认为瓦片大小
+                if target_size: fallback_size = target_size[0] # 如果有目标大小，用目标大小
+                elif key == 'ui_match': fallback_size = UI_MATCH_WIDTH # 特殊处理火柴UI
 
                 # 创建一个纯色方块作为备用图像
-                fallback_surf = pygame.Surface((size, size) if key != 'ui_match' else (UI_MATCH_WIDTH, UI_MATCH_HEIGHT)).convert()
-
-                color = GREY # 默认备用颜色
-                if key == 'wall': color = DARKGREY
-                elif key == 'floor': color = LIGHTGREY
+                fallback_surf = pygame.Surface((fallback_size, fallback_size) if key != 'ui_match' else (UI_MATCH_WIDTH, UI_MATCH_HEIGHT)).convert()
+                # ... (备用颜色逻辑不变) ...
+                color = GREY
+                if 'wall' in key: color = DARKGREY
+                elif 'floor' in key: color = LIGHTGREY
                 elif key == 'player': color = WHITE
                 elif 'monster' in key: color = RED
                 elif 'item' in key: color = YELLOW
                 elif 'food' in key: color = GREEN
                 elif 'weapon' in key: color = BLUE
-                elif key == 'exit': color = YELLOW # 出口备用颜色
+                elif key == 'exit': color = YELLOW
+                elif key in WEED_FILES: color = (34, 139, 34) # 深绿色作为杂草备用
 
                 fallback_surf.fill(color)
                 self.images[key] = fallback_surf
@@ -104,7 +130,14 @@ class AssetManager:
 
     def get_image(self, key: str) -> pygame.Surface:
         """获取已加载的图片 Surface 对象。如果 key 不存在或加载失败，返回 None 或备用图像。"""
-        return self.images.get(key)
+        img = self.images.get(key)
+        if img is None:
+            print(f"警告：尝试获取未加载的图片资源 '{key}'")
+            # 返回一个小的透明方块或者别的默认图像？
+            fallback = pygame.Surface((TILE_SIZE // 2, TILE_SIZE // 2), pygame.SRCALPHA)
+            fallback.fill((255, 0, 255, 100)) # 半透明洋红色块表示错误
+            return fallback
+        return img
 
     def get_sound(self, key: str) -> Optional[pygame.mixer.Sound]:
         """获取已加载的音效 Sound 对象。如果 key 不存在或加载失败，返回 None。"""

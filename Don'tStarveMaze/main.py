@@ -3,6 +3,8 @@ import sys
 import random
 import os
 import pickle
+import noise # 确保导入 noise 库
+
 from settings import *           # 导入所有设置常量
 from assets import AssetManager  # 导入资源管理器
 from maze import Maze, Tile      # 导入迷宫和瓦片类
@@ -16,6 +18,7 @@ from ui import draw_player_hud, draw_game_over_screen, draw_win_screen, draw_pau
 # 导入存档/读档函数
 from save_load import save_game, load_game, capture_game_state, restore_game_state
 from typing import Tuple # 导入需要用到的类型提示
+
 
 class Game:
     """游戏主类，管理游戏循环、状态和对象。"""
@@ -78,14 +81,22 @@ class Game:
         def get_spawn_pos() -> Tuple[float, float]:
             attempts = 0
             while attempts < GRID_WIDTH * GRID_HEIGHT: # 避免死循环
-                # 从迷宫获取一个随机地面瓦片的中心世界坐标
-                pos_world = self.maze.get_random_floor_tile()
-                # 将世界坐标转换为瓦片坐标
-                pos_tile = (int(pos_world[0] // TILE_SIZE), int(pos_world[1] // TILE_SIZE))
+                # --- 修改开始 ---
+                # 从迷宫获取 瓦片坐标 和 世界坐标
+                # 使用 _ 来忽略我们暂时不需要的瓦片坐标（但我们马上会用到）
+                # tile_coords, pos_world = self.maze.get_random_floor_tile()
+                # 或者更清晰地命名：
+                found_tile_coords, found_pos_world = self.maze.get_random_floor_tile()
+
+                # 将瓦片坐标用于检查是否已占用
+                # pos_tile = (int(pos_world[0] // TILE_SIZE), int(pos_world[1] // TILE_SIZE)) # <--- 旧的错误行
+                pos_tile = found_tile_coords # <--- 直接使用返回的瓦片坐标
+
                 # 检查该瓦片是否已被占用
                 if pos_tile not in placed_tiles:
                     placed_tiles.add(pos_tile) # 标记为已占用
-                    return pos_world # 返回可用的世界坐标
+                    return found_pos_world # 返回可用的世界坐标
+                # --- 修改结束 ---
                 attempts += 1
             # 如果尝试了很多次都找不到空位（理论上不应发生）
             print("警告：找不到合适的空闲位置来放置物品！")
@@ -248,6 +259,7 @@ class Game:
     def update(self):
         """更新所有游戏对象的状态。"""
         # 调用 all_sprites 组中所有精灵的 update 方法
+        # 更新精灵组 (Player, Monster, Decoration 都会调用 update)
         # (Player 和 Monster 会在这里更新自己的状态、移动等)
         self.all_sprites.update(self.dt)
         # 更新摄像机，让其跟随玩家
@@ -263,11 +275,11 @@ class Game:
         """绘制所有游戏内容到屏幕上。"""
         self.screen.fill(BLACK) # 用黑色填充背景 (对于完全黑暗的区域)
 
-        # 绘制迷宫 (会根据光照和记忆状态绘制)
+        # 绘制迷宫 (会根据光照和记忆状态绘制)(包括不同地形的地板和墙壁)
         self.maze.draw(self.screen, self.camera, self.lighting)
 
-        # 绘制所有精灵 (物品、玩家、怪物)
-        # LayeredUpdates 会自动按 _layer 属性排序绘制
+        # 绘制所有精灵 (物品、玩家、怪物) (按图层顺序: Decoration -> Item -> Player/Monster)
+        # LayeredUpdates 会自动按 _layer 属性排序绘制——会处理图层顺序
         for sprite in self.all_sprites:
              # --- 优化：只绘制在视野内的精灵 ---
              sprite_tile_x = int(sprite.pos.x // TILE_SIZE)
