@@ -1,7 +1,6 @@
 import pygame
 from settings import *
-from typing import TYPE_CHECKING
-from typing import Optional, Tuple # 导入需要用到的类型提示
+from typing import TYPE_CHECKING, Optional, Tuple # 导入需要用到的类型提示
 
 if TYPE_CHECKING:
     from player import Player
@@ -46,12 +45,15 @@ def draw_text(surface: pygame.Surface, text: str, size: int, x: int, y: int,
 def draw_player_hud(surface: pygame.Surface, player: 'Player', assets: 'AssetManager'):
     """绘制玩家状态信息的 HUD (Heads-Up Display)。"""
 
+    # --- 存储饱食度图标的右边界，用于定位标记物 ---
+    hunger_icon_right_edge = WIDTH // 2 - UI_PADDING * 2
+
     # --- 绘制饱食度 ---
     hunger_icon_base = assets.get_image('ui_hunger') # 获取饱食度图标底图
     if hunger_icon_base:
         icon_rect = hunger_icon_base.get_rect()
         icon_rect.top = UI_PADDING
-        icon_rect.right = WIDTH // 2 - UI_PADDING * 2 # 在中线左边留出一些间距
+        icon_rect.right = hunger_icon_right_edge # 使用变量定位
 
         # --- 修改开始: 使用单独的图层进行混合 ---
         # 1. 创建最终要绘制到屏幕上的复合 Surface (SRCALPHA 以支持最终的整体透明度)
@@ -103,7 +105,24 @@ def draw_player_hud(surface: pygame.Surface, player: 'Player', assets: 'AssetMan
                   icon_rect.centerx, icon_rect.centery,         # 文本中心位置
                   color=text_color, align="center")             # 文本对齐方式
         # --- 修改结束 ---
-        # --- 修改结束 ---
+
+
+    # --- 新增：绘制持有的标记物 ---
+    marker_start_x = hunger_icon_right_edge - MARKER_UI_ICON_SIZE[0] # 从饱食度图标左边开始
+    marker_y = UI_PADDING
+
+    # 从左到右绘制玩家持有的标记物 (列表 index 0 是最左边)
+    for i, marker_id in enumerate(player.markers):
+        marker_icon_orig = assets.get_image(marker_id) # 获取原始标记物图片
+        if marker_icon_orig:
+            # 将标记物图片缩放到 UI 图标大小
+            marker_icon_ui = pygame.transform.scale(marker_icon_orig, MARKER_UI_ICON_SIZE)
+            marker_rect = marker_icon_ui.get_rect()
+            # 计算绘制位置，从左往右排列，紧挨着
+            marker_rect.right = marker_start_x - i * MARKER_UI_ICON_SIZE[0] # 往左排列
+            marker_rect.top = marker_y
+            surface.blit(marker_icon_ui, marker_rect)
+
 
     # --- 绘制火柴 ---
     match_icon = assets.get_image('ui_match')

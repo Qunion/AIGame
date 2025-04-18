@@ -213,4 +213,14 @@ class Monster(pygame.sprite.Sprite):
             print(f"{self.name} 被击败了!")
             # 播放怪物死亡音效（如果与其他音效冲突需要处理）
             # self.game.asset_manager.play_sound('monster_die')
+            # --- 新增：根据怪物类型给予玩家尸体标记物 ---
+            corpse_marker_id = None
+            if self.name == "法师姐姐": corpse_marker_id = 'monster_mage_corpse_1'
+            elif self.name == "法师妹妹": corpse_marker_id = 'monster_mage_corpse_2'
+            elif self.name == "战士哥哥": corpse_marker_id = 'monster_warrior_corpse_1'
+            elif self.name == "战士弟弟": corpse_marker_id = 'monster_warrior_corpse_2'
+
+            if corpse_marker_id:
+                self.game.player.add_marker(corpse_marker_id) # 通知玩家获得标记物
+            # ---------------------------------------
             self.kill() # 从所有精灵组中移除怪物

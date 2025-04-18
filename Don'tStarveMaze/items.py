@@ -61,10 +61,15 @@ class FoodItem(Item):
 
     def interact(self, player: 'Player') -> bool:
         """玩家拾取食物。"""
-        if super().interact(player): # 调用父类 interact
+        if super().interact(player): # 调用父类 interact (处理音效和移除)
             player.add_hunger(self.hunger_value) # 增加玩家饱食度
             if self.food_type == 'meat': # 如果是肉，施加速效果
                 player.apply_speed_boost(self.speed_boost_factor, self.speed_boost_duration)
+                # --- 新增：吃肉获得标记物 ---
+                player.add_marker('apple_core_2')
+            elif self.food_type == 'bread':
+                 # --- 新增：吃面包获得标记物 ---
+                 player.add_marker('apple_core_1')
             return True
         return False
 

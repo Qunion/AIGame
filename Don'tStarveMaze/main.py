@@ -4,6 +4,7 @@ import random
 import os
 import pickle
 import noise # 确保导入 noise 库
+from markers import Marker
 
 from settings import *           # 导入所有设置常量
 from assets import AssetManager  # 导入资源管理器
@@ -52,6 +53,7 @@ class Game:
         self.walls = pygame.sprite.Group()       # 存储墙体精灵（当前未使用，迷宫直接绘制）
         self.items = pygame.sprite.Group()       # 存储地面上的物品精灵
         self.monsters = pygame.sprite.Group()    # 存储怪物精灵
+        self.markers_placed = pygame.sprite.Group() # 新增：存储已放置标记物的组
 
         # 创建迷宫实例 (会自动生成迷宫)
         self.maze = Maze(self, GRID_WIDTH, GRID_HEIGHT)
@@ -175,6 +177,7 @@ class Game:
             self.walls = pygame.sprite.Group()
             self.items = pygame.sprite.Group()
             self.monsters = pygame.sprite.Group()
+            self.markers_placed = pygame.sprite.Group() # 新增：初始化组
             # 创建临时的迷宫和玩家对象，restore_game_state 会填充它们
             # 注意：这里传递 self (Game 实例) 给 Maze 和 Player
             self.maze = Maze(self, GRID_WIDTH, GRID_HEIGHT) # Maze 会生成，但会被覆盖
@@ -227,14 +230,41 @@ class Game:
             if event.type == pygame.KEYDOWN: # 按下键盘按键
                 if event.key == pygame.K_ESCAPE: # 按下 ESC 键
                     self.running = False
-                if event.key == pygame.K_SPACE: # 按下空格键
-                    self.paused = not self.paused # 切换暂停状态
-                    if self.paused:
-                        pygame.mixer.music.pause() # 暂停音乐
-                        print("游戏已暂停")
-                    else:
-                        pygame.mixer.music.unpause() # 取消暂停音乐
+                if event.key == pygame.K_f:
+                    # --- 修改：区分暂停和放置标记物 ---
+                    if self.game_over or self.game_won: # 如果游戏结束，空格无效
+                         pass
+                    elif self.paused: # 如果是暂停状态，空格取消暂停
+                        self.paused = False
+                        pygame.mixer.music.unpause()
                         print("游戏已恢复")
+                    else: # 如果非暂停状态，空格尝试放置标记物，然后才切换暂停
+                        if hasattr(self, 'player'):
+                            placed = self.player.try_place_marker()
+                            # 如果不想放置标记物后自动暂停，去掉下面的暂停逻辑
+                            # if not placed: # 如果放置失败 (没标记物), 切换暂停? (可选行为)
+                            #      self.paused = True
+                            #      pygame.mixer.music.pause()
+                            #      print("游戏已暂停 (无标记物可放)")
+                        # else: # 如果放置成功，或者没有玩家对象（理论上不应发生），则切换暂停
+                        #      self.paused = True
+                        #      pygame.mixer.music.pause()
+                        #      print("游戏已暂停")
+                    # --- 简化：空格只用于放置标记物，暂停用 P 键？ ---
+                    # 或者：如果玩家有标记物，空格是放置；如果没有，空格是暂停？
+                    # 决定：保持原设计，空格 *只* 尝试放置标记物。暂停用单独的键（例如 P）。
+                    # --- 恢复：空格只尝试放置标记物 ---
+                    if hasattr(self, 'player') and not self.paused and not self.game_over and not self.game_won:
+                         self.player.try_place_marker()
+                if event.key == pygame.K_SPACE: # 按下空格键
+                    if not self.game_over and not self.game_won: # 结束后不能暂停
+                        self.paused = not self.paused # 切换暂停状态
+                        if self.paused:
+                            pygame.mixer.music.pause() # 暂停音乐
+                            print("游戏已暂停")
+                        else:
+                            pygame.mixer.music.unpause() # 取消暂停音乐
+                            print("游戏已恢复")
                 # 如果游戏已结束或胜利
                 if self.game_over or self.game_won:
                     if event.key == pygame.K_r: # 按下 R 键 (重新开始)
@@ -313,13 +343,24 @@ class Game:
         elif self.game_won:
             draw_win_screen(self.screen, self.asset_manager)
         elif self.paused:
-            draw_pause_screen(self.screen, self.asset_manager)
+            # 修改调用以反映暂停键是 P
+            # draw_pause_screen(self.screen, self.asset_manager) # 旧调用
+            self.draw_pause_screen_custom() # 使用自定义绘制，提示用 P
 
         # --- 绘制 FPS (可选的调试信息) ---
         # draw_text(self.screen, f"FPS: {self.clock.get_fps():.2f}", 18, 10, 10, YELLOW, align="topleft")
 
         # 更新整个屏幕显示
         pygame.display.flip()
+
+    # --- 新增：自定义暂停界面绘制 ---
+    def draw_pause_screen_custom(self):
+        """绘制游戏暂停画面。"""
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay.fill((50, 50, 50, 180))
+        self.screen.blit(overlay, (0, 0))
+        draw_text(self.screen, "游戏暂停", MESSAGE_FONT_SIZE * 2, WIDTH / 2, HEIGHT / 2, color=WHITE, align="center")
+        draw_text(self.screen, "按 空格 键继续", UI_FONT_SIZE, WIDTH / 2, HEIGHT * 3 / 4, color=WHITE, align="center")
 
     def win_game(self):
         """处理游戏胜利逻辑。"""

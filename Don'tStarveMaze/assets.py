@@ -31,6 +31,10 @@ class AssetManager:
              files_to_load[weed_base_name] = f'{weed_base_name}.png'
         # --- 结束动态构建 ---
 
+        # --- 新增：添加标记物图片 ---
+        for marker_id, filename in MARKER_IMAGE_FILES.items():
+            files_to_load[marker_id] = filename
+        # ---------------------------
 
         # --- 开始加载 ---
         for key, filename in files_to_load.items(): # 使用新的完整列表
@@ -47,7 +51,11 @@ class AssetManager:
 
                 # --- 调整大小 ---
                 target_size = None # 默认不缩放
-                if 'item' in key or 'food' in key or 'weapon' in key and 'sword' in key: # weapon_sword_...
+                if key in MARKER_IMAGE_FILES: # 检查是否是标记物
+                    target_size = MARKER_SPRITE_SIZE # 地图上的大小
+                elif key in WEED_FILES:
+                     target_size = WEED_IMAGE_SIZE
+                elif 'item' in key or 'food' in key or 'weapon' in key and 'sword' in key: # weapon_sword_...
                     target_size = ITEM_IMAGE_SIZE
                 elif 'monster' in key:
                     target_size = MONSTER_IMAGE_SIZE
@@ -70,8 +78,8 @@ class AssetManager:
 
                 self.images[key] = image
                 print(f"已加载图片: {filename} (Key: {key})")
-            except pygame.error as e:
-                print(f"加载图片 {filename} 时出错: {e}")
+            except (pygame.error, FileNotFoundError) as e: # 同时捕获 FileNotFoundError
+                print(f"加载图片 {filename} (Key: {key}) 时出错: {e}")
                 # 提供一个备用的 Surface 对象，防止游戏因缺少图片而崩溃
                 # 确定备用图像的大小
                 fallback_size = TILE_SIZE # 默认为瓦片大小
@@ -91,6 +99,7 @@ class AssetManager:
                 elif 'weapon' in key: color = BLUE
                 elif key == 'exit': color = YELLOW
                 elif key in WEED_FILES: color = (34, 139, 34) # 深绿色作为杂草备用
+                elif key in MARKER_IMAGE_FILES: color = (200, 200, 0) # 黄褐色作为标记物备用
 
                 fallback_surf.fill(color)
                 self.images[key] = fallback_surf
@@ -109,7 +118,7 @@ class AssetManager:
                         sound = pygame.mixer.Sound(path)
                         self.sounds[key] = sound
                         print(f"已加载音效: {filename}")
-                except pygame.error as e:
+                except (pygame.error, FileNotFoundError) as e:
                     print(f"加载音效 {filename} 时出错: {e}")
                     self.sounds[key] = None # 将失败的音效标记为 None
                 except FileNotFoundError:

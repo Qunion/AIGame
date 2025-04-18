@@ -9,6 +9,9 @@ from items import Item, MatchItem, FoodItem, WeaponItem
 # 导入怪物类用于状态恢复
 from monster import Monster
 
+# 导入 Marker 类
+from markers import Marker # 假设 Marker 在 markers.py
+
 # 解决类型提示的循环导入问题
 from typing import TYPE_CHECKING, Dict, Any, List, Tuple, Optional
 if TYPE_CHECKING:
@@ -21,6 +24,7 @@ if TYPE_CHECKING:
     MonsterState = Dict[str, Any]
     MazeState = Dict[str, Any]
     LightingState = Dict[str, Any]
+    PlacedMarkerState = Dict[str, Any] # 定义放置标记物的状态类型
 
 
 def save_game(game_state: 'GameState', filename: str = SAVE_FILE):
@@ -66,6 +70,7 @@ def capture_game_state(game: 'Game') -> 'GameState':
                 for w in game.player.inventory['weapons']
             ]
         },
+        'markers': list(game.player.markers), # 新增：保存持有的标记物列表
         'speed_boost_timer': game.player.speed_boost_timer,
         'magic_match_timer': game.player.magic_match_timer,
         # 不保存速度、各种计时器（如hunger_decay_timer），这些在加载时重置或重新计算
@@ -82,10 +87,18 @@ def capture_game_state(game: 'Game') -> 'GameState':
          'is_active': m.is_active, 'target_pos': tuple(m.target_pos) if m.target_pos else None} # 目标位置也转为元组
         for m in game.monsters
     ]
-    maze_state: 'MazeState' = { # 保存必要的非程序生成的迷宫信息
+        # --- 新增：保存已放置的标记物状态 ---
+    placed_markers_state: List['PlacedMarkerState'] = [
+        {'marker_id': m.marker_id, 'pos': tuple(m.pos)} # 保存 ID 和位置
+        for m in game.markers_placed # 遍历已放置标记物组
+    ]
+    # ---------------------------------
+    maze_state = {
         'grid_data': [[tile.is_wall for tile in col] for col in game.maze.grid_cells], # 保存墙体布局
         'exit_pos': game.maze.exit_pos,
-        # 玩家起始位置在加载或新游戏时确定
+        # 新增：保存地形和装饰物信息 (如果需要精确恢复)
+        'biome_ids': [[tile.biome_id for tile in col] for col in game.maze.grid_cells],
+        'decoration_ids': [[tile.decoration_id for tile in col] for col in game.maze.grid_cells], # 注意 tile.decoration_id 现在是字符串或None
     }
     lighting_state: 'LightingState' = {
         'memory_tiles': dict(game.lighting.memory_tiles) # 保存记忆字典 (pos -> (timestamp, brightness))
@@ -95,6 +108,7 @@ def capture_game_state(game: 'Game') -> 'GameState':
         'player_state': player_state,
         'items_state': items_state,
         'monsters_state': monsters_state,
+        'placed_markers_state': placed_markers_state, # 新增
         'maze_state': maze_state,
         'lighting_state': lighting_state,
         'game_time': pygame.time.get_ticks() # 保存当前游戏时间戳，用于恢复计时器
@@ -115,6 +129,7 @@ def restore_game_state(game: 'Game', state: 'GameState') -> bool:
         game.player.hunger = player_state['hunger']
         game.player.matches = list(player_state['matches'])
         game.player.current_match_index = player_state['current_match_index']
+        game.player.markers = list(player_state.get('markers', [])) # 新增：恢复持有的标记物 (使用 get 提供向后兼容)
         game.player.speed_boost_timer = player_state['speed_boost_timer']
         game.player.magic_match_timer = player_state['magic_match_timer']
         # 恢复武器
@@ -127,6 +142,9 @@ def restore_game_state(game: 'Game', state: 'GameState') -> bool:
             temp_weapon.uses = w_data['uses']
             game.player.inventory['weapons'].append(temp_weapon) # 添加到逻辑库存
             temp_weapon.kill() # 立即从所有精灵组中移除
+        game.player.speed_boost_timer = player_state['speed_boost_timer']
+        game.player.magic_match_timer = player_state['magic_match_timer']
+        # ... (重置状态和计时器) ...
 
         # 更新玩家位置相关的rect
         game.player.rect.center = game.player.pos
@@ -138,7 +156,7 @@ def restore_game_state(game: 'Game', state: 'GameState') -> bool:
         game.player.hunger_decay_timer = 0 # 重置计时器
         game.player.hunger_warn_timer = 0
         game.player.match_out_timer = 0
-
+        game.player.footstep_timer = 0.0 # 重置脚步声计时器
 
         # --- 恢复迷宫 ---
         maze_state = state['maze_state']
@@ -146,6 +164,13 @@ def restore_game_state(game: 'Game', state: 'GameState') -> bool:
         for x in range(GRID_WIDTH):
             for y in range(GRID_HEIGHT):
                 game.maze.grid_cells[x][y].is_wall = maze_state['grid_data'][x][y]
+                # 恢复地形和装饰物 ID (如果保存了)
+                if 'biome_ids' in maze_state:
+                    game.maze.grid_cells[x][y].biome_id = maze_state['biome_ids'][x][y]
+                if 'decoration_ids' in maze_state:
+                    game.maze.grid_cells[x][y].decoration_id = maze_state['decoration_ids'][x][y]
+                    # --- 注意：这里没有重新创建 Decoration 精灵 ---
+                    # 如果装饰物是精灵，需要在下面单独恢复
         game.maze.exit_pos = maze_state['exit_pos']
         # 重建寻路网格矩阵和Grid对象
         game.maze.pathfinding_grid_matrix = game.maze._create_pathfinding_matrix()
@@ -187,7 +212,19 @@ def restore_game_state(game: 'Game', state: 'GameState') -> bool:
             # 更新怪物位置相关的rect
             monster.rect.center = monster.pos
             monster.hit_rect.center = monster.rect.center
-
+        
+        # --- 新增：恢复已放置的标记物 ---
+        # 先清空现有的（以防万一）
+        for m in game.markers_placed: m.kill()
+        game.markers_placed.empty()
+        # 从状态中重新创建
+        if 'placed_markers_state' in state:
+            for m_data in state['placed_markers_state']:
+                Marker(game, pygame.Vector2(m_data['pos']), m_data['marker_id'])
+        # --- 恢复装饰物精灵 (如果之前是精灵的话) ---
+        # 如果 Decoration 是精灵，这里需要类似逻辑恢复它们
+        # for deco_data in state['decorations_state']:
+        #    Decoration(game, ...)
 
         # --- 恢复光照记忆 ---
         saved_time = state.get('game_time', 0)
@@ -196,14 +233,14 @@ def restore_game_state(game: 'Game', state: 'GameState') -> bool:
 
         game.lighting.memory_tiles.clear()
         # 加载时调整记忆时间戳
-        lighting_state = state['lighting_state']
-        for pos, (timestamp, brightness) in lighting_state['memory_tiles'].items():
-            # 将离线时间加到保存的时间戳上
-            adjusted_timestamp = timestamp + time_diff
-            # 检查在离线期间记忆是否会过期
-            # FOW_FORGET_TIME_FRAMES 需要转换为毫秒
-            if current_time - adjusted_timestamp < FOW_FORGET_TIME_FRAMES * (1000 / FPS):
-                game.lighting.memory_tiles[pos] = (adjusted_timestamp, brightness)
+        if 'lighting_state' in state and 'memory_tiles' in state['lighting_state']:
+            for pos, (timestamp, brightness) in state['lighting_state']['memory_tiles'].items():
+                # 将离线时间加到保存的时间戳上
+                adjusted_timestamp = timestamp + time_diff
+                # 检查在离线期间记忆是否会过期
+                # FOW_FORGET_TIME_FRAMES 需要转换为毫秒
+                if current_time - adjusted_timestamp < FOW_FORGET_TIME_FRAMES * (1000 / FPS):
+                    game.lighting.memory_tiles[pos] = (adjusted_timestamp, brightness)
 
         # --- 加载后首次更新时重新计算FoV ---
         game.lighting.update(game.player) # 确保视野是最新的
@@ -213,7 +250,8 @@ def restore_game_state(game: 'Game', state: 'GameState') -> bool:
 
     except Exception as e:
         print(f"恢复游戏状态时出错: {e}")
-        # 可以选择删除损坏的存档文件
+        import traceback
+        traceback.print_exc() # 打印详细错误信息        # 可以选择删除损坏的存档文件
         # if os.path.exists(SAVE_FILE):
         #     try: os.remove(SAVE_FILE)
         #     except OSError: pass

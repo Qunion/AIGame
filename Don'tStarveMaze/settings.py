@@ -196,12 +196,14 @@ EXIT_OUTER_RING_DISTANCE = 10 # 外围区域定义为距离边缘 <= 10 格
 
 # --- 图层 ---
 WALL_LAYER = 1
-PLAYER_LAYER = 3
-ITEM_LAYER = 2
-MONSTER_LAYER = 3
+DECORATION_LAYER = 2.5 # 杂草图层
+MARKER_LAYER = 2.7     # 新增：放置标记物图层 (在杂草之上, 物品/玩家/怪物之下)
+ITEM_LAYER = 3         # 物品图层 (调整一下让标记物在下面?) 或者 Marker 3, Item 3.1? 决定 Marker 2.7, Item 3
+PLAYER_LAYER = 3.5       # 玩家图层
+MONSTER_LAYER = 3.5      # 怪物图层 (与玩家同层或稍低/高?) 保持 3.5
 EFFECT_LAYER = 4
 FOG_LAYER = 5
-DECORATION_LAYER = 2.5 # 新增：装饰物图层 (在地面之上，物品之下/同层？)
+
 
 # --- 图片文件名 (扩展地形和杂草) ---
 # 主字典现在可以移除具体地形/杂草，由代码根据配置动态生成 key
@@ -225,11 +227,25 @@ IMAGE_FILES = {
 }
 # 地形和杂草文件名会在 AssetManager 中根据配置动态添加到加载列表
 
+# 新增：标记物图片文件名字典 (方便管理和加载)
+MARKER_IMAGE_FILES = {
+    'apple_core_1': 'apple_core_1.png',
+    'apple_core_2': 'apple_core_2.png',
+    'monster_mage_corpse_1': 'monster_mage_corpse_1.png',
+    'monster_mage_corpse_2': 'monster_mage_corpse_2.png',
+    'monster_warrior_corpse_1': 'monster_warrior_corpse_1.png',
+    'monster_warrior_corpse_2': 'monster_warrior_corpse_2.png',
+}
+
 # 物品/怪物图片大小建议 (加载后可以缩放)
 # 可以根据实际图片调整
 ITEM_IMAGE_SIZE = (int(TILE_SIZE * 0.6), int(TILE_SIZE * 0.6))
 MONSTER_IMAGE_SIZE = (int(TILE_SIZE * 0.8), int(TILE_SIZE * 0.8))
 PLAYER_IMAGE_SIZE = (PLAYER_RADIUS_PX * 2, PLAYER_RADIUS_PX * 2)
+
+# 标记物图片大小 (地图上和 UI 上可能需要不同处理)
+MARKER_SPRITE_SIZE = ITEM_IMAGE_SIZE # 地图上的标记物大小，暂定同物品
+MARKER_UI_ICON_SIZE = (60, 60)       # UI上标记物图标大小
 
 # --- 音效文件名 ---
 SOUND_FILES = {
@@ -242,7 +258,8 @@ SOUND_FILES = {
     'player_die': 'player_die.wav',
     'monster_die': 'monster_die.wav',
     'weapon_break': 'weapon_break.wav',
-    'win': 'win.wav'
+    'win': 'win.wav',
+    'attack': 'attack.wav' # 新增攻击音效
 }
 
 # --- 存档设置 ---

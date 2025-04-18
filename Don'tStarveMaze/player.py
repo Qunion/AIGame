@@ -4,6 +4,7 @@ import math # 导入 math 进行向量运算
 from settings import *
 import math
 from typing import TYPE_CHECKING, List, Dict, Optional, Tuple # 添加 Tuple # 导入需要用到的类型提示
+from markers import Marker # 假设 Marker 类在 markers.py
 
 if TYPE_CHECKING:
     from main import Game
@@ -65,6 +66,7 @@ class Player(pygame.sprite.Sprite):
         # 玩家物品栏 (当前只存武器)
         # inventory 字典存储不同类型的物品列表
         self.inventory: Dict[str, List['WeaponItem']] = {'weapons': []}
+        self.markers: List[str] = [] # 新增：存储持有的标记物 ID 列表
 
         # --- 移动与速度 (添加 is_running) ---
         self.base_speed: float = PLAYER_SPEED
@@ -219,12 +221,15 @@ class Player(pygame.sprite.Sprite):
         # self.hit_rect.center = self.rect.center
 
 
-
+    # --- 修改 handle_monster_collision 添加攻击音效 ---
     def handle_monster_collision(self, monster: 'Monster'):
         """处理玩家与怪物的碰撞。"""
         if self.inventory['weapons']: # 如果玩家有武器
             weapon = self.inventory['weapons'][0] # 使用获取顺序中的第一把武器
             print(f"玩家使用 {weapon.weapon_type} 剑攻击了 {monster.name}")
+            # --- 新增：播放攻击音效 ---
+            self.game.asset_manager.play_sound('attack')
+            # ------------------------
             monster.take_damage() # 对怪物造成伤害 (怪物自己处理是否死亡)
             weapon.uses -= 1 # 武器消耗一次使用次数
             self.game.asset_manager.play_sound('monster_die') # 播放击中音效（或者单独的武器击中音效）
@@ -354,6 +359,57 @@ class Player(pygame.sprite.Sprite):
              if self.magic_match_timer <= 0:
                   self.magic_match_timer = 0
                   print("火柴魔法效果结束。")
+
+    # --- 新增方法：添加标记物到持有列表 ---
+    def add_marker(self, marker_id: str):
+        """将一个标记物 ID 添加到玩家持有的队列（加到最左边）。"""
+        if marker_id in MARKER_IMAGE_FILES: # 确保是有效的标记物 ID
+            self.markers.insert(0, marker_id)
+            print(f"玩家获得了标记物: {marker_id} (当前持有: {len(self.markers)})")
+        else:
+            print(f"警告：尝试添加无效的标记物 ID: {marker_id}")
+
+    # --- 新增方法：尝试放置标记物 ---
+    def try_place_marker(self) -> bool:
+        """尝试将持有的最右侧标记物放置在当前格子上。"""
+        if not self.markers: # 如果没有标记物可放置
+            print("玩家没有可放置的标记物。")
+            # 可以加一个失败音效 self.game.asset_manager.play_sound('place_marker_fail')
+            return False
+
+        # 获取并移除最右侧（最早获得）的标记物
+        marker_id_to_place = self.markers.pop()
+
+        # 获取玩家当前所在的瓦片坐标
+        player_tile_x = int(self.pos.x // TILE_SIZE)
+        player_tile_y = int(self.pos.y // TILE_SIZE)
+
+        # 计算该瓦片中心的世界坐标
+        pos_world = (player_tile_x * TILE_SIZE + TILE_SIZE / 2,
+                     player_tile_y * TILE_SIZE + TILE_SIZE / 2)
+
+        # --- 检查当前格子是否已经是墙？(虽然理论上玩家应该在地面上) ---
+        if self.game.maze.is_wall(player_tile_x, player_tile_y):
+             print("无法在墙上放置标记物。")
+             # 把标记物加回去？还是直接消耗掉？决定：消耗掉
+             # self.markers.append(marker_id_to_place) # 加回去
+             return False
+
+        # --- 检查当前格子是否已有标记物？(当前设计允许重叠，无需检查) ---
+        # for marker in self.game.markers_placed:
+        #    marker_tile_x = int(marker.pos.x // TILE_SIZE)
+        #    marker_tile_y = int(marker.pos.y // TILE_SIZE)
+        #    if marker_tile_x == player_tile_x and marker_tile_y == player_tile_y:
+        #        print("当前格子已有标记物。")
+        #        # 把标记物加回去
+        #        self.markers.append(marker_id_to_place)
+        #        return False
+
+        # 创建 Marker 精灵实例，它会自动添加到 all_sprites 和 markers_placed 组
+        Marker(self.game, pos_world, marker_id_to_place)
+        print(f"玩家在 {(player_tile_x, player_tile_y)} 放置了标记物: {marker_id_to_place}")
+        # 可以加一个成功音效 self.game.asset_manager.play_sound('place_marker_success')
+        return True
 
     def add_hunger(self, amount: int):
         """增加玩家饱食度。"""
