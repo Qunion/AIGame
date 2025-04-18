@@ -108,7 +108,7 @@ def draw_player_hud(surface: pygame.Surface, player: 'Player', assets: 'AssetMan
 
 
     # --- 新增：绘制持有的标记物 ---
-    marker_start_x = hunger_icon_right_edge - MARKER_UI_ICON_SIZE[0] # 从饱食度图标左边开始
+    marker_start_x = hunger_icon_right_edge - MARKER_UI_ICON_SIZE[0] - 76 # 从饱食度图标左边开始 因为饥饿图标是128的所以需要多减去一部分。
     marker_y = UI_PADDING
 
     # 从左到右绘制玩家持有的标记物 (列表 index 0 是最左边)
