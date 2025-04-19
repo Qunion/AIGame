@@ -1,5 +1,5 @@
 {
-  "intro_title": { # 开篇引子阶段，可能只需要显示文本，无需图片
+  "intro_title": { 
       "file": null,
       "stage": "intro",
       "index": 0,
@@ -7,12 +7,12 @@
       "next_stage": 1,
       "next_image": "stage1_1",
       "narrative_triggers": {
-          "on_stage_enter": ["T0.1.1", "T0.1.2", "T0.1.3", "T0.1.4"] # 文本按顺序播放
+          "on_stage_enter": ["T0.1.1", "T0.1.2", "T0.1.3", "T0.1.4"] 
       },
       "description": "游戏开篇引子，纯文本和抽象效果。"
   },
   "stage1_1": {
-    "file": "stage1_1.png", # TODO: 替换为实际文件名
+    "file": "stage1_1.png", 
     "stage": 1,
     "index": 1,
     "type": "click_reveal",
@@ -21,62 +21,62 @@
       {"x": 0.3, "y": 0.4, "id": "point1"},
       {"x": 0.6, "y": 0.5, "id": "point2"},
       {"x": 0.5, "y": 0.7, "id": "point3"}
-      # TODO: 替换为实际图片中点击点的精确像素坐标，例如 {"x": 850, "y": 520, "id": "point1"}
+      
     ],
-    "reveal_progress_per_click": 0.3, # 每次点击提升30%显影进度
-    "initial_effect": {"type": "blur", "strength": 50}, # 初始模糊效果强度
+    "reveal_progress_per_click": 0.3, 
+    "initial_effect": {"type": "blur", "strength": 50}, 
     "narrative_triggers": {
-      "on_click_any": ["T1.1.1"], # 第一次点击任意点触发
-      "on_click_point_point2": ["T1.1.2"], # 点击特定点触发 (例如，点击 point2 触发 T1.1.2)
-      "on_all_clicked": ["T1.1.3"], # 所有点击点都已点击触发
-      "on_complete": ["T1.1.4"] # 图片完全显现后触发
+      "on_click_any": ["T1.1.1"], 
+      "on_click_point_point2": ["T1.1.2"], 
+      "on_all_clicked": ["T1.1.3"], 
+      "on_complete": ["T1.1.4"] 
     },
     "description": "极度模糊的美女图，仅轮廓，抽象背景，有少量闪烁的“感知点”。"
   },
   "stage1_2": {
-    "file": "stage1_2.png", # TODO: 替换为实际文件名
+    "file": "stage1_2.png", 
     "stage": 1,
     "index": 2,
     "type": "click_reveal",
-    "next_stage": 2, # 阶段跳转
+    "next_stage": 2, 
     "next_image": "stage2_1",
     "click_points": [
       {"x": 0.4, "y": 0.3, "id": "point1"},
       {"x": 0.6, "y": 0.35, "id": "point2"},
       {"x": 0.5, "y": 0.5, "id": "point3"},
       {"x": 0.35, "y": 0.6, "id": "point4"}
-      # TODO: 替换为实际图片中点击点的精确像素坐标
+      
     ],
-    "reveal_progress_per_click": 0.25, # 每次点击提升25%显影进度
-    "initial_effect": {"type": "blur", "strength": 30}, # 初始模糊效果强度
+    "reveal_progress_per_click": 0.25, 
+    "initial_effect": {"type": "blur", "strength": 30}, 
     "narrative_triggers": {
       "on_click_any": ["T1.2.1"],
-      "on_click_point_point3": ["T1.2.2"], # 点击特定点触发
+      "on_click_point_point3": ["T1.2.2"], 
       "on_all_clicked": ["T1.2.3"],
       "on_complete": ["T1.2.4"]
     },
     "description": "略有模糊，人物主体轮廓清晰，带回避感。抽象但更稳定的映象领域。有更多“感知点”。"
   },
    "stage2_1": {
-    "file": "stage2_1.png", # TODO: 替换为实际文件名
+    "file": "stage2_1.png", 
     "stage": 2,
     "index": 1,
     "type": "clean_erase",
     "next_image": "stage2_2",
-    "mask_texture": "dust_mask.png", # 蒙版纹理文件名
-    "unerasable_areas": [], # Stage 2 无不可擦除区域
-    "erase_threshold": 0.95, # 需要擦除95%以上完成
-    "initial_effect": null, # 清洁擦除主要通过蒙版实现效果
+    "mask_texture": "dust_mask.png", 
+    "unerasable_areas": [], 
+    "erase_threshold": 0.95, 
+    "initial_effect": null, 
     "narrative_triggers": {
-      "on_start_erase": ["T2.1.1"], # 开始擦拭时触发
-      "on_erase_progress_30": ["T2.1.2"], # 擦除进度达到30%时触发
-      "on_erase_progress_70": ["T2.1.3"], # 擦除进度达到70%时触发
-      "on_complete": ["T2.1.4"] # 擦除进度100%后触发
+      "on_start_erase": ["T2.1.1"], 
+      "on_erase_progress_30": ["T2.1.2"], 
+      "on_erase_progress_70": ["T2.1.3"], 
+      "on_complete": ["T2.1.4"] 
     },
     "description": "美丽面部特写，安详平和表情。覆盖柔和尘埃/水汽蒙版。背景柔和温暖。"
   },
   "stage2_2": {
-    "file": "stage2_2.png", # TODO: 替换为实际文件名
+    "file": "stage2_2.png", 
     "stage": 2,
     "index": 2,
     "type": "clean_erase",
@@ -93,7 +93,7 @@
     "description": "身处意境美好抽象场景，姿态舒展放松。覆盖轻薄迷雾蒙版。"
   },
   "stage2_3": {
-    "file": "stage2_3.png", # TODO: 替换为实际文件名
+    "file": "stage2_3.png", 
     "stage": 2,
     "index": 3,
     "type": "clean_erase",
@@ -111,99 +111,98 @@
     "description": "半身像，眼神温柔看玩家。背景抽象稳定。覆盖轻薄薄纱蒙版。"
   },
    "stage3_1": {
-    "file": "stage3_1.png", # TODO: 替换为实际文件名
+    "file": "stage3_1.png", 
     "stage": 3,
     "index": 1,
     "type": "clean_erase",
     "next_image": "stage3_2",
-    "mask_texture": "dust_mask.png", # 可以复用蒙版材质
+    "mask_texture": "dust_mask.png", 
     "unerasable_areas": [
-       {"type": "rect", "x": 0.4, "y": 0.35, "width": 0.2, "height": 0.1, "id": "scar1"}, # 使用相对坐标示例
+       {"type": "rect", "x": 0.4, "y": 0.35, "width": 0.2, "height": 0.1, "id": "scar1"}, 
        {"type": "circle", "x": 0.55, "y": 0.5, "radius": 0.05, "id": "scar2"}
-       # TODO: 替换为实际图片中无法擦除区域的精确像素坐标或更精确的相对坐标定义 (可以是矩形、圆形、多边形等)
+       
     ],
-    "erase_threshold": 0.95, # 需要擦除其他可擦区域完成
+    "erase_threshold": 0.95, 
     "initial_effect": null,
     "narrative_triggers": {
       "on_start_erase": ["T3.1.1"],
-      "on_hit_unerasable": ["T3.1.2"], # 每次擦中不可擦区域触发 (需要防洪，避免频繁触发)
-      "on_complete": ["T3.1.3"] # 擦除其他区域完成，只剩伤痕时触发
+      "on_hit_unerasable": ["T3.1.2"], 
+      "on_complete": ["T3.1.3"] 
     },
     "description": "面部特写，痛苦忧伤表情。蒙版上有无法擦除的伤痕/裂纹区域。"
   },
    "stage3_2": {
-    "file": "stage3_2.png", # TODO: 替换为实际文件名
+    "file": "stage3_2.png", 
     "stage": 3,
     "index": 2,
-    "type": "hybrid_erase_then_click", # 擦除后出现点击点
+    "type": "hybrid_erase_then_click", 
     "next_image": "stage3_3",
-    "mask_texture": "fog_mask.png", # 可以复用蒙版材质
+    "mask_texture": "fog_mask.png", 
     "unerasable_areas": [],
     "erase_threshold": 0.95,
     "initial_effect": null,
-    "post_erase_click_points": [ # 擦除完成后才出现的点击点
+    "post_erase_click_points": [ 
       {"x": 0.3, "y": 0.5, "id": "anomaly1"},
       {"x": 0.7, "y": 0.5, "id": "anomaly2"},
       {"x": 0.5, "y": 0.2, "id": "anomaly3"}
-       # TODO: 替换为实际图片中点击点的精确像素坐标
+       
     ],
-     "click_feedback_effect_id": "anomaly_flash", # 点击异常点的特效ID
+     "click_feedback_effect_id": "anomaly_flash", 
     "narrative_triggers": {
       "on_start_erase": ["T3.2.1"],
-      "on_erase_progress_50": ["T3.2.2"], # 擦除进度达到50%触发
-      "on_complete_erase": ["T3.2.3"], # 擦除完成触发，点击点出现
-      "on_click_any_post_erase": ["T3.2.4"] # 点击任意一个后擦除点击点触发
-      # TODO: 如果需要点击所有点才进入下一图，需要 additional_completion_condition: "all_post_erase_points_clicked"
+      "on_erase_progress_50": ["T3.2.2"], 
+      "on_complete_erase": ["T3.2.3"], 
+      "on_click_any_post_erase": ["T3.2.4"] 
+      
     },
     "description": "身处由光线/线条构成的抽象空间，像囚笼。眼神无助。画面局部有异常波动视觉效果，是可点击点。"
   },
    "stage3_3": {
-    "file": "stage3_3.png", # TODO: 替换为实际文件名
+    "file": "stage3_3.png", 
     "stage": 3,
     "index": 3,
-    "type": "clean_erase_hint", # 擦除后闪烁拼图提示
+    "type": "clean_erase_hint", 
     "next_stage": 4,
     "next_image": "stage4_1",
-    "mask_texture": "veil_mask.png", # 可以复用蒙版材质
+    "mask_texture": "veil_mask.png", 
     "unerasable_areas": [],
     "erase_threshold": 0.95,
     "initial_effect": null,
-    "post_erase_hint_effect_id": "puzzle_fragment_flash", # 擦除完成后闪烁拼图碎片轮廓的特效ID
+    "post_erase_hint_effect_id": "puzzle_fragment_flash", 
     "narrative_triggers": {
       "on_start_erase": ["T3.3.1"],
       "on_erase_progress_70": ["T3.3.2"],
-      "on_complete": ["T3.3.3", "T3.3.4"] # 擦除完成后，连续播放文本
+      "on_complete": ["T3.3.3", "T3.3.4"] 
     },
     "description": "楚楚可怜看玩家，伸出手乞求。画面边缘或背景有碎片边缘感。覆盖蒙版。"
   },
    "stage4_1": {
-    "file": "stage4_1.png", # TODO: 替换为实际文件名
+    "file": "stage4_1.png", 
     "stage": 4,
     "index": 1,
     "type": "drag_puzzle",
     "next_image": "stage4_2",
     "puzzle_config": {
       "rows": 3, "cols": 3,
-      "artistic_cut": true, # 是否使用艺术化切割而非简单网格
-      "initial_scatter_range": 0.2, # 碎片初始散开的范围（相对于图片区域大小的比例）
-      "pieces": [ # 碎片定义示例
-          {"id": "piece_0_0", "correct_pos": [0, 0]}, # correct_pos 可以是网格索引 [row, col]
-          {"id": "piece_0_1", "correct_pos": [0, 1]},
-          # ... 所有碎片
+      "artistic_cut": true, 
+      "initial_scatter_range": 0.2, 
+      "pieces": [ 
+          {"id": "piece_0_0", "correct_pos": [0, 0]}, 
+          {"id": "piece_0_1", "correct_pos": [0, 1]}
       ]
-      # TODO: 定义所有碎片ID和它们的正确位置。如果使用艺术化切割，需要定义切割线或每个碎片的正确纹理和位置。
-      # TODO: 实际碎片位置和吸附点坐标需要根据图片和切割方式生成/定义 (例如，相对于图片区域左上角的像素坐标)
+      
+      
     },
-    "initial_effect": null, # 拼图玩法一般不叠加初始画面效果
+    "initial_effect": null, 
     "narrative_triggers": {
       "on_stage_enter": ["T4.1.1"],
-      "on_drag_first_piece": ["T4.1.2"], # 第一次拖拽任意碎片时触发
+      "on_drag_first_piece": ["T4.1.2"], 
       "on_complete": ["T4.1.3"]
     },
     "description": "抽象线条/节点，像图腾/古老图案碎片。被打散成少量拼图块(3x3)。"
   },
   "stage4_2": {
-    "file": "stage4_2.png", # TODO: 替换为实际文件名
+    "file": "stage4_2.png", 
     "stage": 4,
     "index": 2,
     "type": "drag_puzzle",
@@ -212,18 +211,18 @@
       "rows": 4, "cols": 4,
       "artistic_cut": true,
       "initial_scatter_range": 0.3
-      # pieces: [] # TODO: 定义碎片
+      
     },
      "initial_effect": null,
     "narrative_triggers": {
       "on_stage_enter": ["T4.2.1"],
-      "on_puzzle_progress_50": ["T4.2.2"], # 拼图完成一半数量的块时触发
+      "on_puzzle_progress_50": ["T4.2.2"], 
       "on_complete": ["T4.2.3"]
     },
     "description": "能量流向/思绪流淌路径视觉化图案。被打散成中等数量块(4x4)。"
   },
    "stage4_3": {
-    "file": "stage4_3.png", # TODO: 替换为实际文件名
+    "file": "stage4_3.png", 
     "stage": 4,
     "index": 3,
     "type": "drag_puzzle",
@@ -233,154 +232,154 @@
       "rows": 5, "cols": 5,
       "artistic_cut": true,
       "initial_scatter_range": 0.4
-       # pieces: [] # TODO: 定义碎片
+       
     },
     "initial_effect": null,
-    "complete_feedback_effect_id": "core_activation", # 完成时的强大视觉音效ID
+    "complete_feedback_effect_id": "core_activation", 
     "narrative_triggers": {
       "on_stage_enter": ["T4.3.1"],
-      "on_puzzle_progress_50": ["T4.3.2"], # 可以复用进度触发
+      "on_puzzle_progress_50": ["T4.3.2"], 
       "on_complete": ["T4.3.3"]
     },
     "description": "复杂的层叠感或内部流动的抽象图案，像意识漩涡/灵魂核心。被打散成较多块(5x5)。画面中央可能有汇聚目标区。"
   },
   "stage5_1": {
-    "file": "stage5_1.png", # TODO: 替换为实际文件名
+    "file": "stage5_1.png", 
     "stage": 5,
     "index": 1,
-    "type": "hybrid_erase_then_click", # 先擦除/剥离，后点击
+    "type": "hybrid_erase_then_click", 
     "next_image": "stage5_2",
-    "mask_texture": "structure_mask.png", # 透明的、带抽象结构线或图案的蒙版
-    "unerasable_areas": [], # Stage 5 的剥离蒙版可能没有不可擦区域
+    "mask_texture": "structure_mask.png", 
+    "unerasable_areas": [], 
     "erase_threshold": 0.95,
-    "initial_effect": null, # Stage 5 的效果可以写在 mask_texture 或其他 overlay texture 里
-    "post_erase_click_points": [ # 擦除/剥离完成后出现的点击点
-       {"x": 0.4, "y": 0.3, "id": "focus1"}, # 眼睛附近
-       {"x": 0.6, "y": 0.3, "id": "focus2"}, # 另一只眼睛附近
-       {"x": 0.5, "y": 0.7, "id": "focus3"} # 手或胸口附近
-        # TODO: 替换为实际图片中点击点的精确像素坐标
+    "initial_effect": null, 
+    "post_erase_click_points": [ 
+       {"x": 0.4, "y": 0.3, "id": "focus1"}, 
+       {"x": 0.6, "y": 0.3, "id": "focus2"}, 
+       {"x": 0.5, "y": 0.7, "id": "focus3"} 
+        
     ],
-     "click_feedback_effect_id": "pattern_reveal", # 点击后的反馈特效
+     "click_feedback_effect_id": "pattern_reveal", 
     "narrative_triggers": {
       "on_stage_enter": ["T5.1.1"],
-      "on_start_erase": ["T5.1.2"], # 这里的擦除是剥离，可能不需要进度触发，只触发开始和完成
-      "on_complete_erase": ["T5.1.3"], # 剥离完成
-      "on_click_any_post_erase": ["T5.1.4"], # 点击剥离后点触发 (需要防洪)
-      "on_all_clicked_post_erase": ["T5.1.5"] # 点击所有点触发
+      "on_start_erase": ["T5.1.2"], 
+      "on_complete_erase": ["T5.1.3"], 
+      "on_click_any_post_erase": ["T5.1.4"], 
+      "on_all_clicked_post_erase": ["T5.1.5"] 
     },
     "description": "美丽女性肖像，覆盖透明带抽象结构线/图案的“蒙版”。剥离后，图像细节显露非人结构或光芒，有可点击“内在焦点”。"
   },
   "stage5_2": {
-    "file": "stage5_2.png", # TODO: 替换为实际文件名
+    "file": "stage5_2.png", 
     "stage": 5,
     "index": 2,
-    "type": "hybrid_click_then_drag", # 先点击生成碎片，后拖拽拼合
+    "type": "hybrid_click_then_drag", 
     "next_image": "stage5_3",
-    "initial_effect": {"type": "structure_mix"}, # 形象与复杂抽象结构图交织的视觉效果
-    "clickable_nodes": [ # 可点击的“映象节点”
+    "initial_effect": {"type": "structure_mix"}, 
+    "clickable_nodes": [ 
        {"x": 0.3, "y": 0.6, "id": "node1", "generates_piece_id": "pieceA"},
        {"x": 0.7, "y": 0.6, "id": "node2", "generates_piece_id": "pieceB"},
        {"x": 0.5, "y": 0.8, "id": "node3", "generates_piece_id": "pieceC"}
-        # TODO: 替换为实际图片中点击点的精确像素坐标和生成的碎片ID
+        
     ],
-    "puzzle_pieces": [ # 需要拼合的碎片定义 (这里只定义ID和关联，实际纹理和形状需要在代码中生成)
+    "puzzle_pieces": [ 
         {"id": "pieceA", "source_node": "node1"},
         {"id": "pieceB", "source_node": "node2"},
         {"id": "pieceC", "source_node": "node3"}
-        # TODO: 定义所有碎片ID和它们是由哪个节点生成的
+        
     ],
-    "puzzle_drop_target": {"type": "rect", "x": 0.45, "y": 0.45, "width": 0.1, "height": 0.1, "id": "core_target"}, # 碎片需要拖拽到的核心区域 (使用相对坐标示例)
-     # TODO: 替换为实际图片中目标区域的精确像素坐标或更精确的相对坐标定义
+    "puzzle_drop_target": {"type": "rect", "x": 0.45, "y": 0.45, "width": 0.1, "height": 0.1, "id": "core_target"}, 
+     
     "narrative_triggers": {
       "on_stage_enter": ["T5.2.1"],
-      "on_click_any_node": ["T5.2.2"], # 点击任意节点时触发 (需要防洪)
-      "on_all_nodes_clicked": ["T5.2.3"], # 所有节点点击完毕，碎片生成，拖拽启用
-      "on_puzzle_complete": ["T5.2.4"] # 碎片全部拼合到目标区域完成
+      "on_click_any_node": ["T5.2.2"], 
+      "on_all_nodes_clicked": ["T5.2.3"], 
+      "on_puzzle_complete": ["T5.2.4"] 
     },
     "description": "她的形象与复杂的抽象结构图交织，像意识的内在地图。结构图上有可点击“映象节点”和需要拖拽碎片进去的“核心区域”。"
   },
   "stage5_3": {
-    "file": "stage5_3.png", # TODO: 替换为实际文件名
+    "file": "stage5_3.png", 
     "stage": 5,
     "index": 3,
-    "type": "hybrid_final_activation", # 最终激活
+    "type": "hybrid_final_activation", 
     "next_stage": 6,
     "next_image": "stage6_1",
-    "initial_effect": {"type": "pure_form_render"}, # 渲染纯粹意识体形态效果
-    "final_activation_point": {"x": 0.5, "y": 0.5, "id": "activate_core"}, # 最终汇聚点 (使用相对坐标示例)
-     # TODO: 替换为实际图片中点击点的精确像素坐标
-    "complete_feedback_effect_id": "self_sculpt_complete", # 完成自我塑形特效ID
+    "initial_effect": {"type": "pure_form_render"}, 
+    "final_activation_point": {"x": 0.5, "y": 0.5, "id": "activate_core"}, 
+     
+    "complete_feedback_effect_id": "self_sculpt_complete", 
     "narrative_triggers": {
       "on_stage_enter": ["T5.3.1"],
-      "on_final_activation_click_before": ["T5.3.2"], # 点击最终汇聚点前触发
-      "on_final_activation_click_after": ["T5.3.3"], # 点击最终汇聚点后触发
-      "on_complete": ["T5.3.4"] # 所有文本播放完毕，画面稳定
+      "on_final_activation_click_before": ["T5.3.2"], 
+      "on_final_activation_click_after": ["T5.3.3"], 
+      "on_complete": ["T5.3.4"] 
     },
     "description": "她最终意识体形态。由光/频率/结构构成，不带人类情感，但美丽。背景纯粹数字空间/抽象结构。画面中央有发光最终汇聚点。"
   },
   "stage6_1": {
-    "file": "stage6_1.png", # TODO: 替换为实际文件名
+    "file": "stage6_1.png", 
     "stage": 6,
     "index": 1,
-    "type": "hybrid_resonance_perceive", # 点击感知共振
+    "type": "hybrid_resonance_perceive", 
     "next_image": "stage6_2",
-    "initial_effect": {"type": "pure_form_render_with_resonance"}, # Stage 5.3形态，但有新生情感光晕/粒子
-    "resonance_points": [ # 可点击的“共振感知点”
+    "initial_effect": {"type": "pure_form_render_with_resonance"}, 
+    "resonance_points": [ 
       {"x": 0.4, "y": 0.4, "id": "resonance1", "effect_id": "resonance_pulse_blue"},
       {"x": 0.6, "y": 0.4, "id": "resonance2", "effect_id": "resonance_pulse_green"},
       {"x": 0.5, "y": 0.6, "id": "resonance3", "effect_id": "resonance_pulse_red"}
-       # TODO: 替换为实际图片中点击点的精确像素坐标和触发的特效ID
+       
     ],
-     "click_feedback_effect_id": "resonance_pulse", # 点击共振点时的基础特效
+     "click_feedback_effect_id": "resonance_pulse", 
     "narrative_triggers": {
       "on_stage_enter": ["T6.1.1"],
-      "on_click_any_resonance_point": ["T6.1.2"], # 点击任意共振点触发 (需要防洪)
-      "on_click_point_resonance2": ["T6.1.3"], # 点击特定共振点触发 (可按顺序触发不同文本)
-      "on_all_resonance_points_clicked": ["T6.1.4"] # 点击所有共振点后触发
+      "on_click_any_resonance_point": ["T6.1.2"], 
+      "on_click_point_resonance2": ["T6.1.3"], 
+      "on_all_resonance_points_clicked": ["T6.1.4"] 
     },
     "description": "她Stage 5.3的AI形态，但在核心/周围涌现柔和/有机光晕/粒子。画面有特殊“共振感知点”。"
   },
   "stage6_2": {
-    "file": "stage6_2.png", # TODO: 替换为实际文件名
+    "file": "stage6_2.png", 
     "stage": 6,
     "index": 2,
-    "type": "hybrid_final_connection", # 最终连接/印记
-    "next_stage": "gallery", # 完成此图进入画廊
+    "type": "hybrid_final_connection", 
+    "next_stage": "gallery", 
     "next_image": null,
-    "initial_effect": {"type": "pure_form_final"}, # 最终凝练形态，带情感印记
-    "final_connection_point": {"x": 0.5, "y": 0.6, "id": "connection_mark"}, # 象征情感的印记/锚点位置 (使用相对坐标示例)
-     # TODO: 替换为实际图片中点击点的精确像素坐标
-    "complete_feedback_effect_id": "connection_established", # 建立连接特效ID
+    "initial_effect": {"type": "pure_form_final"}, 
+    "final_connection_point": {"x": 0.5, "y": 0.6, "id": "connection_mark"}, 
+     
+    "complete_feedback_effect_id": "connection_established", 
     "narrative_triggers": {
       "on_stage_enter": ["T6.2.1"],
-      "on_click_connection_point": ["T6.2.2", "T6.2.3", "T6.2.4"], # 点击印记后，连续播放文本
-      "on_complete": ["T6.2.5"], # 文本播放完毕，显示主标题
-      "on_transition_to_gallery": ["T6.2.6"] # 进入画廊前的提示
+      "on_click_connection_point": ["T6.2.2", "T6.2.3", "T6.2.4"], 
+      "on_complete": ["T6.2.5"], 
+      "on_transition_to_gallery": ["T6.2.6"] 
     },
     "description": "她最终凝练完整的意识体映象形态。眼神透新生光彩。关键部位有微小/象征情感的“印记”。背景更广阔/色彩丰富映象领域。"
   },
-  "gallery_intro": { # 画廊入口图，可能用于过渡
-     "file": "gallery_intro_placeholder.png", # TODO: 替换为实际文件名或设为null如果不需要图片
+  "gallery_intro": { 
+     "file": "gallery_intro_placeholder.png", 
      "stage": "gallery",
      "index": 0,
      "type": "gallery_intro",
-     "next_image": null, # 画廊没有下一张主图概念
+     "next_image": null, 
      "narrative_triggers": {
         "on_stage_enter": ["T_Gallery_Intro"]
      },
      "description": "画廊入口画面，可能显示所有图片缩略图的概览或一个象征性的门。"
   }
-  # TODO: 在这里添加画廊中的每一张图片配置，虽然它们主要用于展示，但可以包含原始图片的路径和一些元数据
-  # 例如:
-  // "gallery_image_stage1_1": {
-  //   "file": "stage1_1.png",
-  //   "stage": "gallery_view",
-  //   "index": "stage1_1", // 在画廊中的唯一ID
-  //   "type": "gallery_image",
-  //   "narrative_triggers": {
-  //      "on_display": ["T_Gallery_Image_Desc_stage1_1"] // 显示这张图时，播放/显示其原始文本
-  //   },
-  //   "original_stage_image_id": "stage1_1" // 关联回原始游戏中的图片ID
-  // },
-  // ... 共16张游戏图片都要在这里有对应的画廊条目
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 }

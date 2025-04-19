@@ -1,12 +1,16 @@
 import re
 import os
 
+
 def remove_comments(json_content):
+    # 移除 # 开头的注释
+    json_content = re.sub(r'#.*', '', json_content)
     # 移除单行注释
     json_content = re.sub(r'//.*', '', json_content)
     # 移除多行注释
     json_content = re.sub(r'/\*.*?\*/', '', json_content, flags=re.DOTALL)
     return json_content
+
 
 def process_json_file(file_path):
     try:
@@ -24,12 +28,14 @@ def process_json_file(file_path):
         print(f"处理文件 {file_path} 时发生错误: {e}")
         return False
 
+
 def process_all_json_files_in_folder(folder_path):
     for root, _, files in os.walk(folder_path):
         for file in files:
             if file.endswith('.json'):
                 file_path = os.path.join(root, file)
                 process_json_file(file_path)
+
 
 if __name__ == "__main__":
     try:
@@ -53,5 +59,4 @@ if __name__ == "__main__":
         print(f"程序运行过程中出现错误: {e}")
     finally:
         input("\n按任意键继续...")
-
     

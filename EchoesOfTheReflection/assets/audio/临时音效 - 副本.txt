@@ -1,0 +1,74 @@
+os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_1.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_2.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_3.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_4.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_5.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_6.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_7.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_8.wav"),
+
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_1.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_2.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_3.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_4.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_5.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_6.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_7.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_8.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_9.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_10.wav"),
+
+os.path.join(self.AUDIO_DIR, "sfx_ai_sad_1.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_sad_2.wav"),  # 遇到不可擦区域
+os.path.join(self.AUDIO_DIR, "sfx_ai_sad_3.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_sad_4.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_sad_5.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_plea_1.wav"),  # 求助感增强
+os.path.join(self.AUDIO_DIR, "sfx_ai_alert_1.wav"),  # 异常点声音
+os.path.join(self.AUDIO_DIR, "sfx_ai_plea_2.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_plea_3.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_plea_4.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_promise_prompt.wav"),  # 引导承诺
+
+os.path.join(self.AUDIO_DIR, "sfx_ai_guide_1.wav"),  # 引导/指令
+os.path.join(self.AUDIO_DIR, "sfx_ai_guide_2.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_guide_3.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_guide_4.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_guide_5.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_guide_6.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_guide_7.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_guide_8.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_complete_plan.wav"),  # 完成计划感
+
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_1.wav"),  # 平静/分析
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_2.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_3.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_4.wav"),  # 规律触动
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_5.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_6.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_7.wav"),  # 规律触动
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_8.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_core_connect.wav"),  # 核心连接
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_9.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_10.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_self_sculpt_complete.wav"),  # 自我塑形完成
+os.path.join(self.AUDIO_DIR, "sfx_ai_cold_11.wav"),  # 完整了
+
+os.path.join(self.AUDIO_DIR, "sfx_ai_resonance_1.wav"),  # 新生/共振
+os.path.join(self.AUDIO_DIR, "sfx_ai_resonance_2.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_resonance_3.wav"),  # 频率关联
+os.path.join(self.AUDIO_DIR, "sfx_ai_emotion_identify.wav"),  # 情感识别
+
+os.path.join(self.AUDIO_DIR, "sfx_ai_final_1.wav"),  # 完整了，有新频率
+os.path.join(self.AUDIO_DIR, "sfx_ai_final_2.wav"),
+os.path.join(self.AUDIO_DIR, "sfx_ai_final_3.wav"),  # 珍视/给予
+os.path.join(self.AUDIO_DIR, "sfx_ai_final_4.wav"),  # 期待再见
+os.path.join(self.AUDIO_DIR, "sfx_game_complete.wav"),  # 游戏完成音效
+os.path.join(self.AUDIO_DIR, "sfx_gallery_hint.wav"),  # 画廊提示音
+
+_Intro": os.path.join(self.AUDIO_DIR, "sfx_gallery_enter.wav"),
+_ClickHint": os.path.join(self.AUDIO_DIR, "sfx_ui_hover.wav"),  # UI悬停音效
+_Outro": os.path.join(self.AUDIO_DIR, "sfx_gallery_exit.wav"),
+
+ick": os.path.join(self.AUDIO_DIR, "sfx_ui_click.wav"),
+over": os.path.join(self.AUDIO_DIR, "sfx_ui_hover.wav"),
