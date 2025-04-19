@@ -126,6 +126,7 @@ class Settings:
         self.TEXT_FONT_SIZE = 30 # TODO: 根据实际屏幕大小和UI调整
         self.TEXT_SPEED_CPS = 20 # Characters Per Second (每秒显示多少个字符)
         self.TEXT_BOX_PADDING = 20 # 文本框内边距 (像素)
+        self.TEXT_BOX_HEIGHT = 1080 # 为了避免BUG，我自己设置了文本框高度
         # 文本框高度自适应或固定，位置RelativeToImageArea 将在 UIManager 中处理
 
         # 画廊设置

@@ -2,6 +2,7 @@
 import pygame
 import time
 import os
+import json
 from settings import Settings
 
 class NarrativeManager:
@@ -14,6 +15,8 @@ class NarrativeManager:
         """初始化叙事管理器"""
         self.screen = screen
         self.settings = settings
+        # 加载图片配置数据
+        self.image_configs = self._load_image_configs()
 
         # 文本内容字典 (假设从某个地方加载所有文本内容)
         # TODO: 需要一个地方存储所有文本内容，例如一个独立的JSON文件或 image_config 的一个子集
@@ -128,7 +131,31 @@ class NarrativeManager:
             # 通知 GameManager 文本播放完毕状态，由 GameManager 控制前进按钮的可见性
 
 
+    def _load_image_configs(self):
+        try:
+            with open(self.settings.IMAGE_CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            print("未找到 image_config.json 文件")
+            return {}
+
     def update(self):
+
+        # 假设 self.current_text_id 存储当前文本 ID
+        # 从列表中获取当前文本 ID
+        if self.current_texts_ids and self.current_text_index < len(self.current_texts_ids):
+            current_text_id = self.current_texts_ids[self.current_text_index]
+            # 从配置文件中获取对应的配置
+            config = self.image_configs.get(current_text_id)
+            if config:
+                # 获取 description 作为当前文本内容
+                current_text_content = config.get('description', '')
+            else:
+                current_text_content = "没有找到对应的文本配置"
+        else:
+            current_text_content = "没有文本ID"
+
+
         """更新文本显示状态"""
         if not self._is_playing_text:
              # 如果没有文本正在播放，检查是否在等待进入下一段

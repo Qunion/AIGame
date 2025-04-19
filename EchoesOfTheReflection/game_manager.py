@@ -28,7 +28,6 @@ class GameManager:
             with open(self.settings.IMAGE_CONFIG_FILE, 'r', encoding='utf-8') as f:
                 # return json.load(f) # 标准 json.load 会在这里报错
                 return parser.load(f) # 使用 jsoncomment 加载，会自动忽略注释
-
         except FileNotFoundError:
             print(f"错误：图片配置文件未找到 {self.settings.IMAGE_CONFIG_FILE}")
             # TODO: 处理错误，例如退出游戏或显示错误信息
@@ -43,10 +42,21 @@ class GameManager:
         """初始化游戏管理器"""
         self.screen = screen
         self.settings = settings
+        # 加载图片配置数据
+        self.image_configs = self._load_image_configs()
         # self.current_state = settings.STATE_GAME # 初始状态设置为游戏 (跳过菜单) - 改在加载或开始新游戏里设置
+
+        # 标记首次进入某个阶段，用于触发on_stage_enter文本
+        self._entered_stages = {stage_id: False for stage_id in [
+            self.settings.STAGE_INTRO, self.settings.STAGE_1, self.settings.STAGE_2,
+            self.settings.STAGE_3, self.settings.STAGE_4, self.settings.STAGE_5,
+            self.settings.STAGE_6, self.settings.STAGE_GALLERY
+        ]}
 
         # 初始化子系统 (UI Manager 需要在 ImageRenderer 和 NarrativeManager 之后初始化，因为它可能需要访问它们)
         self.image_renderer = ImageRenderer(screen, settings)
+        # 将自身实例赋值给 settings 的 game_manager 属性
+        self.settings.game_manager = self
         self.narrative_manager = NarrativeManager(screen, settings)
         self.audio_manager = AudioManager(settings)
         self.input_handler = InputHandler()
@@ -66,13 +76,6 @@ class GameManager:
 
         # 加载或开始新游戏
         self._load_or_start_game()
-
-        # 标记首次进入某个阶段，用于触发on_stage_enter文本
-        self._entered_stages = {stage_id: False for stage_id in [
-            self.settings.STAGE_INTRO, self.settings.STAGE_1, self.settings.STAGE_2,
-            self.settings.STAGE_3, self.settings.STAGE_4, self.settings.STAGE_5,
-            self.settings.STAGE_6, self.settings.STAGE_GALLERY
-        ]}
 
     def _load_or_start_game(self):
         """尝试加载进度，否则开始新游戏"""
@@ -348,6 +351,21 @@ class GameManager:
         # 清屏并绘制背景图 (背景图绘制放在 ImageRenderer 中)
         # self.screen.fill(self.settings.BLACK) # Clear screen before drawing background
         # Background is now drawn inside ImageRenderer.draw_image or ImageRenderer.draw_background
+
+        current_image_id = self.current_image_id
+        if current_image_id is None:
+            return
+
+        # 获取当前图片对应的配置
+        config = self.image_configs.get(current_image_id)
+        if config is None:
+            print(f"未找到 {current_image_id} 对应的配置信息")
+            return
+
+        # 使用 config 变量
+        if "on_complete" in config.get("narrative_triggers", {}):
+            # 处理 on_complete 相关逻辑
+            pass
 
         # 根据当前状态绘制不同的内容
         if self.current_state == self.settings.STATE_GAME:
