@@ -38,7 +38,7 @@ class NarrativeManager:
         # 文本显示相关
         self.current_texts_ids = [] # 当前需要显示的文本ID列表 (从 GameManager 接收)
         self.current_text_index = 0 # 当前正在播放的文本在列表中的索引
-        self.current_text_content = "" # 当前正在播放的文本的完整内容
+        self.current_text_content = "没找到哦！" # 当前正在播放的文本的完整内容
         self.current_display_text = "" # 正在逐字显示的文本内容
         self.chars_to_display_count = 0 # 需要显示的字符数（用于逐字效果）
         self.last_char_time = 0 # 上次显示字符的时间
@@ -143,6 +143,7 @@ class NarrativeManager:
 
         # 假设 self.current_text_id 存储当前文本 ID
         # 从列表中获取当前文本 ID
+        #避免报错加的一段内容，但实际可能不需要。
         if self.current_texts_ids and self.current_text_index < len(self.current_texts_ids):
             current_text_id = self.current_texts_ids[self.current_text_index]
             # 从配置文件中获取对应的配置
@@ -154,6 +155,8 @@ class NarrativeManager:
                 current_text_content = "没有找到对应的文本配置"
         else:
             current_text_content = "没有文本ID"
+        # 打印当前文本内容，用于调试
+        print(f"当前文本内容: {current_text_content}")
 
 
         """更新文本显示状态"""
