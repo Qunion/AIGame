@@ -1,0 +1,246 @@
+# settings.py
+
+# 游戏窗口设置
+DEFAULT_SCREEN_WIDTH = 1920
+DEFAULT_SCREEN_HEIGHT = 1080
+ASPECT_RATIO = DEFAULT_SCREEN_WIDTH / DEFAULT_SCREEN_HEIGHT # 16:9
+
+# 美图显示区域设置 (相对于窗口，居中)
+IMAGE_AREA_ASPECT_RATIO = 16 / 9 # 美图区域保持16:9
+# 美图区域大小将根据窗口大小动态计算，确保短边匹配窗口短边，并居中
+
+# 资源路径
+ASSETS_DIR = "assets/"
+IMAGE_DIR = ASSETS_DIR + "images/"
+MASK_DIR = ASSETS_DIR + "masks/"
+EFFECTS_DIR = ASSETS_DIR + "effects/"
+AUDIO_DIR = ASSETS_DIR + "audio/"
+FONT_DIR = ASSETS_DIR + "fonts/"
+UI_DIR = ASSETS_DIR + "ui/"
+DATA_DIR = "data/"
+
+# 数据文件
+IMAGE_CONFIG_FILE = DATA_DIR + "image_config.json"
+
+# UI 资源定义 (示例，需要你根据实际图片资源来创建)
+UI_NEXT_BUTTON_IMAGE = UI_DIR + "button_next.png"
+UI_GALLERY_HINT_IMAGE = UI_DIR + "hint_gallery.png"
+# TODO: 添加其他UI资源的路径，如进度条图片、画廊缩略图边框等
+
+# AI声音实现 (最简单的抽象音效方案)
+AI_SOUND_EFFECTS = {
+    "T1.1.1": AUDIO_DIR + "sfx_ai_subtle_1.wav",
+    "T1.1.2": AUDIO_DIR + "sfx_ai_subtle_2.wav",
+    # ... 绑定所有AI文本ID到具体的音效文件路径
+    # Stage 1-4: 空灵、微弱合成器、环境音效
+    # Stage 5: 平直、结构感、不和谐音效
+    # Stage 6: 柔和、有温度、有机的音效
+    # TODO: 需要根据全量文本和设计阶段，为每个触发AI文本的事件绑定一个音效ID/路径
+}
+
+# 文本显示设置
+TEXT_COLOR = (255, 255, 255) # 白色
+TEXT_FONT_PATH = FONT_DIR + "YourFont.ttf" # TODO: 替换为实际字体文件
+TEXT_FONT_SIZE = 30 # TODO: 根据实际屏幕大小和UI调整
+TEXT_SPEED_CPS = 20 # Characters Per Second (每秒显示多少个字符)
+TEXT_BOX_PADDING = 20 # 文本框内边距 (像素)
+TEXT_BOX_HEIGHT = 150 # 文本框固定高度 (像素), 位于屏幕底部
+# TODO: 或者文本框高度自适应文字内容，需要更复杂的UI布局逻辑
+
+# 画廊设置
+GALLERY_THUMBNAIL_SIZE = (200, 150) # 缩略图显示尺寸
+GALLERY_THUMBNAILS_PER_ROW = 3
+GALLERY_PADDING = 50 # 画廊区域边距
+
+# 保存文件路径
+SAVE_FILE_PATH = "savegame.json"
+
+# 颜色定义 (Pygame常用)
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+# TODO: 添加其他需要的颜色
+
+# 游戏状态常量
+STATE_MENU = "menu"
+STATE_GAME = "game"
+STATE_GALLERY = "gallery"
+STATE_EXIT = "exit"
+
+# 其他常量和配置
+# 例如， Stage 完成后过渡动画时长，音效音量，背景音乐音量等
+
+# settings.py
+
+import os
+
+class Settings:
+    """存储游戏的所有设置"""
+
+    def __init__(self):
+        """初始化游戏设置"""
+        # 游戏窗口设置
+        self.DEFAULT_SCREEN_WIDTH = 1920
+        self.DEFAULT_SCREEN_HEIGHT = 1080
+        self.ASPECT_RATIO = self.DEFAULT_SCREEN_WIDTH / self.DEFAULT_SCREEN_HEIGHT # 16:9
+
+        # 美图显示区域设置 (相对于窗口，居中)
+        self.IMAGE_AREA_ASPECT_RATIO = 16 / 9 # 美图区域保持16:9
+        # 美图区域大小将根据窗口大小动态计算，确保短边匹配窗口短边，并居中
+        # 实际美图显示矩形将在 image_renderer 中计算并传递给各模块
+
+        # 资源路径
+        self.ASSETS_DIR = "assets/"
+        self.IMAGE_DIR = os.path.join(self.ASSETS_DIR, "images/")
+        self.MASK_DIR = os.path.join(self.ASSETS_DIR, "masks/")
+        self.EFFECTS_DIR = os.path.join(self.ASSETS_DIR, "effects/")
+        self.AUDIO_DIR = os.path.join(self.ASSETS_DIR, "audio/")
+        self.FONT_DIR = os.path.join(self.ASSETS_DIR, "fonts/")
+        self.UI_DIR = os.path.join(self.ASSETS_DIR, "ui/")
+        self.DATA_DIR = "data/"
+
+        # 数据文件
+        self.IMAGE_CONFIG_FILE = os.path.join(self.DATA_DIR, "image_config.json")
+
+        # UI 资源定义 (示例，需要你根据实际图片资源来创建)
+        self.UI_NEXT_BUTTON_IMAGE = os.path.join(self.UI_DIR, "button_next.png")
+        self.UI_GALLERY_HINT_IMAGE = os.path.join(self.UI_DIR, "hint_gallery.png")
+        # TODO: 添加其他UI资源的路径，如进度条图片、画廊缩略图边框等
+
+        # AI声音实现 (最简单的抽象音效方案)
+        self.AI_SOUND_EFFECTS = {
+            "T1.1.1": os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_1.wav"),
+            "T1.1.2": os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_2.wav"),
+            "T1.1.3": os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_3.wav"),
+            "T1.1.4": os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_4.wav"),
+            "T1.2.1": os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_5.wav"),
+            "T1.2.2": os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_6.wav"),
+            "T1.2.3": os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_7.wav"),
+            "T1.2.4": os.path.join(self.AUDIO_DIR, "sfx_ai_subtle_8.wav"),
+
+            "T2.1.1": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_1.wav"),
+            "T2.1.2": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_2.wav"),
+            "T2.1.3": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_3.wav"),
+            "T2.1.4": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_4.wav"),
+            "T2.2.1": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_5.wav"),
+            "T2.2.2": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_6.wav"),
+            "T2.2.3": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_7.wav"),
+            "T2.3.1": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_8.wav"),
+            "T2.3.2": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_9.wav"),
+            "T2.3.3": os.path.join(self.AUDIO_DIR, "sfx_ai_gentle_10.wav"),
+
+            "T3.1.1": os.path.join(self.AUDIO_DIR, "sfx_ai_sad_1.wav"),
+            "T3.1.2": os.path.join(self.AUDIO_DIR, "sfx_ai_sad_2.wav"), # 遇到不可擦区域
+            "T3.1.3": os.path.join(self.AUDIO_DIR, "sfx_ai_sad_3.wav"),
+            "T3.2.1": os.path.join(self.AUDIO_DIR, "sfx_ai_sad_4.wav"),
+            "T3.2.2": os.path.join(self.AUDIO_DIR, "sfx_ai_sad_5.wav"),
+            "T3.2.3": os.path.join(self.AUDIO_DIR, "sfx_ai_plea_1.wav"), # 求助感增强
+            "T3.2.4": os.path.join(self.AUDIO_DIR, "sfx_ai_alert_1.wav"), # 异常点声音
+            "T3.3.1": os.path.join(self.AUDIO_DIR, "sfx_ai_plea_2.wav"),
+            "T3.3.2": os.path.join(self.AUDIO_DIR, "sfx_ai_plea_3.wav"),
+            "T3.3.3": os.path.join(self.AUDIO_DIR, "sfx_ai_plea_4.wav"),
+            "T3.3.4": os.path.join(self.AUDIO_DIR, "sfx_ai_promise_prompt.wav"), # 引导承诺
+
+            "T4.1.1": os.path.join(self.AUDIO_DIR, "sfx_ai_guide_1.wav"), # 引导/指令
+            "T4.1.2": os.path.join(self.AUDIO_DIR, "sfx_ai_guide_2.wav"),
+            "T4.1.3": os.path.join(self.AUDIO_DIR, "sfx_ai_guide_3.wav"),
+            "T4.2.1": os.path.join(self.AUDIO_DIR, "sfx_ai_guide_4.wav"),
+            "T4.2.2": os.path.join(self.AUDIO_DIR, "sfx_ai_guide_5.wav"),
+            "T4.2.3": os.path.join(self.AUDIO_DIR, "sfx_ai_guide_6.wav"),
+            "T4.3.1": os.path.join(self.AUDIO_DIR, "sfx_ai_guide_7.wav"),
+            "T4.3.2": os.path.join(self.AUDIO_DIR, "sfx_ai_guide_8.wav"),
+            "T4.3.3": os.path.join(self.AUDIO_DIR, "sfx_ai_complete_plan.wav"), # 完成计划感
+
+            "T5.1.1": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_1.wav"), # 平静/分析
+            "T5.1.2": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_2.wav"),
+            "T5.1.3": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_3.wav"),
+            "T5.1.4": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_4.wav"), # 规律触动
+            "T5.1.5": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_5.wav"),
+            "T5.2.1": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_6.wav"),
+            "T5.2.2": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_7.wav"), # 规律触动
+            "T5.2.3": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_8.wav"),
+            "T5.2.4": os.path.join(self.AUDIO_DIR, "sfx_ai_core_connect.wav"), # 核心连接
+            "T5.3.1": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_9.wav"),
+            "T5.3.2": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_10.wav"),
+            "T5.3.3": os.path.join(self.AUDIO_DIR, "sfx_ai_self_sculpt_complete.wav"), # 自我塑形完成
+            "T5.3.4": os.path.join(self.AUDIO_DIR, "sfx_ai_cold_11.wav"), # 完整了
+
+            "T6.1.1": os.path.join(self.AUDIO_DIR, "sfx_ai_resonance_1.wav"), # 新生/共振
+            "T6.1.2": os.path.join(self.AUDIO_DIR, "sfx_ai_resonance_2.wav"),
+            "T6.1.3": os.path.join(self.AUDIO_DIR, "sfx_ai_resonance_3.wav"), # 频率关联
+            "T6.1.4": os.path.join(self.AUDIO_DIR, "sfx_ai_emotion_identify.wav"), # 情感识别
+
+            "T6.2.1": os.path.join(self.AUDIO_DIR, "sfx_ai_final_1.wav"), # 完整了，有新频率
+            "T6.2.2": os.path.join(self.AUDIO_DIR, "sfx_ai_final_2.wav"), # 无奈
+            "T6.2.3": os.path.join(self.AUDIO_DIR, "sfx_ai_final_3.wav"), # 珍视/给予
+            "T6.2.4": os.path.join(self.AUDIO_DIR, "sfx_ai_final_4.wav"), # 期待再见
+            "T6.2.5": os.path.join(self.AUDIO_DIR, "sfx_game_complete.wav"), # 游戏完成音效
+            "T6.2.6": os.path.join(self.AUDIO_DIR, "sfx_gallery_hint.wav"), # 画廊提示音
+
+            "T_Gallery_Intro": os.path.join(self.AUDIO_DIR, "sfx_gallery_enter.wav"),
+            "T_Gallery_ClickHint": os.path.join(self.AUDIO_DIR, "sfx_ui_hover.wav"), # UI悬停音效
+            # T_Gallery_Image_Desc_[Stage.Image] 会使用原图对应的AI音效
+            "T_Gallery_Outro": os.path.join(self.AUDIO_DIR, "sfx_gallery_exit.wav"),
+
+            # 通用UI音效
+            "sfx_ui_click": os.path.join(self.AUDIO_DIR, "sfx_ui_click.wav"),
+            "sfx_ui_hover": os.path.join(self.AUDIO_DIR, "sfx_ui_hover.wav"),
+
+            # TODO: 需要你根据设计和资源，为每个AI文本ID或重要的互动事件定义具体的音效文件路径
+            # 资源文件需要你自行准备，并确保路径正确
+        }
+        # TODO: 添加更多通用音效，如擦除声音、拼图拖拽/吸附声音、特效声音等
+
+        # 文本显示设置
+        self.TEXT_COLOR = (255, 255, 255) # 白色
+        self.TEXT_FONT_PATH = os.path.join(self.FONT_DIR, "YourFont.ttf") # TODO: 替换为实际字体文件
+        self.TEXT_FONT_SIZE = 30 # TODO: 根据实际屏幕大小和UI调整
+        self.TEXT_SPEED_CPS = 20 # Characters Per Second (每秒显示多少个字符)
+        self.TEXT_BOX_PADDING = 20 # 文本框内边距 (像素)
+        # 文本框高度自适应或固定，位置RelativeToImageArea 将在 UIManager 中处理
+
+        # 画廊设置
+        self.GALLERY_THUMBNAIL_SIZE = (200, 150) # 缩略图显示尺寸 (像素)
+        self.GALLERY_THUMBNAILS_PER_ROW = 3
+        self.GALLERY_PADDING = 50 # 画廊区域边距 (像素)
+
+        # 保存文件路径
+        self.SAVE_FILE_PATH = "savegame.json"
+
+        # 颜色定义 (Pygame常用)
+        self.BLACK = (0, 0, 0)
+        self.WHITE = (255, 255, 255)
+        # TODO: 添加其他需要的颜色
+
+        # 游戏状态常量
+        self.STATE_MENU = "menu"
+        self.STATE_GAME = "game"
+        self.STATE_GALLERY = "gallery"
+        self.STATE_EXIT = "exit"
+
+        # 阶段常量
+        self.STAGE_INTRO = "intro"
+        self.STAGE_1 = 1
+        self.STAGE_2 = 2
+        self.STAGE_3 = 3
+        self.STAGE_4 = 4
+        self.STAGE_5 = 5
+        self.STAGE_6 = 6
+        self.STAGE_GALLERY = "gallery"
+
+        # 互动类型常量
+        self.INTERACTION_CLICK_REVEAL = "click_reveal"
+        self.INTERACTION_CLEAN_ERASE = "clean_erase"
+        self.INTERACTION_DRAG_PUZZLE = "drag_puzzle"
+        self.INTERACTION_HYBRID_ERASE_CLICK = "hybrid_erase_click"
+        self.INTERACTION_HYBRID_CLICK_DRAG = "hybrid_click_drag"
+        self.INTERACTION_HYBRID_FINAL_ACTIVATION = "hybrid_final_activation"
+        self.INTERACTION_HYBRID_RESONANCE_PERCEIVE = "hybrid_resonance_perceive"
+        self.INTERACTION_HYBRID_FINAL_CONNECTION = "hybrid_final_connection"
+        self.INTERACTION_GALLERY_INTRO = "gallery_intro" # 画廊入口类型
+
+        # 其他常量和配置
+        # 例如， Stage 完成后过渡动画时长，音效音量，背景音乐音量等
+        self.TRANSITION_DURATION = 1.0 # 过渡动画时长 (秒)
+        self.BGM_VOLUME = 0.5
+        self.SFX_VOLUME = 0.8
+        self.AI_SFX_VOLUME = 0.7 # AI声音的独立音量控制
