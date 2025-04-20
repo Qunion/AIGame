@@ -39,11 +39,22 @@ class InputHandler:
 
 
     def handle_event(self, event):
-        """处理单个Pygame事件"""
+        """
+        处理单个Pygame事件。
+
+        Args:
+            event (pygame.event.Event): Pygame事件对象。
+        """
         # 首先处理那些与游戏状态无关的事件，比如退出
         if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+            # 当接收到退出事件时，调用 Game 类的退出方法，该方法会负责存档和退出
+            if hasattr(self.game, 'quit_game'):
+                self.game.quit_game()
+            else:
+                 # If quit_game method is not available (e.g., fatal error during init), exit directly
+                 pygame.quit()
+                 sys.exit()
+
 
         # 根据当前游戏状态，将事件分发给对应的处理逻辑
         if self.game.current_state == settings.GAME_STATE_PLAYING:
@@ -52,22 +63,37 @@ class InputHandler:
         elif self.game.current_state == settings.GAME_STATE_GALLERY_LIST:
             # 事件交给 Gallery 类处理列表视图逻辑
             if hasattr(self.game, 'gallery') and self.game.gallery:
-                 # 只有当事件发生在图库窗口区域时才处理？或者 Gallery 自己判断？ Gallery 自己判断更灵活。
-                 handled = self.game.gallery.handle_event_list(event)
-                 # 如果 Gallery 处理了事件 (例如点击外部区域关闭图库)，则不再继续处理
-                 # if handled:
-                 #      return
+                 # Gallery's handle_event_list method should return True if event is consumed
+                 self.game.gallery.handle_event_list(event)
+                 # If Gallery handles click on external area, it will change state and return True, no further handling needed here.
+
         elif self.game.current_state == settings.GAME_STATE_GALLERY_VIEW_LIT:
             # 事件交给 Gallery 类处理大图查看逻辑
             if hasattr(self.game, 'gallery') and self.game.gallery:
-                 handled = self.game.gallery.handle_event_view_lit(event)
-                 # if handled:
-                 #      return
-        # else: # LOADING 状态下，只处理退出事件，其他忽略
+                 # Gallery's handle_event_view_lit method should return True if event is consumed
+                 self.game.gallery.handle_event_view_lit(event)
+
+        # else: # LOADING state: only QUIT event handled above. Other events are ignored.
 
 
     def _handle_playing_input(self, event):
         """处理游戏进行中状态下的输入事件"""
+
+        # 处理键盘事件 (例如用于 debug 显示切换)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                # 按下空格键，切换 debug 显示标志为 True
+                if hasattr(self.game, 'display_piece_info'): # 安全检查
+                    self.game.display_piece_info = True
+                    # print("Debug显示开启") # Debug
+
+        elif event.type == pygame.KEYUP:
+             if event.key == pygame.K_SPACE:
+                # 释放空格键，切换 debug 显示标志为 False
+                if hasattr(self.game, 'display_piece_info'): # 安全检查
+                    self.game.display_piece_info = False
+                    # print("Debug显示关闭") # Debug
+
         # 在 Board 正在处理完成流程（移除、下落、填充）时，禁止玩家操作
         if self.board.current_board_state != settings.BOARD_STATE_PLAYING:
             # ... (处理 mouse up 清理状态的逻辑保持不变) ...

@@ -876,7 +876,7 @@ class ImageManager:
         """
         获取所有已入场（未点亮或已点亮）图片的ID、状态和完成时间。
         已入场的图片定义为：ImageManager 知道文件路径且状态不是 'unentered'。
-        只返回那些碎片已成功加载完成的图片的信息，因为图库需要显示缩略图。
+        返回所有已入场图片的信息，不限碎片加载状态。
         """
         status_list = []
         # 确保遍历顺序与图片ID一致
@@ -886,15 +886,13 @@ class ImageManager:
              status = self.image_status.get(img_id, 'unentered')
              # 图库中只显示 'unlit' 和 'lit' 状态的图片
              if status in ['unlit', 'lit']:
-                # 只有当图片的全部碎片成功加载时，才能在图库中显示（因为需要生成缩略图）
-                if img_id in self.pieces_surfaces and self.pieces_surfaces.get(img_id) is not None and len(self.pieces_surfaces[img_id]) == settings.PIECES_PER_IMAGE:
-                    status_info = {'id': img_id, 'state': status}
-                    if status == 'lit':
-                        status_info['completion_time'] = self.completed_times.get(img_id, time.time()) # 如果没有完成时间，使用当前时间 (不应该发生)
-                    status_list.append(status_info)
-                # else:
-                    # print(f"警告: 图片ID {img_id} 状态为 {status}，但碎片尚未完整加载，图库中不显示。") # Debug
-
+                status_info = {'id': img_id, 'state': status}
+                if status == 'lit':
+                    # 获取完成时间，如果没有完成时间 (不应该发生)，使用当前时间
+                    status_info['completion_time'] = self.completed_times.get(img_id, time.time())
+                # 添加一个标志，表示碎片 surface 是否已加载，用于图库是否能显示缩略图
+                status_info['is_pieces_loaded'] = (img_id in self.pieces_surfaces and self.pieces_surfaces.get(img_id) is not None and len(self.pieces_surfaces[img_id]) == settings.PIECES_PER_IMAGE)
+                status_list.append(status_info)
 
         return status_list
 
@@ -947,3 +945,87 @@ class ImageManager:
          else:
              # print(f"警告: 尝试获取图片ID {image_id} 的完整处理后图片，但碎片尚未完整加载。") # Debug
              return None # 碎片未加载完成，完整图不可用
+
+    def get_state(self):
+        """
+        获取ImageManager需要存档的状态信息。
+
+        Returns:
+            dict: 包含图片状态、完成时间、碎片消耗进度等的字典。
+        """
+        state = {
+            'image_status': self.image_status, # 存储所有图片的最新状态
+            'completed_times': self.completed_times, # 存储已点亮图片的完成时间
+            'next_image_to_consume_id': self.next_image_to_consume_id, # 存储下一个要消耗碎片的图片ID
+            'pieces_consumed_from_current_image': self.pieces_consumed_from_current_image # 存储当前消耗图片的已消耗碎片数量
+        }
+        # Note: self.all_image_files 是根据文件扫描获得的，不需要存档
+        # self.processed_full_images 和 self.pieces_surfaces 是运行时加载的，不需要存档，读档时需要重新加载
+        return state
+
+    def load_state(self, state_data):
+        """
+        从存档数据加载ImageManager的状态。
+
+        Args:
+            state_data (dict): 从存档文件中读取的状态字典。
+        """
+        if not state_data:
+            print("警告: ImageManager 尝试从空的存档数据加载状态。")
+            return # 没有有效的存档数据，不加载
+
+        # 从存档数据更新ImageManager的状态属性
+        # 确保键存在于 state_data 中以避免 KeyError
+        if 'image_status' in state_data:
+             # 确保只加载扫描到的图片的状态，避免加载不存在图片的记录
+             loaded_image_status = state_data['image_status']
+             self.image_status = {
+                 img_id: status
+                 for img_id, status in loaded_image_status.items()
+                 if img_id in self.all_image_files # 只加载扫描到的图片的状态
+             }
+             print(f"ImageManager 从存档加载了 {len(self.image_status)} 张图片的状态。") # Debug
+
+        if 'completed_times' in state_data:
+             # 确保只加载状态为 lit 的图片的完成时间，且图片ID存在
+             loaded_completed_times = state_data['completed_times']
+             self.completed_times = {
+                 img_id: comp_time
+                 for img_id, comp_time in loaded_completed_times.items()
+                 if img_id in self.image_status and self.image_status.get(img_id) == 'lit' # 只加载已入场且已点亮图片的完成时间
+             }
+             print(f"ImageManager 从存档加载了 {len(self.completed_times)} 张已点亮图片的完成时间。") # Debug
+
+
+        if 'next_image_to_consume_id' in state_data:
+             # 确保加载的 next_image_to_consume_id 是一个已知的图片ID
+             next_id = state_data['next_image_to_consume_id']
+             if next_id is None or next_id in self.all_image_files:
+                 self.next_image_to_consume_id = next_id
+                 print(f"ImageManager 从存档加载 next_image_to_consume_id: {self.next_image_to_consume_id}") # Debug
+             else:
+                 print(f"警告: 存档中的 next_image_to_consume_id ({next_id}) 不是已知图片ID。使用默认值或重新计算。") # Debug
+                 # 如果加载的ID无效，需要重新确定下一个要消耗的ID
+                 self._initialize_consumption() # 重新初始化消耗状态
+
+
+        if 'pieces_consumed_from_current_image' in state_data:
+             # 确保加载的已消耗数量在有效范围内 (0 到 settings.PIECES_PER_IMAGE)
+             consumed_count = state_data['pieces_consumed_from_current_image']
+             if 0 <= consumed_count <= settings.PIECES_PER_IMAGE:
+                 self.pieces_consumed_from_current_image = consumed_count
+                 print(f"ImageManager 从存档加载 pieces_consumed_from_current_image: {self.pieces_consumed_from_current_image}") # Debug
+             else:
+                 print(f"警告: 存档中的 pieces_consumed_from_current_image ({consumed_count}) 无效。使用默认值或重新计算。") # Debug
+                 # 如果加载的数量无效，需要重新初始化消耗数量
+                 if self.next_image_to_consume_id is not None:
+                     self.pieces_consumed_from_current_image = 0 # 简单重置为0
+                 else:
+                     self.pieces_consumed_from_current_image = 0
+
+
+        # Note: 加载状态后，需要确保对应图片的碎片 surface 在内存中可用
+        # ImageManager 的初始加载(_initial_load_images) 和后台加载(_load_and_process_single_image) 会负责加载碎片
+        # 在 main.py 中加载 ImageManager 状态后，Board 在加载其状态时会需要这些碎片
+        # Board.load_state 会检查碎片是否已加载，并在需要时触发加载。
+

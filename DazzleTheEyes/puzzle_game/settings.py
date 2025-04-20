@@ -31,7 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # 获取当前文件所在
 ASSETS_DIR = os.path.join(BASE_DIR, "assets") + os.sep # assets文件夹路径
 
 # 碎片生成与缓存设置
-REGENERATE_PIECES = 0 # 是否重新生成碎片：1-是，0-否。设置为0时优先从文件加载。
+REGENERATE_PIECES = 1 # 是否重新生成碎片：1-是，0-否。设置为0时优先从文件加载。
 # 生成的碎片存放目录
 GENERATED_PIECE_DIR = os.path.join(ASSETS_DIR, "pieces") + os.sep
 # 确保碎片目录存在
@@ -47,7 +47,7 @@ INITIAL_LOAD_IMAGE_COUNT = 5 # 根据你的图片数量和期望加载速度调�
 
 # 后台加载图片的速度控制
 BACKGROUND_LOAD_BATCH_SIZE = 1 # 每次后台尝试加载处理的图片数量 (可以调整)
-BACKGROUND_LOAD_DELAY = 0.5 # 每批处理之间的最小延迟 (秒)，避免完全占用CPU，让Pygame有时间绘制和处理事件
+BACKGROUND_LOAD_DELAY = 0.1 # 每批处理之间的最小延迟 (秒)，避免完全占用CPU，让Pygame有时间绘制和处理事件
 
 
 # 加载界面设置
@@ -131,5 +131,14 @@ BOARD_STATE_REMOVING_PIECES = 2 # 正在移除碎片
 BOARD_STATE_PIECES_FALLING = 3 # 碎片正在下落
 BOARD_STATE_PENDING_FILL = 4 # 下落完成，等待填充新碎片
 
+
+# 存档设置
+SAVE_FILE_NAME = "savegame.json" # 存档文件名
+# 完整的存档文件路径将是 os.path.join(BASE_DIR, SAVE_FILE_NAME)
+AUTOSAVE_INTERVAL = 30 # 自动存档间隔 (秒)
+
+# Debug 设置
+DEBUG_TEXT_COLOR = (255, 255, 255) # Debug 文字颜色 (白色)
+DEBUG_FONT_SIZE = 15 # Debug 文字字体大小
 
 # 其他需要调试的参数...

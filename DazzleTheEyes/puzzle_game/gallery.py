@@ -39,16 +39,18 @@ class Gallery:
 
         # UI元素 - 大图查看界面
         # 左右导航按钮 (位置在 draw 方法中根据当前显示的大图Rect动态计算)
+        # callback 参数使用了 lambda 匿名函数，以便在点击时调用 navigate_lit_images
         self.left_button = Button(settings.LEFT_BUTTON_PATH, (0, 0), anchor='center', callback=lambda: self.navigate_lit_images(-1))
         self.right_button = Button(settings.RIGHT_BUTTON_PATH, (0, 0), anchor='center', callback=lambda: self.navigate_lit_images(1))
 
         # Sprite Group 用于管理大图查看界面的按钮，方便绘制和事件处理
         self.view_lit_buttons = pygame.sprite.Group(self.left_button, self.right_button)
 
-        # 字体 (使用Game实例中的字体)
-        self.font_thumbnail = self.game.font_thumbnail # 假设Game实例有font_thumbnail
+        # 字体 (使用Game实例中的字体) - Optional, if you draw text on thumbnails
+        # self.font_thumbnail = self.game.font_thumbnail # Assumption, using it for optional drawing
 
         # 图库列表的可见区域 Rect，用于 set_clip
+        # 这是图库窗口内部，排除内边距的区域，用于限制绘制范围
         self._list_visible_clip_rect = pygame.Rect(
              settings.GALLERY_X + settings.GALLERY_PADDING,
              settings.GALLERY_Y + settings.GALLERY_PADDING,
@@ -58,7 +60,7 @@ class Gallery:
 
 
     def open_gallery(self):
-        """打开图库界面，切换游戏状态"""
+        """打开图库界面，切换游戏状态。这个方法由Game类调用。"""
         print("打开图库。") # Debug
         # 在打开时更新列表内容和排序
         self._update_picture_list()
@@ -71,7 +73,7 @@ class Gallery:
 
 
     def close_gallery(self):
-        """关闭图库界面，切换回游戏主状态"""
+        """关闭图库界面，切换回游戏主状态。这个方法由Game类调用。"""
         print("关闭图库。") # Debug
         # 确保退出大图查看状态 (如果在大图查看状态下点击外部区域，也会调用此方法)
         self.viewing_lit_image_index = -1
@@ -80,21 +82,24 @@ class Gallery:
 
 
     def _update_picture_list(self):
-        """从image_manager获取并更新图库中的图片列表及状态，并进行排序"""
+        """从image_manager获取并更新图库中的图片列表及状态，并进行排序。"""
         # 获取所有已入场(未点亮+已点亮)且碎片已加载的图片列表，包含状态和完成时间
+        # ImageManager 提供的列表已包含必要信息，并且已经过滤掉了碎片未加载完整的图片
         all_entered_and_loaded_pictures = self.image_manager.get_all_entered_pictures_status() # ImageManager 提供的列表已包含必要信息
 
         # 分离已点亮和未点亮图片
+        # 已点亮的按完成时间倒序排列
         lit_pictures = sorted([p for p in all_entered_and_loaded_pictures if p['state'] == 'lit'],
-                              key=lambda x: x['completion_time'], reverse=True) # 按完成时间倒序
+                              key=lambda x: x['completion_time'], reverse=True)
 
+        # 未点亮的按图片ID顺序排列
         unlit_pictures = sorted([p for p in all_entered_and_loaded_pictures if p['state'] == 'unlit'],
-                                key=lambda x: x['id']) # 按ID顺序 (即文件命名顺序)
+                                key=lambda x: x['id'])
 
-        # 合并列表，已点亮在前
+        # 合并列表，已点亮图片在前
         self.pictures_in_gallery = lit_pictures + unlit_pictures
 
-        # 更新已点亮图片ID列表，用于大图导航
+        # 更新已点亮图片ID列表，用于大图导航 (确保顺序与图库列表一致)
         self._lit_images_list = [p['id'] for p in lit_pictures]
 
         # 计算列表内容的实际总高度
@@ -106,12 +111,13 @@ class Gallery:
         if num_pictures == 0:
             self._list_content_height = 0
         else:
-            # 计算所需的总行数
-            num_rows = (num_pictures + settings.GALLERY_IMAGES_PER_ROW - 1) // settings.GALLERY_IMAGES_PER_ROW # 向上取整
+            # 计算所需的总行数，向上取整
+            num_rows = (num_pictures + settings.GALLERY_IMAGES_PER_ROW - 1) // settings.GALLERY_IMAGES_PER_ROW
             # 总高度 = 行数 * 缩略图高度 + (行数 - 1) * 垂直间距 + 2 * 上下内边距
             self._list_content_height = num_rows * settings.GALLERY_THUMBNAIL_HEIGHT + max(0, num_rows - 1) * settings.GALLERY_THUMBNAIL_GAP_Y + 2 * settings.GALLERY_PADDING
 
         # 计算最大可滚动距离
+        # 如果内容总高度小于窗口高度，最大滚动距离为0
         self._max_scroll_y = max(0, self._list_content_height - settings.GALLERY_HEIGHT)
 
         # print(f"图库列表更新: 共 {num_pictures} 张图 (已点亮 {len(lit_pictures)}, 未点亮 {len(unlit_pictures)})") # Debug
@@ -156,7 +162,7 @@ class Gallery:
                              return True # 事件已被处理
                  # 点击在图库窗口内部，但不是图片缩略图
                  # 如果点击在图库窗口背景上，且不是缩略图或按钮等，事件未消耗
-                 # return False # 事件未被内部UI元素处理
+                 # return False # Event not handled by internal UI elements
 
         elif event.type == pygame.MOUSEWHEEL: # 鼠标滚轮事件
             # 确保鼠标在图库窗口区域内时，滚轮事件才有效
@@ -275,7 +281,7 @@ class Gallery:
             num_lit_images = len(self._lit_images_list)
             if num_lit_images <= 1:
                  # print("只有一张已点亮图片，无法导航。") # Debug, avoid spamming
-                 return # 只有一张图，不能导航
+                 return # 不能导航，如果只有一张图片
 
             # 计算下一个索引，支持循环
             new_index = (current_index + direction) % num_lit_images
@@ -289,12 +295,13 @@ class Gallery:
     def handle_event_view_lit(self, event):
         """处理图库大图查看界面的事件。返回 True 表示事件被消耗，False 表示未处理。"""
         # 处理左右导航按钮的事件
-        handled = self.view_lit_buttons.handle_event(event) # Button 类需要有 handle_event 方法并返回 True/False
+        # Button 类需要有 handle_event 方法并返回 True 如果事件被处理
+        handled = self.view_lit_buttons.handle_event(event)
 
         if handled:
              return True # 事件被按钮处理了
 
-        # 如果事件未被按钮处理，检查是否点击了正在显示的大图本身
+        # 如果事件未被按钮处理，检查是否点击了正在显示的大图本身 (用于退出查看)
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
              # 获取当前正在查看的图片ID
              if self.viewing_lit_image_index != -1 and self._lit_images_list:
@@ -309,7 +316,8 @@ class Gallery:
                      # 计算缩放因子，以适应屏幕尺寸，保持比例，且不超出屏幕 (留边距)
                      margin = 40
                      max_scale_factor = min((screen_w - margin) / img_w, (screen_h - margin) / img_h)
-                     scale_factor = min(1.0, max_scale_factor) # 确保不放大超过原始处理尺寸，且留白
+                     # 确保不放大超过原始处理尺寸 (这里假设原始处理尺寸就是 full_image_surface 的尺寸), 且留白
+                     scale_factor = min(1.0, max_scale_factor)
 
                      scaled_w = int(img_w * scale_factor)
                      scaled_h = int(img_h * scale_factor)
@@ -349,6 +357,7 @@ class Gallery:
         overlay.fill(settings.OVERLAY_COLOR)
         surface.blit(overlay, (0, 0))
 
+        # 绘制相应的图库界面
         if self.viewing_lit_image_index != -1:
              # 绘制大图查看界面
              self.draw_view_lit(surface)
@@ -358,120 +367,135 @@ class Gallery:
 
 
     def draw_list(self, surface):
-        """绘制图库列表界面"""
-        # 绘制图库窗口背景 Surface 到屏幕上
+        """绘制图库列表界面。"""
+        # 将图库窗口背景 Surface 绘制到主屏幕 Surface 上
         surface.blit(self.gallery_window_surface, self.gallery_window_rect)
 
-        # 设置裁剪区域，只绘制图库窗口内部的内容
+        # 设置一个裁剪区域，将绘制限制在图库窗口内部的内容区域
         old_clip = surface.get_clip() # 保存旧的裁剪区域
-        surface.set_clip(self._list_visible_clip_rect) # 设置新的裁剪区域
+        surface.set_clip(self._list_visible_clip_rect) # 设置新的裁剪区域到可见内容区域
 
 
         # 绘制列表内容，需要考虑滚动偏移 self.scroll_y
-        # 遍历 self.pictures_in_gallery
+        # 遍历 self.pictures_in_gallery 列表中的图片信息
         for i, pic_info in enumerate(self.pictures_in_gallery):
-            # 计算当前缩略图在列表内容中的位置 (不考虑滚动)
-            row_in_list = i // settings.GALLERY_IMAGES_PER_ROW
-            col_in_row = i % settings.GALLERY_IMAGES_PER_ROW
-            # 计算绘制的屏幕坐标 (相对于屏幕左上角)
+            # 计算当前缩略图在列表内容网格中的位置 (不考虑滚动)
+            row_in_list = i // settings.GALLERY_IMAGES_PER_ROW # 在列表中的行索引
+            col_in_row = i % settings.GALLERY_IMAGES_PER_ROW # 在当前行中的列索引
+            # 计算绘制到屏幕上的像素坐标 (相对于屏幕左上角)
             draw_x = settings.GALLERY_X + settings.GALLERY_PADDING + col_in_row * (settings.GALLERY_THUMBNAIL_WIDTH + settings.GALLERY_THUMBNAIL_GAP_X)
             draw_y = settings.GALLERY_Y + settings.GALLERY_PADDING + row_in_list * (settings.GALLERY_THUMBNAIL_HEIGHT + settings.GALLERY_THUMBNAIL_GAP_Y) - self.scroll_y # 应用滚动偏移
 
-            # 获取缩略图 surface
+
+            # 获取缩略图 surface (ImageManager 会处理缓存和生成)
             thumbnail_surface = self.image_manager.get_thumbnail(pic_info['id'])
 
             if thumbnail_surface:
-                # 如果是未点亮状态，将缩略图灰度化
+                # 如果是未点亮状态，将缩略图灰度化处理
                 if pic_info['state'] == 'unlit':
+                     # 使用 utils.grayscale_surface 工具函数
                      thumbnail_surface = utils.grayscale_surface(thumbnail_surface)
 
-                # 绘制缩略图
+                # 绘制缩略图到屏幕 Surface 上
                 surface.blit(thumbnail_surface, (draw_x, draw_y))
 
                 # TODO: 可以绘制图片ID或状态文字 (可选)
-                # text_surface = self.font_thumbnail.render(f"ID:{pic_info['id']}", True, settings.WHITE)
-                # surface.blit(text_surface, (draw_x, draw_y + settings.GALLERY_THUMBNAIL_HEIGHT + 5)) # 绘制在缩略图下方
+                # if hasattr(self.game, 'font_thumbnail') and self.game.font_thumbnail:
+                #     text_surface = self.game.font_thumbnail.render(f"ID:{pic_info['id']}", True, settings.WHITE)
+                #     surface.blit(text_surface, (draw_x, draw_y + settings.GALLERY_THUMBNAIL_HEIGHT + 5)) # 绘制在缩略图下方
 
             else:
-                 # 如果无法获取缩略图，绘制一个占位符
+                 # 如果无法获取缩略图 surface，绘制一个占位符矩形
                  placeholder_rect = pygame.Rect(draw_x, draw_y, settings.GALLERY_THUMBNAIL_WIDTH, settings.GALLERY_THUMBNAIL_HEIGHT)
                  pygame.draw.rect(surface, settings.GRAY, placeholder_rect) # 绘制灰色矩形
-                 # 可以在占位符上绘制文字，比如"加载中..." (如果后台加载还未完成)
-                 # if pic_info['is_pieces_loaded'] == False: # 假设 pic_info 包含加载状态
-                 #     placeholder_font = self.game.font_loading # 或另一个小字体
-                 #     placeholder_text = placeholder_font.render("加载中...", True, settings.BLACK)
-                 #     text_center = placeholder_rect.center
-                 #     text_rect = placeholder_text.get_rect(center=text_center)
-                 #     surface.blit(placeholder_text, text_rect)
+                 # 可选：在占位符上绘制文字，例如 "加载中..." 或 "无法加载"
 
 
-        # 恢复旧的裁剪区域
+        # 恢复旧的裁剪区域，以便后续绘制其他UI元素或主游戏界面
         surface.set_clip(old_clip)
 
 
     def draw_view_lit(self, surface):
-        """绘制图库大图查看界面"""
+        """绘制图库大图查看界面。"""
+        # 检查是否正在查看已点亮大图
         if self.viewing_lit_image_index == -1 or not self._lit_images_list:
-             print("警告: 尝试绘制大图查看界面，但没有图片可查看。") # Debug
+             print("警告: 尝试绘制大图查看界面，但没有图片被选中查看或已点亮图片列表为空。") # Debug
              return
 
         # 获取当前正在查看的图片ID
         current_image_id = self._lit_images_list[self.viewing_lit_image_index]
+        # 从 ImageManager 获取完整处理后的图片 surface
+        # ImageManager 会处理缓存
         full_image_surface = self.image_manager.get_full_processed_image(current_image_id)
 
         if full_image_surface:
-            # 缩放图片以适应屏幕，保持比例
+            # 缩放图片以适应屏幕显示，保持比例
             img_w, img_h = full_image_surface.get_size()
             screen_w, screen_h = settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT
 
-            # 计算缩放因子，以适应屏幕尺寸，保持比例，且不超出屏幕 (留边距)
+            # 计算缩放因子，使其完整适应屏幕，并留有边距
             margin = 40
+            # 计算能适应屏幕并留有边距的最大缩放因子
             max_scale_factor = min((screen_w - margin) / img_w, (screen_h - margin) / img_h)
-            scale_factor = min(1.0, max_scale_factor) # 确保不放大超过原始处理尺寸 (这里假设原始处理尺寸就是 full_image_surface 的尺寸), 且留白
+            # 最终缩放因子取 1.0 和最大适应因子的最小值，确保不放大超过原始处理尺寸 (600x1080)，并遵守边距
+            scale_factor = min(1.0, max_scale_factor)
 
+            # 计算缩放后的图片尺寸
             scaled_w = int(img_w * scale_factor)
             scaled_h = int(img_h * scale_factor)
 
             # 确保缩放后的尺寸有效
             if scaled_w <= 0 or scaled_h <= 0:
                 print(f"警告: 大图图片 {current_image_id} 缩放后尺寸无效 ({scaled_w}x{scaled_h})。") # Debug
-                # 绘制一个占位符
+                # 绘制一个占位符矩形
                 placeholder_rect = pygame.Rect(0, 0, 200, 150) # 示例占位符大小
                 placeholder_rect.center = (screen_w // 2, screen_h // 2)
                 pygame.draw.rect(surface, settings.GRAY, placeholder_rect)
-                # 可以绘制文字 "加载失败"
+                # 可选：在占位符上绘制文字 "加载失败"
                 return
 
+            # 进行图片缩放
             scaled_image = pygame.transform.scale(full_image_surface, (scaled_w, scaled_h))
 
-            # 计算绘制位置 (居中)
+            # 计算绘制位置，使其在屏幕上居中
             img_rect = scaled_image.get_rect(center=(screen_w // 2, screen_h // 2))
+            # 绘制缩放后的图片到屏幕 Surface 上
             surface.blit(scaled_image, img_rect)
 
             # 绘制左右导航按钮
-            # 计算按钮位置，相对于绘制的大图Rect
-            button_offset_x = max(50, (screen_w - scaled_w) // 4) # 按钮距离图片边缘的距离，或者屏幕边缘的距离
+            # 计算按钮位置，相对于绘制的大图 Rect
+            # 按钮与大图垂直居中对齐
+            # 按钮在水平方向上位于大图外部，并留有一定偏移量
+            button_offset_x = max(50, (screen_w - scaled_w) // 4) # 按钮距离图片边缘或屏幕边缘的距离，取较大值确保可见
             self.left_button.rect.centery = img_rect.centery
-            self.left_button.rect.right = img_rect.left - button_offset_x # 按钮放在图片左侧
+            self.left_button.rect.right = img_rect.left - button_offset_x # 左按钮的右边缘在大图左边缘左侧
 
             self.right_button.rect.centery = img_rect.centery
-            self.right_button.rect.left = img_rect.right + button_offset_x # 按钮放在图片右侧
+            self.right_button.rect.left = img_rect.right + button_offset_x # 右按钮的左边缘在大图右边缘右侧
 
-            # 绘制按钮组
+            # 绘制按钮组 (包含左右导航按钮)
             self.view_lit_buttons.draw(surface)
 
         else:
-             # 如果无法获取完整处理后的图片，绘制一个加载中或占位符
-             # 这不应该经常发生，因为只有碎片加载完成后才可能进入已点亮状态
-             print(f"警告: 尝试获取图片ID {current_image_id} 的完整处理后图片，可能尚未加载。") # Debug
-             # 绘制一个文本提示
-             font = self.game.font_loading # 使用加载界面的字体或通用字体
-             text_surface = font.render("图片加载中...", True, settings.WHITE)
-             text_rect = text_surface.get_rect(center=(settings.SCREEN_WIDTH//2, settings.SCREEN_HEIGHT//2))
-             surface.blit(text_surface, text_rect)
+             # 如果无法获取完整处理后的图片 surface，绘制一个加载中或占位符文本
+             # 这通常不应该发生，因为进入 VIEW_LIT 状态的前提是图片碎片已加载
+             print(f"警告: 尝试获取图片ID {current_image_id} 的完整处理后图片，但 surface 为 None。") # Debug
+             # 绘制提示文本 "图片加载中..."
+             # 使用 Game 实例中的字体
+             if hasattr(self.game, 'font_loading') and self.game.font_loading: # 检查 Game 实例和字体属性是否存在
+                font = self.game.font_loading
+                text_surface = font.render("图片加载中...", True, settings.WHITE)
+                text_rect = text_surface.get_rect(center=(settings.SCREEN_WIDTH//2, settings.SCREEN_HEIGHT//2))
+                surface.blit(text_surface, text_rect)
+             else:
+                # 如果 Game 实例或字体不可用，使用 Pygame 默认字体作为回退
+                font_fallback = pygame.font.Font(None, 40)
+                text_surface = font_fallback.render("图片加载中...", True, settings.WHITE)
+                text_rect = text_surface.get_rect(center=(settings.SCREEN_WIDTH//2, settings.SCREEN_HEIGHT//2))
+                surface.blit(text_surface, text_rect)
 
-    # def update(self, dt): # Gallery 类自身的 update 方法 (如果有动画等需要更新)
-    #      # 例如，按钮的 update 方法
+    # def update(self, dt): # Gallery 类自身的 update 方法 (如果 Gallery 内部有动画等需要随时间更新的状态)
+    #      # 例如，如果按钮有动画效果，需要调用它们的 update 方法
     #      # if self.game.current_state == settings.GAME_STATE_GALLERY_VIEW_LIT:
     #      #      self.view_lit_buttons.update(dt)
     #      pass

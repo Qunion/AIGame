@@ -13,13 +13,13 @@ import utils # 导入工具函数
 
 
 class Board:
-    def __init__(self, image_manager):
+    def __init__(self, image_manager, saved_grid_data=None): # <-- 新的方法签名
         """
         初始化拼盘
 
         Args:
             image_manager (ImageManager): 图像管理器实例
-            # game_instance (Game): Game实例，用于触发事件或状态改变 (例如显示提示或切换图库状态) - 通过ImageManager间接访问
+            saved_grid_data (list, optional): 从存档中加载的拼盘布局数据。如果为None，则进行初始填充。默认为None。
         """
         self.image_manager = image_manager
         # self.game = game_instance # 持有Game实例引用，用于调用Game方法
@@ -27,9 +27,6 @@ class Board:
         # 存储拼盘中的碎片，使用二维列表表示物理网格 (16x9)
         # 列表中的元素将是 Piece 对象或 None (表示空槽位)
         self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
-
-        # 获取初始碎片并填充到拼盘
-        self.fill_initial_pieces()
 
         # 选中的碎片 (用于点击交换)
         self.selected_piece = None
@@ -41,20 +38,98 @@ class Board:
         self.selection_rect = None
 
         # Board内部状态，管理完成 -> 移除 -> 下落 -> 填充流程
+        # 读档时，Board 状态应该回到 PLAYING
         self.current_board_state = settings.BOARD_STATE_PLAYING
         self._completed_image_id_pending_process = None # 完成的图片ID，等待处理
         self._completed_area_start_pos = None # 已完成区域的左上角网格位置
 
         # 用于管理所有 Piece Sprite 的 Group
         self.all_pieces_group = pygame.sprite.Group()
-        # 将所有初始碎片添加到 Group
-        for r in range(settings.BOARD_ROWS):
-            for c in range(settings.BOARD_COLS):
-                if self.grid[r][c]:
-                    self.all_pieces_group.add(self.grid[r][c])
+        # Group 的内容将在填充或加载拼盘时添加
+
+
+        # 根据是否提供了存档数据来初始化拼盘
+        if saved_grid_data is not None:
+            # 从存档数据加载拼盘布局
+            print("从存档加载拼盘布局...") # Debug
+            self._load_grid_from_data(saved_grid_data)
+        else:
+            # 进行初始填充
+            print("进行初始拼盘填充...") # Debug
+            self.fill_initial_pieces()
 
         # 动画完成后的回调队列 (当下落动画完成后，需要触发填充等后续流程)
         self._animation_completion_callbacks = []
+
+
+    # 添加一个内部方法来从存档数据加载网格
+    def _load_grid_from_data(self, saved_grid_data):
+        """
+        从提供的存档数据构建拼盘网格和Sprite Group。
+
+        Args:
+            saved_grid_data (list): 从存档读取的拼盘布局二维列表。
+        """
+        # 确保存档数据尺寸匹配
+        if not isinstance(saved_grid_data, list) or len(saved_grid_data) != settings.BOARD_ROWS:
+             print(f"错误: 存档数据行数不匹配。预期 {settings.BOARD_ROWS}，实际 {len(saved_grid_data) if isinstance(saved_grid_data, list) else '非列表'}。清空拼盘。")
+             self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
+             self.all_pieces_group.empty()
+             return # 尺寸不匹配，加载失败
+
+        # 清空当前的网格和 Sprite Group
+        self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
+        self.all_pieces_group.empty()
+
+        pieces_added_count = 0
+        for r in range(settings.BOARD_ROWS):
+            if not isinstance(saved_grid_data[r], list) or len(saved_grid_data[r]) != settings.BOARD_COLS:
+                 print(f"错误: 存档数据第 {r} 行列数不匹配。预期 {settings.BOARD_COLS}，实际 {len(saved_grid_data[r]) if isinstance(saved_grid_data[r], list) else '非列表'}。该行加载失败。")
+                 # 清空该行，避免使用无效数据
+                 self.grid[r] = [None for _ in range(settings.BOARD_COLS)]
+                 continue # 处理下一行
+
+            for c in range(settings.BOARD_COLS):
+                piece_info = saved_grid_data[r][c]
+                if piece_info is not None:
+                    # 如果槽位不是空的，创建 Piece 对象
+                    try:
+                        img_id = piece_info['id']
+                        orig_r = piece_info['orig_r']
+                        orig_c = piece_info['orig_c']
+
+                        # 从 ImageManager 获取碎片 surface
+                        # 这里需要确保 ImageManager 已经加载了该图片的碎片 surface
+                        # ImageManager._load_and_process_single_image(img_id) # 可以在这里强制加载，但可能阻塞
+                        # 更好的做法是依赖 ImageManager 在初始化时加载，并在 Board 初始化前完成
+                        # 如果碎片surface确实没有加载，pieces_surfaces[img_id] 可能不存在或不完整
+                        if img_id not in self.image_manager.pieces_surfaces or \
+                           self.image_manager.pieces_surfaces.get(img_id) is None or \
+                           (orig_r, orig_c) not in self.image_manager.pieces_surfaces[img_id]:
+                             print(f"警告: 存档碎片图片ID {img_id}, 原始 ({orig_r},{orig_c}) 的 surface 未加载。槽位 ({r},{c}) 将为空。") # Debug
+                             self.grid[r][c] = None # 碎片 surface 未加载，该槽位留空
+                             continue # 跳过创建 Piece 对象
+
+                        piece_surface = self.image_manager.pieces_surfaces[img_id][(orig_r, orig_c)]
+
+                        # 创建 Piece 对象，设置其原始信息和当前网格位置
+                        piece = Piece(piece_surface, img_id, orig_r, orig_c, r, c)
+                        self.grid[r][c] = piece
+                        self.all_pieces_group.add(piece) # 添加到 Sprite Group
+                        pieces_added_count += 1
+
+                    except (KeyError, TypeError, ValueError) as e:
+                        print(f"错误: 加载存档碎片信息 ({piece_info}) 异常: {e}. 槽位 ({r},{c}) 将为空。") # Debug
+                        self.grid[r][c] = None # 存档数据格式错误，该槽位留空
+                    except Exception as e:
+                        print(f"错误: 创建存档碎片对象异常: {e}. 槽位 ({r},{c}) 将为空。") # Debug
+                        self.grid[r][c] = None # 其他未知错误，该槽位留空
+                else:
+                    # 槽位是空的 (None)，grid[r][c] 已经是 None 了，无需操作
+                    pass
+
+        print(f"从存档加载了 {pieces_added_count} 个碎片到拼盘。") # Debug
+        # Note: 如果 pieces_added_count < total_required_pieces，拼盘将会有空位，这是正常的。
 
 
     def fill_initial_pieces(self):
@@ -97,8 +172,8 @@ class Board:
         只会交换在 BOARD_STATE_PLAYING 状态下。
 
         Args:
-            pos1_grid (tuple): 第一个碎片的网格坐标 (row, col)
-            pos2_grid (tuple): 第二个碎片的网格坐标 (row, col)
+            pos1_grid (tuple): 第一个碎片的网格坐标 (行, 列)
+            pos2_grid (tuple): 第二个碎片的网格坐标 (行, 列)
 
         Returns:
             bool: True 如果交换成功，False 如果交换失败或当前Board状态不允许交换。
@@ -144,7 +219,7 @@ class Board:
 
 
     def select_piece(self, piece):
-        """选中一个碎片 (用于点击交换模式)"""
+        """选中一个碎片 (用于点击交换模式)。"""
         if self.current_board_state != settings.BOARD_STATE_PLAYING:
              return # 只在PLAYING状态下允许选中
 
@@ -163,14 +238,14 @@ class Board:
 
 
     def unselect_piece(self):
-        """取消选中状态"""
+        """取消选中状态。"""
         self.selected_piece = None
         self.selection_rect = None # 移除选中高亮框
         # print("取消选中碎片。") # 调试信息
 
 
     def start_dragging(self, piece):
-        """开始拖拽一个碎片"""
+        """开始拖拽一个碎片。"""
         if self.current_board_state != settings.BOARD_STATE_PLAYING:
              return # 只在PLAYING状态下允许拖拽
 
@@ -183,7 +258,7 @@ class Board:
 
 
     def stop_dragging(self):
-        """停止拖拽"""
+        """停止拖拽当前碎片。"""
         if self.dragging_piece:
             # print(f"停止拖拽碎片: 图片ID {self.dragging_piece.original_image_id}, 当前位置 ({self.dragging_piece.current_grid_row},{self.dragging_piece.current_grid_col})") # 调试信息
             # 将碎片放回其当前网格位置的精确屏幕坐标 (如果拖拽时位置有偏移的话)
@@ -213,7 +288,7 @@ class Board:
             # 设置 Board 内部状态为图片完成，等待处理
             self.current_board_state = settings.BOARD_STATE_PICTURE_COMPLETED
             self._completed_image_id_pending_process = completed_image_id
-            # self._completed_area_start_pos 已在 check_completion 中记录
+            # _completed_area_start_pos 已在 check_completion 中记录
 
             # 停止当前可能的交互 (取消选中，停止拖拽)
             self.unselect_piece()
@@ -233,37 +308,39 @@ class Board:
 
     def check_completion(self):
         """
-        检查拼盘中是否存在一个完整的 5x9 图片块。
+        检查拼盘中是否存在一个完整的 5列 x 9行 图片块。
         返回已完成的图片ID，如果没有则返回None。
         如果找到，记录完成区域的左上角位置在 self._completed_area_start_pos。
         """
-        # 遍历所有可能的 5x9 块的左上角起始点
+        # 遍历所有可能的 5列 x 9行 图片块的左上角起始点
         # 物理板子是 9行 x 16列
-        # 逻辑图片是 5行 x 9列
-        # 起始行的范围: 从 0 到 BOARD_ROWS - IMAGE_LOGIC_ROWS (9 - 5 = 4)。所以是 0, 1, 2, 3, 4
-        # 起始列的范围: 从 0 到 BOARD_COLS - IMAGE_LOGIC_COLS (16 - 9 = 7)。所以是 0, 1, 2, 3, 4, 5, 6, 7
-        for start_row in range(settings.BOARD_ROWS - settings.IMAGE_LOGIC_ROWS + 1):
-            for start_col in range(settings.BOARD_COLS - settings.IMAGE_LOGIC_COLS + 1):
+        # 逻辑图片是 9行 x 5列
+        # 起始行的范围: 从 0 到 BOARD_ROWS - IMAGE_LOGIC_ROWS (9 - 9 = 0)。范围是 0。所以只有 start_row = 0 是可能的。
+        # 起始列的范围: 从 0 到 BOARD_COLS - IMAGE_LOGIC_COLS (16 - 5 = 11)。范围是 0 到 11。
+        for start_row in range(settings.BOARD_ROWS - settings.IMAGE_LOGIC_ROWS + 1): # 范围基于新的 IMAGE_LOGIC_ROWS=9
+            for start_col in range(settings.BOARD_COLS - settings.IMAGE_LOGIC_COLS + 1): # 范围基于新的 IMAGE_LOGIC_COLS=5
 
-                # 获取该 5x9 区域左上角的碎片
+                # 获取该 5列 x 9行 区域左上角的碎片
                 top_left_piece = self.grid[start_row][start_col]
 
-                # 如果左上角没有碎片，或者碎片的原始位置不是逻辑上的 (0,0)，则不可能从这里开始一个完整的图片
+                # 如果左上角没有碎片，或者碎片的原始位置不是逻辑上的 (0,0)，
+                # 它就不可能是一个完整图片块的起始。
+                # Original row/col 是碎片在逻辑上的 9x5 图片网格中的原始位置。
                 if top_left_piece is None or top_left_piece.original_row != 0 or top_left_piece.original_col != 0:
                     continue # 检查下一个可能的起始位置
 
-                # 确定要检查的图片ID
+                # 确定要检查的目标图片ID
                 target_image_id = top_left_piece.original_image_id
                 is_complete = True # 假设这个区域是一个完整的图片块
 
-                # 遍历这个 5x9 区域内的所有位置 (相对于起始点的偏移 dr, dc)
-                for dr in range(settings.IMAGE_LOGIC_ROWS): # 0 to 4
-                    for dc in range(settings.IMAGE_LOGIC_COLS): # 0 to 8
-                        current_row = start_row + dr
-                        current_col = start_col + dc
-                        # 确保在板子范围内检查
+                # 遍历这个 9行 x 5列 区域内的所有位置 (相对于起始点的偏移 dr, dc)
+                for dr in range(settings.IMAGE_LOGIC_ROWS): # 遍历逻辑行 (0 to 8)
+                    for dc in range(settings.IMAGE_LOGIC_COLS): # 遍历逻辑列 (0 to 4)
+                        current_row = start_row + dr # 对应的物理行
+                        current_col = start_col + dc # 对应的物理列
+                        # 确保检查在板子范围内 (考虑到外层循环的范围限制，这通常为真)
                         if not (0 <= current_row < settings.BOARD_ROWS and 0 <= current_col < settings.BOARD_COLS):
-                            is_complete = False # 区域超出版子范围 (理论上不会发生，因为外层循环已限制)
+                            is_complete = False # 区域超出版子范围 (不应该发生)
                             break
                         current_piece = self.grid[current_row][current_col]
 
@@ -273,6 +350,7 @@ class Board:
                             break # 该块不完整，跳出内层循环
 
                         # 检查碎片的原始信息是否与目标图片ID和预期的原始位置匹配
+                        # 位于 (current_row, current_col) 的碎片应该是逻辑上原始位于 (dr, dc) 的碎片
                         if (current_piece.original_image_id != target_image_id or
                             current_piece.original_row != dr or
                             current_piece.original_col != dc):
@@ -284,7 +362,7 @@ class Board:
 
                 # 如果内层循环都通过，说明找到了一个完整的图片块
                 if is_complete:
-                    # 在返回图片ID之前，先记录这个完成的区域，以便后续移除
+                    # 在返回图片ID之前，记录这个完成的区域的左上角位置
                     self._completed_area_start_pos = (start_row, start_col)
                     return target_image_id # 返回完成的图片ID
 
@@ -343,18 +421,20 @@ class Board:
 
         start_row, start_col = self._completed_area_start_pos
         completed_image_id = self._completed_image_id_pending_process
-        # print(f"移除图片 {completed_image_id} 在 ({start_row},{start_col}) 开始的 5x9 区域碎片...") # Debug
+        # print(f"Removing pieces for image {completed_image_id} starting at ({start_row},{start_col}) (9x5 area)...") # Debug
 
         pieces_to_remove_list = [] # 收集要移除的碎片对象
 
-        for dr in range(settings.IMAGE_LOGIC_ROWS):
-            for dc in range(settings.IMAGE_LOGIC_COLS):
-                r = start_row + dr
-                c = start_col + dc
+        # 遍历要移除的 9行 x 5列 区域 based on the logical image dimensions
+        for dr in range(settings.IMAGE_LOGIC_ROWS): # 逻辑行 (0 to 8)
+            for dc in range(settings.IMAGE_LOGIC_COLS): # 逻辑列 (0 to 4)
+                r = start_row + dr # 对应的物理行
+                c = start_col + dc # 对应的物理列
                 # 确保坐标在板子范围内
                 if 0 <= r < settings.BOARD_ROWS and 0 <= c < settings.BOARD_COLS:
                     piece_to_remove = self.grid[r][c]
                     # 再次检查碎片是否属于当前完成的图片 (安全检查)
+                    # 检查原始行/列是否与逻辑区域的偏移匹配
                     if piece_to_remove and piece_to_remove.original_image_id == completed_image_id and \
                        piece_to_remove.original_row == dr and piece_to_remove.original_col == dc:
                          pieces_to_remove_list.append(piece_to_remove)
@@ -440,30 +520,55 @@ class Board:
 
 
     def draw(self, surface):
-        """在指定的surface上绘制拼盘中的所有碎片和选中效果"""
+        """在指定的surface上绘制拼盘中的所有碎片、选中效果和 debug 信息。"""
         # 绘制所有非拖拽中的碎片
-        # 使用 Sprite Group 的 draw 方法绘制所有碎片，除了正在拖拽的那个
-        # 先将拖拽碎片临时从 group 中移除，绘制完 group 后再绘制拖拽碎片，确保其在最上层
+        # Temporarily remove the dragging piece from the group to draw it on top later
         if self.dragging_piece and self.dragging_piece in self.all_pieces_group:
              self.all_pieces_group.remove(self.dragging_piece)
 
+        # 绘制所有在 Group 中的 Sprite
         self.all_pieces_group.draw(surface)
 
         # 绘制选中碎片的特殊效果 (例如绘制边框)
         if self.selection_rect:
-             # 确保选中高亮框的位置与选中碎片 rect 同步
+             # Ensure the highlight position is synced with the selected piece's rect
              if self.selected_piece:
                  border_thickness = 5
+                 # Update selection_rect position based on selected piece's current position
                  self.selection_rect.topleft = (self.selected_piece.rect.left - border_thickness, self.selected_piece.rect.top - border_thickness)
-             pygame.draw.rect(surface, settings.HIGHLIGHT_COLOR, self.selection_rect, 5) # 绘制边框，最后一个参数是线条宽度
+             # Draw the selection border
+             pygame.draw.rect(surface, settings.HIGHLIGHT_COLOR, self.selection_rect, 5) # Draw border with thickness=5
 
 
         # 在最后绘制正在拖拽的碎片，使其显示在最上层
         if self.dragging_piece:
-             # InputHandler 会在 MOUSEMOTION 中实时更新 dragging_piece.rect 的位置
+             # InputHandler updates the dragging_piece.rect.center in MOUSEMOTION
              self.dragging_piece.draw(surface)
 
-        # 绘制完成后，将拖拽碎片加回 group
+        # Draw debug piece info if the debug flag is set in Game
+        # Access Game instance and debug font via ImageManager
+        if hasattr(self.image_manager.game, 'display_piece_info') and self.image_manager.game.display_piece_info:
+             if hasattr(self.image_manager.game, 'font_debug') and self.image_manager.game.font_debug:
+                 debug_font = self.image_manager.game.font_debug
+                 # Iterate through the grid (or all pieces group) to draw text on each piece
+                 for piece in self.all_pieces_group: # Iterate through the group (more efficient if pieces are removed)
+                     # Format the debug text (Image ID, Original Row, Original Column)
+                     debug_text = f"ID:{piece.original_image_id} R:{piece.original_row} C:{piece.original_col}"
+                     # Render the text
+                     text_surface = debug_font.render(debug_text, True, settings.DEBUG_TEXT_COLOR)
+                     # Position the text, e.g., centered on the piece's rect
+                     text_rect = text_surface.get_rect(center=piece.rect.center)
+                     # Draw the text
+                     surface.blit(text_surface, text_rect)
+                 # Also draw info for the dragging piece if it's active and not in the group
+                 if self.dragging_piece and self.dragging_piece not in self.all_pieces_group:
+                     debug_text = f"ID:{self.dragging_piece.original_image_id} R:{self.dragging_piece.original_row} C:{self.dragging_piece.original_col}"
+                     text_surface = debug_font.render(debug_text, True, settings.DEBUG_TEXT_COLOR)
+                     text_rect = text_surface.get_rect(center=self.dragging_piece.rect.center)
+                     surface.blit(text_surface, text_rect)
+
+
+        # Add the dragging piece back to the group after drawing
         if self.dragging_piece and self.dragging_piece not in self.all_pieces_group:
              self.all_pieces_group.add(self.dragging_piece)
 
@@ -505,3 +610,32 @@ class Board:
                            settings.BOARD_ROWS * settings.PIECE_SIZE)
 
     # def _update_falling_pieces(self, dt): ... (已整合到 all_pieces_group.update)
+
+
+    def get_state(self):
+        """
+        获取当前拼盘的碎片布局状态。
+
+        Returns:
+            list: 一个二维列表，表示拼盘的网格布局。
+                  每个元素是一个字典 {'id': original_image_id, 'orig_r': original_row, 'orig_c': original_col}
+                  或者 None 表示空槽位。
+        """
+        saved_grid = []
+        for r in range(settings.BOARD_ROWS):
+            row_data = []
+            for c in range(settings.BOARD_COLS):
+                piece = self.grid[r][c]
+                if piece:
+                    # 保存碎片的原始信息，用于重建Piece对象
+                    piece_info = {
+                        'id': piece.original_image_id,
+                        'orig_r': piece.original_row,
+                        'orig_c': piece.original_col
+                    }
+                    row_data.append(piece_info)
+                else:
+                    row_data.append(None) # 保存 None 表示空槽位
+            saved_grid.append(row_data)
+
+        return saved_grid
