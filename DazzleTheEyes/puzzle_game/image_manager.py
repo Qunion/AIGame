@@ -27,23 +27,24 @@ class ImageManager:
         """
         self.game = game # 持有Game实例的引用
 
-        # 存储所有原始图片文件的信息 {id: filepath}
-        self.all_image_files = {} # {image_id: full_filepath}
-        self._scan_image_files() # 扫描图片文件，获取所有图片ID和路径
-
         # 存储加载和处理后的原始图片表面 {id: pygame.Surface} (用于图库大图)
         self.processed_full_images = {}
         # 存储生成的碎片表面 {id: { (row, col): pygame.Surface }}
         # 只有当图片的全部碎片成功加载或生成时，才会在这个字典中创建 entry
         self.pieces_surfaces = {}
-        # 存储每张图片的状态 {id: 'unentered' / 'unlit' / 'lit'}
-        self.image_status = {} # {image_id: status} - 状态在扫描时已初始化为'unentered'
         # 存储已点亮图片的完成时间 {id: timestamp} # 用于图库排序
         self.completed_times = {}
 
+        # 存储每张图片的状态 {id: 'unentered' / 'unlit' / 'lit'}
+        self.image_status = {} # {image_id: status} - 必须在扫描前初始化
+
+        # 存储所有原始图片文件的信息 {id: filepath}
+        self.all_image_files = {} # {image_id: full_filepath}
+        self._scan_image_files() # 扫描图片文件，获取所有图片ID和路径 (现在 self.image_status 已经存在)
+
         # 跟踪图片加载进度
         # _loaded_image_count 记录已**成功生成全部碎片**的图片数量 (即在 self.pieces_surfaces 中有完整 entry 的图片数量)
-        self._loaded_image_count = 0
+        self._loaded_image_count = 0 # 这个计数在 _update_loaded_count 中维护
         self._total_image_count = len(self.all_image_files) # 总共扫描到的图片数量
 
         # 跟踪下一批需要从哪张图片取碎片
@@ -93,7 +94,7 @@ class ImageManager:
         print(f"正在进行初始加载处理前 {len(images_to_process_ids)} 张图片...") # 调试信息
 
         for image_id in images_to_process_ids:
-             # 加载并处理单张图片，包括尝试从缓存加载，_load_and_process_single_image 会返回处理是否成功
+             # 加载并处理单张图片，包括尝试从缓存加载, _load_and_process_single_image 会返回处理是否成功
              self._load_and_process_single_image(image_id)
 
         # _loaded_image_count 会在 _load_and_process_single_image 内部根据处理成功情况更新。
@@ -155,9 +156,10 @@ class ImageManager:
                  return False # Loading failed
 
             # 处理图片尺寸 (缩放和居中裁剪)
-            target_width = settings.IMAGE_LOGIC_COLS * settings.PIECE_SIZE # 9 * 120 = 1080
-            target_height = settings.IMAGE_LOGIC_ROWS * settings.PIECE_SIZE # 5 * 120 = 600
-            target_size = (target_width, target_height)
+            # 目标尺寸是 settings.IMAGE_LOGIC_COLS * settings.PIECE_SIZE 宽 x settings.IMAGE_LOGIC_ROWS * settings.PIECE_SIZE 高
+            target_width = settings.IMAGE_LOGIC_COLS * settings.PIECE_SIZE # 5 * 120 = 600
+            target_height = settings.IMAGE_LOGIC_ROWS * settings.PIECE_SIZE # 9 * 120 = 1080
+            target_size = (target_width, target_height) # <-- 确认这里是 (600, 1080)
 
             processed_img_pg = self._process_image_for_pieces(original_img_pg, target_size)
 
@@ -320,7 +322,8 @@ class ImageManager:
         """
         将 Pygame Surface 缩放和居中裁剪到目标尺寸。
         如果 PIL 可用且需要，可以使用PIL进行更复杂的处理。
-        返回处理后的 Pygame Surface 或 None (如果失败)。
+        返回处理后的 Pygame Surface或None(如果失败)。
+        目标尺寸是 (IMAGE_LOGIC_COLS * PIECE_SIZE, IMAGE_LOGIC_ROWS * PIECE_SIZE)。
         """
         if not PIL_AVAILABLE:
             # print("警告: PIL未安装，使用Pygame处理图片。")
@@ -333,32 +336,33 @@ class ImageManager:
     def _process_image_with_pygame(self, image_surface_pg, target_size):
         """使用Pygame进行缩放和裁剪"""
         img_w, img_h = image_surface_pg.get_size()
-        target_w, target_h = target_size
+        target_w, target_h = target_size # <-- target_w = 600, target_h = 1080
 
         if img_h == 0 or target_h == 0:
              print("警告: 图像高度或目标高度为0，无法计算比例。")
              return None
 
         img_aspect = img_w / img_h
-        target_aspect = target_w / target_h
+        target_aspect = target_w / target_h # <-- 目标比例是 600 / 1080 = 9 / 16 (0.5625)
 
         # 计算缩放后的尺寸
-        if img_aspect > target_aspect:
-            # 原始图偏宽，按目标高度缩放，宽度会超出，需要裁剪两侧
-            scaled_h = target_h
-            scaled_w = int(scaled_h * img_aspect)
-        else:
-            # 原始图偏高或比例接近，按目标宽度缩放，高度会超出或刚好，需要裁剪上下
-            scaled_w = target_w
-            scaled_h = int(scaled_w / img_aspect)
+        # 保持原始比例，使其至少一个维度达到目标尺寸，另一个维度超出或刚好
+        if img_aspect > target_aspect: # 原始图偏宽 (例如 16:9), 按目标高度缩放，宽度会超出，需要裁剪两侧
+            scaled_h = target_h # 缩放后高度等于目标高度 (1080)
+            scaled_w = int(scaled_h * img_aspect) # 缩放后宽度按原始比例计算
+        else: # 原始图偏高 (例如 9:16) 或比例接近目标比例 (9:16), 按目标宽度缩放，高度会超出或刚好，需要裁剪上下
+            scaled_w = target_w # 缩放后宽度等于目标宽度 (600)
+            scaled_h = int(scaled_w / img_aspect) # 缩放后高度按原始比例计算
 
-        # 确保缩放后的尺寸有效且不小于目标尺寸 (理论上按一个维度缩放再裁剪不会小于目标尺寸)
+        # 确保缩放后的尺寸有效且不小于目标尺寸
+        # Check if scaled dimensions are large enough to contain the target area
         if scaled_w < target_w or scaled_h < target_h or scaled_w <= 0 or scaled_h <= 0:
-            print(f"警告: Pygame缩放尺寸计算异常，原始 {img_w}x{img_h}, 目标 {target_w}x{target_h}, 缩放 {scaled_w}x{scaled_h}. 返回None.")
-            return None # 返回 None 表示失败
+             print(f"警告: Pygame缩放尺寸计算异常，原始 {img_w}x{img_h}, 目标 {target_w}x{target_h}, 缩放 {scaled_w}x{scaled_h}. 返回None.")
+             return None # 返回 None 表示失败
 
 
         try:
+             # 缩放
              scaled_img_pg = pygame.transform.scale(image_surface_pg, (scaled_w, scaled_h))
         except pygame.error as e:
              print(f"警告: Pygame缩放失败: {e}。返回None。")
@@ -366,18 +370,23 @@ class ImageManager:
 
 
         # 计算裁剪区域
-        crop_x = (scaled_w - target_w) // 2
-        crop_y = (scaled_h - target_h) // 2
+        # 裁剪的尺寸就是目标尺寸
+        crop_width = target_w  # 裁剪宽度是目标宽度 (600)
+        crop_height = target_h # 裁剪高度是目标高度 (1080)
+        # 裁剪的起始点，使其居中
+        crop_x = (scaled_w - crop_width) // 2
+        crop_y = (scaled_h - crop_height) // 2
 
         # 确保裁剪区域在有效范围内
-        if crop_x < 0 or crop_y < 0 or crop_x + target_w > scaled_w or crop_y + target_h > scaled_h:
-             print(f"警告: Pygame裁剪区域 ({crop_x},{crop_y},{target_w},{target_h}) 超出缩放图片范围 ({scaled_w}x{scaled_h})，返回None。")
+        # 检查裁剪起始点是否非负，以及裁剪结束点是否在缩放图片范围内
+        if crop_x < 0 or crop_y < 0 or crop_x + crop_width > scaled_w or crop_y + crop_height > scaled_h:
+             print(f"警告: Pygame裁剪区域 ({crop_x},{crop_y},{crop_width},{crop_height}) 超出缩放图片范围 ({scaled_w}x{scaled_h})，返回None。")
              return None # 返回 None 表示失败
 
 
         try:
             # 使用 Pygame 的 subsurface 进行裁剪，并复制以获得独立的 surface
-            cropped_img_pg = scaled_img_pg.subsurface((crop_x, crop_y, target_w, target_h)).copy()
+            cropped_img_pg = scaled_img_pg.subsurface((crop_x, crop_y, crop_width, crop_height)).copy()
             return cropped_img_pg
         except ValueError as e:
              print(f"警告: Pygame subsurface 失败: {e}. 返回None。")
@@ -385,78 +394,93 @@ class ImageManager:
 
 
     def _process_image_with_pil(self, image_surface_pg, target_size):
-        """使用Pillow进行缩放和裁剪"""
+        """使用Pillow进行缩放和居中裁剪到目标尺寸。"""
         if not PIL_AVAILABLE:
              print("错误: PIL未安装，无法使用PIL处理图片。")
              return None # 理论上不会走到这里，因为外层已检查PIL_AVAILABLE
 
         try:
             # 将Pygame Surface转换为PIL Image
-            # Pygame Surface 的 get_bitsize() 可以用来确定模式
             mode = "RGBA" if image_surface_pg.get_flags() & pygame.SRCALPHA else "RGB"
-            # Ensure original surface is not locked
             try:
+                # Ensure original surface is not locked or has a compatible format
                 pil_img = Image.frombytes(mode, image_surface_pg.get_size(), pygame.image.tostring(image_surface_pg, mode))
-            except pygame.error as e:
-                 print(f"警告: Pygame tostring failed: {e}. Attempting alternative.")
-                 # Attempt alternative conversion if needed
+            except Exception as e:
+                 print(f"警告: Pygame tostring failed for PIL conversion: {e}. Returning None.")
                  # This might happen if surface is locked or has unusual format
-                 return None # Or try Pygame method
+                 return None # Fail conversion if tostring fails
 
             img_w, img_h = pil_img.size
-            target_w, target_h = target_size
+            target_w, target_h = target_size # target_w = 600, target_h = 1080
 
             if img_h == 0 or target_h == 0:
                  print("警告: 图像高度或目标高度为0，无法计算比例。")
                  return None
 
             img_aspect = img_w / img_h
-            target_aspect = target_w / target_h
+            target_aspect = target_w / target_h # 目标比例是 600 / 1080 = 9 / 16
 
-            if img_aspect > target_aspect:
-                # 原始图偏宽，按高缩放
-                scaled_h = target_h
-                scaled_w = int(scaled_h * img_aspect)
-            else:
-                # 原始图偏高，按宽缩放
-                scaled_w = target_w
-                scaled_h = int(scaled_w / img_aspect)
+            # 计算缩放后的尺寸
+            # Keep original aspect ratio, scale to fit or exceed one target dimension
+            if img_aspect > target_aspect: # Original is wider (e.g., 16:9), scale to target height
+                scaled_h = target_h # Scaled height equals target height (1080)
+                scaled_w = int(scaled_h * img_aspect) # Calculate scaled width based on original aspect
+            else: # Original is taller (e.g., 9:16) or similar aspect, scale to target width
+                scaled_w = target_w # Scaled width equals target width (600)
+                scaled_h = int(scaled_w / img_aspect) # Calculate scaled height based on original aspect
 
-            # PIL缩放 (使用高质量滤波器，如 LANCZOS)
-            # 确保缩放后的尺寸有效
-            if scaled_w <= 0 or scaled_h <= 0:
+            # Ensure scaled dimensions are valid and large enough for the target crop
+            # This check is simplified: make sure dimensions are positive and at least target size (should hold if logic above is right)
+            if scaled_w < target_w or scaled_h < target_h or scaled_w <= 0 or scaled_h <= 0:
                  print(f"警告: PIL缩放尺寸计算异常，原始 {img_w}x{img_h}, 目标 {target_w}x{target_h}, 缩放 {scaled_w}x{scaled_h}. 返回None.")
-                 return None
-
-            scaled_pil_img = pil_img.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS)
-
-            # 居中裁剪
-            crop_x = (scaled_w - target_w) // 2
-            crop_y = (scaled_h - target_h) // 2
-
-            # 确保裁剪区域在有效范围内
-            if crop_x < 0 or crop_y < 0 or crop_x + target_w > scaled_w or crop_y + target_h > scaled_h:
-                 print(f"警告: PIL裁剪区域 ({crop_x},{crop_y},{target_w},{target_h}) 超出缩放图片范围 ({scaled_w}x{scaled_h})，返回None。")
-                 return None
+                 return None # <--- **关键修改：异常时返回 None**
 
 
-            cropped_pil_img = scaled_pil_img.crop((crop_x, crop_y, crop_x + target_w, crop_y + target_h))
+            try:
+                 # PIL resize (using a high quality filter like LANCZOS)
+                 scaled_pil_img = pil_img.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS)
+            except Exception as e:
+                 print(f"警告: PIL缩放失败: {e}. 返回None.")
+                 return None # <--- **关键修改：缩放失败时返回 None**
+
+
+            # Calculate crop area
+            crop_width = target_w # Crop width is target width (600)
+            crop_height = target_h # Crop height is target height (1080)
+            # Calculate crop start coordinates to center the crop
+            crop_x = (scaled_w - crop_width) // 2
+            crop_y = (scaled_h - crop_height) // 2
+
+            # Ensure crop area is valid (non-negative start and end within scaled image bounds)
+            if crop_x < 0 or crop_y < 0 or crop_x + crop_width > scaled_w or crop_y + crop_height > scaled_h:
+                 print(f"警告: PIL裁剪区域 ({crop_x},{crop_y},{crop_width},{crop_height}) 超出缩放图片范围 ({scaled_w}x{scaled_h})，返回None。")
+                 return None # <--- **关键修改：裁剪区域无效时返回 None**
+
+            try:
+                 cropped_pil_img = scaled_pil_img.crop((crop_x, crop_y, crop_x + crop_width, crop_y + crop_height))
+            except Exception as e:
+                 print(f"警告: PIL裁剪失败: {e}. 返回None.")
+                 return None # <--- **关键修改：裁剪失败时返回 None**
+
 
             # 将PIL Image转换回Pygame Surface
-            # 确保模式兼容 Pygame
+            # Ensure mode is compatible with Pygame (RGBA)
             if cropped_pil_img.mode != 'RGBA':
                  # print(f"警告: PIL裁剪后模式为 {cropped_pil_img.mode}, 转换为 RGBA。")
                  cropped_pil_img = cropped_pil_img.convert('RGBA')
-            # fromstring 方法现在需要 size 参数
-            pygame_surface = pygame.image.fromstring(cropped_pil_img.tobytes(), cropped_pil_img.size, "RGBA")
-
-            return pygame_surface
+            # Use pygame.image.fromstring to create Pygame Surface
+            try:
+                 pygame_surface = pygame.image.fromstring(cropped_pil_img.tobytes(), cropped_pil_img.size, "RGBA")
+                 return pygame_surface # <--- 成功返回 Surface
+            except Exception as e:
+                 print(f"警告: PIL to Pygame conversion failed: {e}. 返回None.")
+                 return None # <--- 转换失败时返回 None
 
         except Exception as e:
-            print(f"错误: 使用PIL处理图片失败: {e}")
-            # 如果PIL处理失败，回退到Pygame处理 (可选，或者直接返回 None/空白Surface)
-            # return self._process_image_with_pygame(image_surface_pg, target_size) # 避免无限递归
-            return None # 直接返回 None 表示失败
+            # Catch any other unexpected exceptions during PIL processing
+            print(f"错误: 使用PIL处理图片时发生未知错误: {e}. 返回None.")
+            # Optionally fallback to Pygame processing here, but returning None is safer on failure
+            return None # <--- 捕获其他异常时返回 None
 
 
     # def _split_image_into_pieces(self, image_id, processed_image_surface): # Change signature
@@ -466,6 +490,8 @@ class ImageManager:
 
         Args:
             processed_image_surface (pygame.Surface): 已缩放和裁剪到目标尺寸的完整图片 Surface。
+                                                     预期尺寸为 (IMAGE_LOGIC_COLS * PIECE_SIZE, IMAGE_LOGIC_ROWS * PIECE_SIZE).
+                                                     即 (600, 1080)
 
         Returns:
             dict: { (row, col): pygame.Surface } 形式的碎片字典，或 None (如果分割失败或尺寸不匹配)。
@@ -473,8 +499,9 @@ class ImageManager:
         img_w, img_h = processed_image_surface.get_size()
         piece_w, piece_h = settings.PIECE_SIZE, settings.PIECE_SIZE
 
-        expected_w = settings.IMAGE_LOGIC_COLS * piece_w
-        expected_h = settings.IMAGE_LOGIC_ROWS * piece_h
+        expected_w = settings.IMAGE_LOGIC_COLS * piece_w # 5 * 120 = 600
+        expected_h = settings.IMAGE_LOGIC_ROWS * piece_h # 9 * 120 = 1080
+
         if img_w != expected_w or img_h != expected_h:
             # 这个检查理论上应该在 _process_image_for_pieces 中处理
             print(f"错误: 处理后的图片尺寸 {img_w}x{img_h} 与预期 {expected_w}x{expected_h} 不符。无法分割碎片。")
@@ -482,11 +509,14 @@ class ImageManager:
 
         pieces_dict = {} # 存储本次分割的碎片
 
-        for r in range(settings.IMAGE_LOGIC_ROWS):
-            for c in range(settings.IMAGE_LOGIC_COLS):
-                x = c * piece_w
-                y = r * piece_h
-                # 确保提取区域在图片范围内
+        # Iterate through the logical grid (rows x cols) to extract pieces
+        # Iterate through Rows first (0 to 8), then Columns (0 to 4)
+        for r in range(settings.IMAGE_LOGIC_ROWS): # Iterate through rows (0 to 8)
+            for c in range(settings.IMAGE_LOGIC_COLS): # Iterate through columns (0 to 4)
+                x = c * piece_w # Calculate x-coordinate for the piece (Col affects X)
+                y = r * piece_h # Calculate y-coordinate for the piece (Row affects Y)
+
+                # Ensure extraction area is within the image bounds
                 if x >= 0 and y >= 0 and x + piece_w <= img_w and y + piece_h <= img_h:
                     try:
                          # 从大图 surface 中提取碎片区域
@@ -541,8 +571,9 @@ class ImageManager:
 
         # 快速检查：是否存在所有预期的碎片文件
         all_files_exist_quick_check = True
-        for r in range(settings.IMAGE_LOGIC_ROWS):
-            for c in range(settings.IMAGE_LOGIC_COLS):
+        # Iterate through the logical grid (rows x cols)
+        for r in range(settings.IMAGE_LOGIC_ROWS): # Rows (0 to 8)
+            for c in range(settings.IMAGE_LOGIC_COLS): # Columns (0 to 4)
                  filename = settings.PIECE_FILENAME_FORMAT.format(image_id, r, c)
                  filepath = os.path.join(settings.GENERATED_PIECE_DIR, filename)
                  if not os.path.exists(filepath):
@@ -559,8 +590,9 @@ class ImageManager:
         potential_pieces_surfaces = {} # 临时存储加载的碎片surface
         loaded_count = 0
         try:
-            for r in range(settings.IMAGE_LOGIC_ROWS):
-                for c in range(settings.IMAGE_LOGIC_COLS):
+            # Iterate through the logical grid (rows x cols)
+            for r in range(settings.IMAGE_LOGIC_ROWS): # Rows (0 to 8)
+                for c in range(settings.IMAGE_LOGIC_COLS): # Columns (0 to 4)
                     filename = settings.PIECE_FILENAME_FORMAT.format(image_id, r, c)
                     filepath = os.path.join(settings.GENERATED_PIECE_DIR, filename)
                     piece_surface = pygame.image.load(filepath).convert_alpha()
@@ -660,8 +692,9 @@ class ImageManager:
             # 确保是完整图片所需的全部碎片
             if img_id in initial_fill_candidates_ids[:settings.INITIAL_FULL_IMAGES_COUNT]:
                  # print(f"正在获取图片 {img_id} 的所有碎片 ({settings.PIECES_PER_IMAGE} 个) 用于初始完整填充。") # Debug
-                 for r in range(settings.IMAGE_LOGIC_ROWS):
-                     for c in range(settings.IMAGE_LOGIC_COLS):
+                 # Iterate through the logical grid (rows x cols)
+                 for r in range(settings.IMAGE_LOGIC_ROWS): # Rows (0 to 8)
+                     for c in range(settings.IMAGE_LOGIC_COLS): # Columns (0 to 4)
                           # 确保碎片surface存在
                           piece_surface = self.pieces_surfaces[img_id][(r, c)] # 此时pieces_surfaces[img_id] guaranteed non-None and full
                           # 创建Piece对象，初始网格位置先填 -1,-1，Board后续会随机分配
