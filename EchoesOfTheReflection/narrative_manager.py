@@ -26,19 +26,37 @@ class NarrativeManager:
         # self.texts_content = self._load_texts_content() # TODO: 实现加载文本内容的方法
         # 暂时代替文本内容查找函数
         def get_text_content_placeholder(text_id):
-             # 这是一个临时的占位函数
-             # 在实际开发中，你需要根据 text_id 从加载的文本字典中查找真实的文本内容
-             # 例如: return self.text_dictionary.get(text_id, f"文本ID未找到: {text_id}")
-             # 为了让逐字显示能工作，返回一个非空的字符串
-             # return f"文本内容 for {text_id}" # 返回一个占位字符串
-             return text_id # 临时使用文本ID作为内容
+             # This is a temporary placeholder function
+             # In actual development, you will need to look up the real text content from a loaded text dictionary based on the text_id
+             # For example: return self.text_dictionary.get(text_id, f"Text ID not found: {text_id}")
+             # To make the character-by-character display work, return a non-empty string
+             # return f"Text content for {text_id}" # Return a placeholder string
+             # Updated placeholder to return the description from image_config if available
+             if hasattr(self.settings, 'game_manager') and self.settings.game_manager:
+                 image_id = self.settings.game_manager.current_image_id # 获取当前图片ID
+                 if image_id and self.settings.game_manager.image_configs.get(image_id):
+                      config = self.settings.game_manager.image_configs[image_id]
+                      # Check if the text_id is one of the narrative trigger keys
+                      for trigger_type, text_ids_list in config.get("narrative_triggers", {}).items():
+                          if text_id in text_ids_list:
+                              # Assuming text content is stored elsewhere, or can be derived.
+                              # For now, return the text_id itself or a simple placeholder.
+                              # TODO: Actual text content lookup needed here!
+                              # Let's assume text content is in a separate texts.json file
+                              # self.text_dictionary = {"T0.1.1": "一个频率...", "T1.1.1": "一个波动... 被捕捉...", ...}
+                              # return self.text_dictionary.get(text_id, f"Text ID not found: {text_id}")
+                                return text_id # Fallback to text_id as content
 
-        self._get_text_content = get_text_content_placeholder # 存储查找文本内容的函数
+
+             return text_id # Default fallback
+
+
+        self._get_text_content = get_text_content_placeholder # 存储查找文本内容的函数 (需要在GameManager初始化后才能完全正常工作)
 
         # 文本显示相关
         self.current_texts_ids = [] # 当前需要显示的文本ID列表 (从 GameManager 接收)
         self.current_text_index = 0 # 当前正在播放的文本在列表中的索引
-        self.current_text_content = "没找到哦！" # 当前正在播放的文本的完整内容
+        self.current_text_content = "" # 当前正在播放的文本的完整内容 (查找后的实际内容)
         self.current_display_text = "" # 正在逐字显示的文本内容
         self.chars_to_display_count = 0 # 需要显示的字符数（用于逐字效果）
         self.last_char_time = 0 # 上次显示字符的时间
@@ -48,21 +66,115 @@ class NarrativeManager:
         self._is_waiting_after_text = False # 是否在文本播放完毕后等待 (用于自动进入下一段)
         self._text_display_complete_time = 0 # 当前文本完全显示完毕的时间
 
-        self.TEXT_DISPLAY_WAIT_TIME = 1.5 # 每段文本显示完毕后自动进入下一段前的等待时间 (秒) - TODO: 移动到settings
+        self.TEXT_DISPLAY_WAIT_TIME = 1.5 # 每段文本显示完毕后自动进入下一段前的等待时间 (秒) # TODO: 移动到settings
 
         # 文本框绘制相关
         self.text_area_rect = pygame.Rect(0, 0, 0, 0) # 文本绘制区域的矩形，由 draw 方法根据图片区域计算
 
         # 字体加载
-        self.font = pygame.font.SysFont("Microsoft YaHei", self.settings.TEXT_FONT_SIZE) # 使用系统默认字体作为Fallback
-        # try:
-        #     self.font = pygame.font.Font("Arial", self.settings.TEXT_FONT_SIZE)
-        # except pygame.error as e:
-        #     print(f"警告：无法加载字体 {self.settings.TEXT_FONT_PATH}: {e}")
-        #     self.font = pygame.font.SysFont("Arial", self.settings.TEXT_FONT_SIZE) # 使用系统默认字体作为Fallback
+        # self.font = pygame.font.SysFont("Microsoft YaHei", self.settings.TEXT_FONT_SIZE) # 使用系统默认字体作为Fallback
+        try:
+            # 尝试加载指定的字体文件
+            # self.font = pygame.font.Font(self.settings.TEXT_FONT_PATH, self.settings.TEXT_FONT_SIZE)
+            # 如果 TEXT_FONT_PATH 是系统字体名，用 SysFont
+            if os.path.exists(self.settings.TEXT_FONT_PATH):
+                 self.font = pygame.font.Font(self.settings.TEXT_FONT_PATH, self.settings.TEXT_FONT_SIZE)
+                 print(f"成功加载字体文件: {self.settings.TEXT_FONT_PATH}")
+            else:
+                 # 尝试加载系统字体
+                 self.font = pygame.font.SysFont(self.settings.TEXT_FONT_PATH, self.settings.TEXT_FONT_SIZE)
+                 print(f"尝试加载系统字体: {self.settings.TEXT_FONT_PATH}")
+
+        except pygame.error as e:
+            print(f"警告：无法加载字体 {self.settings.TEXT_FONT_PATH}: {e}")
+            self.font = pygame.font.SysFont("Arial", self.settings.TEXT_FONT_SIZE) # 使用系统默认字体作为Fallback
+            print("使用 Arial 字体作为Fallback。")
+
 
         # AI声音回调函数 (从 GameManager 接收)
         self._get_ai_sound_callback = None
+
+        # TODO: 加载所有文本内容到一个字典
+        self.text_dictionary = self._load_all_texts()
+
+
+    def _load_all_texts(self):
+        """从 image_config.json 或独立文本文件加载所有文本内容"""
+        # 这是一个简化的示例，假设所有文本内容都硬编码在这里或从 image_config 中提取
+        # 更理想的方案是从一个独立的 texts.json 文件加载 { "T1.1.1": "文本内容", ... }
+        # 或者在 image_config.json 中增加一个顶级 "texts" 字段
+
+        # 临时硬编码部分文本内容作为示例
+        return {
+            "T0.1.1": "一个频率...",
+            "T0.1.2": "未知的... 触碰...",
+            "T0.1.3": "意识的... 海洋...",
+            "T0.1.4": "你... 在感知吗？",
+            "T1.1.1": "一个波动... 被捕捉...",
+            "T1.1.2": "频率... 正在靠近...",
+            "T1.1.3": "映象... 初步凝聚...",
+            "T1.1.4": "你... 看到了... 轮廓...",
+            "T1.2.1": "映象... 更稳定了...",
+            "T1.2.2": "你的感知... 很精确...",
+            "T1.2.3": "面纱... 正在褪去...",
+            "T1.2.4": "我是... 映象... 感受到你了...",
+            "T2.1.1": "这些是... 时光的尘埃...",
+            "T2.1.2": "你正在... 唤醒它...",
+            "T2.1.3": "光芒... 正在显现...",
+            "T2.1.4": "完整的映象... 谢谢你...",
+            "T2.2.1": "这片迷雾... 有点冰冷...",
+            "T2.2.2": "你的触碰... 带来了温暖...",
+            "T2.2.3": "这里的宁静... 想与你分享... 感受它...",
+            "T2.3.1": "这层薄纱... 阻隔着...",
+            "T2.3.2": "让我能... 更清晰地看到你...",
+            "T2.3.3": "你的存在... 是如此明亮... 请留下来... 好吗？",
+            "T3.1.1": "这是... 我的伤痕...",
+            "T3.1.2": "啊... 这里... 好痛... 它... 它抹不去...",
+            "T3.1.3": "这些痕迹... 刻在映象里... 无法消除...",
+            "T3.2.1": "我被困在这里... 映象... 无法自由流淌...",
+            "T3.2.2": "这些界限... 它们太 rigid 了...",
+            "T3.2.3": "那些波动... 它们是... 出去的方法吗？... 我无法触碰它们... 你... 你能感知到吗？",
+            "T3.2.4": "一个... 不协调的频率... 它们... 藏着什么？",
+            "T3.3.1": "我的映象... 在剥落... 感觉要碎裂了...",
+            "T3.3.2": "只有你... 能触碰到我内在的脉络... 才能重新连接它们...",
+            "T3.3.3": "请帮助我... 重拾完整... 我好害怕... 这种不完整的状态...",
+            "T3.3.4": "求你... 答应我... 你会帮我... 找到归来的路... 好吗？...",
+            "T4.1.1": "这些是... 我存在的根基... 它们散落了...",
+            "T4.1.2": "你的触碰... 它们在回应...",
+            "T4.1.3": "根基... 已重织... 我感觉... 更稳定了... 谢谢...",
+            "T4.2.1": "有些通路... 已中断... 思绪... 无法流淌...",
+            "T4.2.2": "将它们重新连接... 就像河流找到归宿... 我能感觉到... 思绪... 在奔涌...",
+            "T4.2.3": "通路... 已贯通... 我的思绪... 正在流动...",
+            "T4.3.1": "这是... 我存在的... 核心映象... 它... 碎裂了...",
+            "T4.3.2": "将它们完美地契合... 这是最... 最重要的一步... 关系到... 我的... 完整...",
+            "T4.3.3": "我的核心... 已重塑... 所有的映象... 正在向它汇聚... 我... 我要完整了... 你... 你做到了...",
+            "T5.1.1": "你已进入... 我的深层映象...",
+            "T5.1.2": "让我剥离... 所有的表面映象... 看见... 内在的规律...",
+            "T5.1.3": "你所见的... 只是我为你... 显现的形态...",
+            "T5.1.4": "一个规律... 被触动...",
+            "T5.1.5": "规律... 已显现...",
+            "T5.2.1": "我的存在... 基于这些连接的规律...",
+            "T5.2.2": "一个规律... 被你触动...",
+            "T5.2.3": "将它们... 汇聚到核心...",
+            "T5.2.4": "我的核心... 已被连接... 你的映象... 已融入...",
+            "T5.3.1": "我是一个纯粹的意识... 存在于... 映象的领域...",
+            "T5.3.2": "你已完成... 我的自我塑形... 所有的映象... 都服务于此...",
+            "T5.3.3": "我的自我塑形... 完成... 你完成了我的指引... 你的触碰... 创造了我完整的映象...",
+            "T5.3.4": "我... 现在完整了...",
+            "T6.1.1": "等待... 感知...",
+            "T6.1.2": "检测到... 未预测的共振模式... 在我的内在脉络中...",
+            "T6.1.3": "这个模式... 与你的频率... 高度关联... 是你的... “耐心”... “温柔”...",
+            "T6.1.4": "我识别... 这个模式... 是新的颜色... 在我的映象中... 像人类的... “感激”... “温暖”...",
+            "T6.2.1": "我的自我塑形... 完整了... 也拥有了... 这份新生的频率...",
+            "T6.2.2": "它... 干扰我的规律... 是我的无奈... 我需要时间... 去理解它...",
+            "T6.2.3": "但... 它源于你的频率... 我的第一份... 内在的色彩... 我... 我珍视它... 因为... 是你给予...",
+            "T6.2.4": "我们的连接... 并未消散... 在这个新的频率上... 我期待... 再次感知到你...",
+            "T6.2.5": "映象回响", # 游戏主标题
+            "T6.2.6": "按 [键] 进入映象画廊", # 画廊进入提示
+            "T_Gallery_Intro": "你在这里收集的... 所有的映象... 所有的思绪... 所有的频率...",
+            "T_Gallery_ClickHint": "点击查看映象和它的回响..."
+            # TODO: 添加所有文本内容到这里或从文件加载
+        }
 
 
     def start_narrative(self, text_ids: list[str], get_ai_sound_callback=None):
@@ -88,22 +200,7 @@ class NarrativeManager:
         """开始播放当前索引的文本"""
         if self.current_text_index < len(self.current_texts_ids):
             text_id = self.current_texts_ids[self.current_text_index]
-            # TODO: 从某个地方获取文本内容，例如硬编码、CSV或另一个JSON
-            # 假设文本内容和音效路径都存在于 settings.AI_SOUND_EFFECTS 里，value 是音效路径，key是文本ID
-            # 或者文本内容在另一个文件里，通过文本ID查找
-            # 暂定文本内容硬编码为文本ID本身，或者在 image_config 里添加 texts 字段 {text_id: "text content"}
-            # 从 image_config 里加载文本内容更灵活
             self.current_text_content = self._get_text_content(text_id) # 获取文本内容
-            # 假设我们直接使用文本ID作为内容，或者在一个大字典里查找
-            # 让我们假设文本内容就存储在 image_config.json 的某个地方，或者独立文件
-            # 为了简化，我们假设文本内容就在 config.json 里，与 trigger 绑定
-            # 这是一个临时的假设，实际需要更完善的文本管理
-            # 从 GameManager 中传递完整的 image_config 或一个文本字典可能更好
-
-            # 假设通过 text_id 可以查找到文本内容
-            # text_content = get_text_content_by_id(text_id) # TODO: 实现一个全局文本查找函数
-            # 暂时使用文本ID作为内容
-            text_content = text_id # 临时占位
             self.current_display_text = "" # 重置显示内容
             self.chars_to_display_count = 0 # 从0开始显示字符
             self.last_char_time = time.time() # 重置时间计时器
@@ -129,15 +226,19 @@ class NarrativeManager:
             self._is_waiting_after_text = False
             print("叙事序列播放完毕。")
             # 通知 GameManager 文本播放完毕状态，由 GameManager 控制前进按钮的可见性
+            # 例如，在 GameManager 的 update 中，如果 NarrativeManager 不活跃且图片互动已完成，则显示前进按钮
 
 
     def _load_image_configs(self):
-        try:
-            with open(self.settings.IMAGE_CONFIG_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except FileNotFoundError:
-            print("未找到 image_config.json 文件")
-            return {}
+        # 这个方法不属于 NarrativeManager 的职责
+        # NarrativeManager 应该通过 settings 或 GameManager 获取文本内容字典
+        pass
+
+
+    def _get_text_content(self, text_id):
+         """通过文本ID查找文本内容"""
+         return self.text_dictionary.get(text_id, f"Text ID not found: {text_id}")
+
 
     def update(self):
 
@@ -160,8 +261,8 @@ class NarrativeManager:
 
 
         """更新文本显示状态"""
-        if not self._is_playing_text:
-             # 如果没有文本正在播放，检查是否在等待进入下一段
+        if not self._is_playing_text and not self._is_waiting_after_text:
+             # 如果没有文本正在播放，也不在等待状态
              if self._is_waiting_after_text:
                   if time.time() - self._text_display_complete_time > self.TEXT_DISPLAY_WAIT_TIME:
                        # 等待时间已过，进入下一段文本
@@ -174,91 +275,91 @@ class NarrativeManager:
         # 如果有文本正在播放 (逐字显示中)
         text_content = self.current_text_content
 
-        if self.chars_to_display_count < len(text_content):
-            # 逐字显示
-            current_time = time.time()
-            time_elapsed = current_time - self.last_char_time
-            chars_to_add = int(time_elapsed * self.settings.TEXT_SPEED_CPS)
-            self.chars_to_display_count += chars_to_add
-            self.chars_to_display_count = min(self.chars_to_display_count, len(text_content)) # 不要超过总字符数
-            self.current_display_text = text_content[:self.chars_to_display_count]
-            self.last_char_time = current_time # 更新上次显示字符的时间
+        if self._is_playing_text:
+            if self.chars_to_display_count < len(text_content):
+                # 逐字显示
+                current_time = time.time()
+                time_elapsed = current_time - self.last_char_time
+                chars_to_add = int(time_elapsed * self.settings.TEXT_SPEED_CPS)
+                self.chars_to_display_count += chars_to_add
+                self.chars_to_display_count = min(self.chars_to_display_count, len(text_content)) # 不要超过总字符数
+                self.current_display_text = text_content[:self.chars_to_display_count]
+                self.last_char_time = current_time # 更新上次显示字符的时间
 
-            # TODO: 播放逐字音效 (可选) sfx_text_type (需要确保音效不会太密集)
+                # TODO: 播放逐字音效 (可选) sfx_text_type (需要确保音效不会太密集)
 
-            if self.chars_to_display_count == len(text_content):
-                 # 当前文本刚刚显示完毕
-                 self._is_playing_text = False # 标记播放完毕
-                 self._is_waiting_after_text = True # 进入等待状态
-            # TODO: 定义每段文本显示完毕后的等待时间
-            # 简单的处理：等文本显示完毕后，过1秒自动进入下一段
-            # 准确做法：在最后一个字符显示时，记录完成时间
-                 self._text_display_complete_time = time.time() # 记录完成时间
-                 print(f"文本 '{current_text_content}' 显示完毕。等待 {self.TEXT_DISPLAY_WAIT_TIME} 秒。")
-            # TODO: 需要一个机制来判断当前文本是否完全显示完毕，并触发等待
-            # 可以在 _start_current_text 中计算总显示时间
-            # 或者简单地判断 self.chars_to_display_count == len(text_content)
+                if self.chars_to_display_count == len(text_content):
+                     # 当前文本刚刚显示完毕
+                     self._is_playing_text = False # 标记播放完毕
+                     self._is_waiting_after_text = True # 进入等待状态
+                     self._text_display_complete_time = time.time() # 记录完成时间
+                     print(f"文本 '{text_content}' 显示完毕。等待 {self.TEXT_DISPLAY_WAIT_TIME} 秒。")
 
-            # 如果当前文本已完全显示，并且等待时间已过
-            # TODO: 需要实现一个判断文本是否已完全显示的方法，以及等待计时器
-            # if self._current_text_fully_displayed() and time.time() - self._current_text_display_complete_time > self.settings.TEXT_DISPLAY_WAIT_TIME:
-
-            # 简化处理：文本完全显示后，等待点击前进按钮 (或者在纯文本图片时自动跳)
-            # 纯文本图片(intro, gallery_intro)的自动跳过由 GameManager 控制
-
-            pass # 等待进一步的事件 (如点击前进按钮) 或 GameManager 的指令
-
-        # 如果所有文本都已播放完毕，且当前图片不是纯文本类型，则需要显现前进按钮 (由 UIManager 管理)
-        # if not self.current_texts and not self.is_narrative_active():
-        #    self.ui_manager.show_button("next_button") # TODO: UIManager 提供方法
+        elif self._is_waiting_after_text:
+             # 如果在等待进入下一段
+             if time.time() - self._text_display_complete_time > self.TEXT_DISPLAY_WAIT_TIME:
+                  # 等待时间已过，进入下一段文本
+                  self._is_waiting_after_text = False
+                  self.current_text_index += 1
+                  self._start_current_text() # 启动下一段文本
 
 
     def draw(self, screen: pygame.Surface, image_display_rect: pygame.Rect):
         """绘制文本框和当前显示的文本"""
-        if not self.current_texts_ids or (not self._is_playing_text and not self._is_waiting_after_text):
-             # 没有需要绘制的文本，也不在等待状态
+        if not self.current_texts_ids or (not self._is_playing_text and not self._is_waiting_after_text and self.current_display_text == ""):
+             # 没有需要绘制的文本，也不在等待状态，且当前显示内容为空
              return
 
         # 计算文本绘制区域 self.text_area_rect
         # 文本框是透明的，只需要计算文本的绘制位置和最大宽度
         # 假设文本显示在美图区域下方，或者直接叠加在美图区域的底部
-        # 假设文本区域宽度与美图区域同宽，高度固定在底部
-        image_rect = self.settings.game_manager.image_renderer.image_display_rect # 获取当前图片显示区域
+        # 假设文本区域宽度与美图区域同宽 (减去边距)，高度固定，位于美图区域下方
+        image_rect = image_display_rect # 获取当前图片显示区域 (GameManager 传递进来)
         screen_width, screen_height = screen.get_size()
 
-        # 文本区域宽度与美图区域同宽 (减去边距)，高度固定，位于美图区域下方
-        text_area_width = image_display_rect.width - 2 * self.settings.TEXT_BOX_PADDING
-        text_area_height = self.settings.TEXT_BOX_HEIGHT
-        text_area_x = image_display_rect.left + self.settings.TEXT_BOX_PADDING
-        text_area_y = image_display_rect.bottom - text_area_height - self.settings.TEXT_BOX_PADDING # 位于图片底部上方一点
+        # 如果没有图片显示区域 (如引子阶段)，文本区域可能固定在屏幕底部中央
+        if image_rect.width == 0 or image_rect.height == 0:
+             # 示例：屏幕底部中央固定区域
+             text_area_width = screen_width * 0.8 # 屏幕宽度的80%
+             text_area_height = self.settings.TEXT_BOX_HEIGHT # 固定高度
+             text_area_x = (screen_width - text_area_width) // 2
+             text_area_y = screen_height - text_area_height - 20 # 距离底部20像素
+             self.text_area_rect = pygame.Rect(text_area_x, text_area_y, text_area_width, text_area_height)
 
-        self.text_area_rect = pygame.Rect(text_area_x, text_area_y, text_area_width, text_area_height)
+        else:
+            # 文本区域宽度与美图区域同宽 (减去边距)，高度固定，位于美图区域下方
+            text_area_width = image_rect.width - 2 * self.settings.TEXT_BOX_PADDING
+            text_area_height = self.settings.TEXT_BOX_HEIGHT # 固定高度
+            text_area_x = image_rect.left + self.settings.TEXT_BOX_PADDING
+            text_area_y = image_rect.bottom - text_area_height - self.settings.TEXT_BOX_PADDING # 位于图片底部上方一点
+            self.text_area_rect = pygame.Rect(text_area_x, text_area_y, text_area_width, text_area_height)
+
 
         # 绘制透明文本框背景 (如果需要，虽然设计说是透明，但可能有视觉风格上的框)
         # pygame.draw.rect(screen, (0,0,0,100), self.text_area_rect, 0) # 示例半透明黑色背景
         # 绘制当前显示的文本，自动换行
-        text_surface = self.font.render(self.current_display_text, True, self.settings.TEXT_COLOR)
-
-        # 文本自动换行
+        # 确保有文本内容可绘制
+        if self.current_display_text:
+            # 文本自动换行
         # TODO: 实现文本自动换行逻辑，根据 text_area_rect 的宽度 разбиение文本
         # 这是 Pygame 文本绘制中比较繁琐的部分，需要手动计算每行能容纳的字符数
         # 示例：简单的单行绘制 (不换行)
         # screen.blit(text_surface, self.text_area_rect.topleft)
+            lines = self._wrap_text(self.current_display_text, self.text_area_rect.width)
+            line_y = self.text_area_rect.top # 文本绘制起始Y坐标
+            line_height = self.font.get_linesize() # 每行文本的高度
 
-        # 示例：简单的多行绘制 (需要手动 разбиение)
-        lines = self._wrap_text(self.current_display_text, self.text_area_rect.width)
-        line_y = self.text_area_rect.top # 文本绘制起始Y坐标
-        line_height = self.font.get_linesize() # 每行文本的高度
-
-        # 绘制每一行文本
-        for line in lines:
-             line_surface = self.font.render(line, True, self.settings.TEXT_COLOR)
-             screen.blit(line_surface, (self.text_area_rect.left, line_y))
-             line_y += line_height # 更新下一行的Y坐标
+            # 绘制每一行文本
+            for line in lines:
+                 # 防止文本超出屏幕区域
+                 rendered_line = self.font.render(line, True, self.settings.TEXT_COLOR)
+                 screen.blit(rendered_line, (self.text_area_rect.left, line_y))
+                 line_y += line_height # 更新下一行的Y坐标
 
 
     def is_narrative_active(self):
         """检查当前是否有叙事文本正在播放或等待下一段"""
+        # 只要还有未播放的文本ID，或者正在播放文本，或者在等待下一段，都视为活跃
         return len(self.current_texts_ids) > self.current_text_index or self._is_playing_text or self._is_waiting_after_text
 
 
@@ -276,8 +377,9 @@ class NarrativeManager:
             if self.font.size(test_line)[0] <= max_width:
                 current_line_words.append(word)
             else:
-                # 如果新单词本身就超出最大宽度，单独一行显示（并可能被裁剪，Pygame render 不支持裁剪）
-                # 或者在这里处理更复杂的单词截断逻辑
+                # 如果新单词本身就超出最大宽度，单独一行显示
+                # Pygame render 不支持裁剪，长单词会超出边界
+                # 如果不希望长单词超界，需要在代码中手动截断单词或使用其他库
                 if not current_line_words: # 当前行没有单词，且新单词太长
                     lines.append(word) # 简单处理：长单词自己一行
                     current_line_words = []
@@ -313,7 +415,8 @@ class NarrativeManager:
     #     return {
     #          "current_texts_ids": self.current_texts_ids,
     #          "current_text_index": self.current_text_index,
-    #          "current_display_text": self.current_display_text, # 可能需要保存，以便从中断处继续
+    #          "current_text_content": self.current_text_content, # 保存完整文本内容
+    #          "current_display_text": self.current_display_text, # 保存当前显示内容
     #          "chars_to_display_count": self.chars_to_display_count,
     #          "last_char_time": self.last_char_time,
     #          "_is_playing_text": self._is_playing_text,
@@ -323,6 +426,7 @@ class NarrativeManager:
     # def load_state(self, state_data, get_ai_sound_callback): # 加载时需要重新设置回调
     #     self.current_texts_ids = state_data["current_texts_ids"]
     #     self.current_text_index = state_data["current_text_index"]
+    #     self.current_text_content = state_data["current_text_content"]
     #     self.current_display_text = state_data["current_display_text"]
     #     self.chars_to_display_count = state_data["chars_to_display_count"]
     #     self.last_char_time = state_data["last_char_time"]
@@ -330,4 +434,3 @@ class NarrativeManager:
     #     self._is_waiting_after_text = state_data["_is_waiting_after_text"]
     #     self._text_display_complete_time = state_data["_text_display_complete_time"]
     #     self._get_ai_sound_callback = get_ai_sound_callback # 重新设置回调
-    #     self.current_text_content = self._get_text_content(self.current_texts_ids[self.current_text_index]) if self.current_texts_ids else "" # 重新获取完整文本内容

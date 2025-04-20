@@ -9,35 +9,48 @@ class UIElement:
         self.id = element_id
         self.image_path = image_path
         self.surface = None
+        self._original_position = position # 存储初始位置，用于相对定位
+        self.relative_to = relative_to # 定位参考系："image_area", "screen", "custom_rect_id"
+
         if image_path:
             try:
-                self.surface = pygame.image.load(image_path).convert_alpha()
-                self.rect = self.surface.get_rect(topleft=position)
-            except pygame.error as e:
-                print(f"警告：无法加载UI图片 {image_path}: {e}")
-                self.surface = None # 加载失败
+                # 不直接加载图片，只存储路径。在UIManager中统一加载和缓存
+                # self.surface = pygame.image.load(image_path).convert_alpha()
+                # self.rect = self.surface.get_rect(topleft=position)
+                self.rect = pygame.Rect(position[0], position[1], 0, 0) # 初始矩形大小为0，后续根据图片加载和定位计算
+            except Exception as e:
+                print(f"警告：UI图片路径 {image_path} 可能无效或加载问题: {e}")
+                self.surface = None # 加载失败标记
                 self.rect = pygame.Rect(position[0], position[1], 50, 20) # 占位矩形
 
-        else: # 没有图片，可能只是一个区域或文本容器
+
+        else: # 没有图片，可能只是一个区域或文本容器 (文本绘制由NarrativeManager处理)
              self.rect = pygame.Rect(position[0], position[1], 0, 0) # 初始为0尺寸，需要外部设置
 
         self._original_position = position # 存储初始位置，用于相对定位
         self.relative_to = relative_to # 定位参考系："image_area", "screen", "custom_rect_id"
         self.visible = False # 默认不可见
 
+
     def set_position(self, position: tuple[int, int]):
         """设置元素在屏幕上的绝对位置"""
         self.rect.topleft = position
 
-    def is_clicked(self, mouse_pos: tuple[int, int]) -> bool:
+    def is_clicked(self, mouse_pos: tuple[int: int]) -> bool: # 修正类型提示
         """检查点击是否在元素矩形内且可见"""
         return self.visible and self.rect.collidepoint(mouse_pos)
 
-    def draw(self, screen: pygame.Surface):
+    def draw(self, screen: pygame.Surface, ui_image_cache: dict): # 传递图片缓存
         """绘制UI元素"""
-        if self.visible and self.surface:
-            screen.blit(self.surface, self.rect.topleft)
-        # TODO: 可以添加绘制其他类型的UI元素，如进度条、文本框背景等
+        if self.visible and self.image_path: # 只有有图片路径的才尝试绘制
+            # 从缓存获取图片Surface
+            self.surface = ui_image_cache.get(self.image_path) # 在UIManager加载时填充缓存
+
+            if self.surface:
+                 # 绘制时才根据当前rect位置绘制
+                 screen.blit(self.surface, self.rect.topleft)
+
+            # TODO: 可以添加绘制其他类型的UI元素，如进度条、文本框背景等 (如果它们不是图片)
 
 
 class UIManager:
@@ -50,27 +63,32 @@ class UIManager:
         self.game_manager = game_manager # 需要访问 GameManager 的状态和方法
 
         self.ui_elements = {} # 字典 {element_id: UIElement instance}
+        self.ui_image_cache = {} # UI图片资源缓存 {image_path: Pygame Surface}
 
         # 加载和创建UI元素
         self._load_ui_elements()
+        # 加载UI图片资源到缓存
+        self._load_ui_images_to_cache()
 
         # 当前活动的UI集合 ID (例如 "game_ui", "gallery_ui")
         self.active_ui_set_id = None
+
+        # 初始设置UI集合
+        # self.set_ui_set_active("game_ui") # 由GameManager在_set_state中调用
 
 
     def _load_ui_elements(self):
         """加载所有预定义的UI元素"""
         # 加载通用UI元素
-        # 前进按钮
-        self._create_element("next_button", self.settings.UI_NEXT_BUTTON_IMAGE, (0, 0), relative_to="image_area") # 位置后续计算
-        # 画廊入口提示 (如果需要)
-        # self._create_element("gallery_hint", self.settings.UI_GALLERY_HINT_IMAGE, (0, 0), relative_to="screen") # 示例
+        # 前进按钮 - 示例位置 (相对于图片区域右下角偏移量)
+        self._create_element("next_button", self.settings.UI_NEXT_BUTTON_IMAGE, (-150, -80), relative_to="image_area_bottom_right") # 新增相对定位类型
 
         # 加载画廊UI元素
-        # 退出画廊按钮
-        self._create_element("gallery_exit_button", self.settings.UI_NEXT_BUTTON_IMAGE, (50, 50), relative_to="screen") # 示例位置
+        # 退出画廊按钮 - 示例位置 (相对于屏幕左上角偏移量)
+        self._create_element("gallery_exit_button", self.settings.UI_NEXT_BUTTON_IMAGE, (50, 50), relative_to="screen") # 示例位置，复用前进按钮图片
 
         # TODO: 加载其他UI元素，如进度条（可能是背景和前景两个图片）
+        # TODO: 添加画廊缩略图的点击区域定义（虽然绘制在GalleryManager，但点击检测可以在UIManager处理）
 
 
     def _create_element(self, element_id: str, image_path: str = None, position: tuple[int, int] = (0, 0), relative_to="image_area"):
@@ -78,6 +96,20 @@ class UIManager:
         element = UIElement(element_id, image_path, position, relative_to)
         self.ui_elements[element_id] = element
         return element
+
+    def _load_ui_images_to_cache(self):
+        """加载所有UI元素引用的图片资源到缓存"""
+        for element_id, element in self.ui_elements.items():
+            if element.image_path and element.image_path not in self.ui_image_cache:
+                if os.path.exists(element.image_path):
+                    try:
+                        self.ui_image_cache[element.image_path] = pygame.image.load(element.image_path).convert_alpha()
+                        # 可以在加载时就计算图片的原始尺寸，并更新元素的初始矩形大小
+                        element.rect.size = self.ui_image_cache[element.image_path].get_size()
+                    except pygame.error as e:
+                        print(f"警告：无法加载UI图片到缓存 {element.image_path}: {e}")
+                        self.ui_image_cache[element.image_path] = None # 加载失败
+
 
     def set_ui_set_active(self, ui_set_id: str):
         """
@@ -88,14 +120,14 @@ class UIManager:
         self.active_ui_set_id = ui_set_id
 
         # 根据集合ID设置元素的可见性
-        # 这是一个简化的示例，你可能需要更精细的控制
+        # 这是一个简化的示例，你可能需要更精细的控制哪些元素属于哪个集合
         for element_id, element in self.ui_elements.items():
              element.visible = False # 默认全部隐藏
 
         if ui_set_id == "game_ui":
-             # 游戏中的UI，例如前进按钮 (仅当需要时才可见，通过 set_element_visible 控制)
+             # 游戏中的UI，例如前进按钮 (仅当需要时才可见，由 update 方法或 NarrativeManager 控制)
              # self.set_element_visible("next_button", True) # 示例，实际由 GameManager/NarrativeManager 控制
-             pass # 游戏UI元素的可见性由其他逻辑控制
+             pass # 游戏UI元素的可见性由其他逻辑控制，但确保它们属于这个集合
 
         elif ui_set_id == "gallery_ui":
              # 画廊中的UI
@@ -120,17 +152,18 @@ class UIManager:
         """
         处理Pygame事件，检查UI元素点击。
         返回 True 如果事件被UI处理，否则返回 False。
+        image_display_rect: 当前美图显示区域 (可能不用于画廊UI)
         """
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mouse_pos = event.pos
             for element_id, element in self.ui_elements.items():
-                if element.is_clicked(mouse_pos):
+                if element.visible and element.rect.collidepoint(mouse_pos): # 只检查可见元素的点击
                     # 处理UI元素的点击事件
                     print(f"UI元素点击: {element_id}")
                     self._handle_ui_click(element_id, mouse_pos)
                     return True # 事件被UI处理，不再向底层传递
 
-        # TODO: 处理其他UI相关的事件，如鼠标悬停效果
+        # TODO: 处理其他UI相关的事件，如鼠标悬停效果 (可能需要遍历可见元素并检查鼠标位置)
 
         return False # 事件未被UI处理
 
@@ -143,22 +176,25 @@ class UIManager:
                  self.set_element_visible("next_button", False) # 隐藏前进按钮
                  self.game_manager._go_to_next_image() # 通知GameManager进入下一图
                  # TODO: 播放UI点击音效 sfx_ui_click
-                 self.game_manager.audio_manager.play_sfx("sfx_ui_click")
+                 if self.game_manager.audio_manager:
+                      self.game_manager.audio_manager.play_sfx("sfx_ui_click")
 
 
         elif element_id == "gallery_exit_button":
             # 点击退出画廊按钮
              self.game_manager.gallery_manager.exit_gallery() # 通知画廊管理器退出
              # TODO: 播放UI点击音效 sfx_ui_click
-             self.game_manager.audio_manager.play_sfx("sfx_ui_click")
+             if self.game_manager.audio_manager:
+                 self.game_manager.audio_manager.play_sfx("sfx_ui_click")
+
 
         # TODO: 添加其他UI元素的点击逻辑，例如菜单按钮、画廊缩略图（画廊缩略图点击由GalleryManager处理更合适）
 
 
-    def update(self, image_display_rect: pygame.Rect):
+    def update(self, current_image_display_rect: pygame.Rect):
         """更新UI元素状态 (例如位置计算，动画等)"""
-        # 根据当前的图片显示区域计算并设置相对定位UI元素的位置
-        self._calculate_ui_positions(image_display_rect)
+        # 根据当前的图片显示区域或屏幕尺寸计算并设置相对定位UI元素的位置
+        self._calculate_ui_positions(current_image_display_rect)
 
         # 控制前进按钮的可见性：当游戏状态，且当前图片的互动完成，且所有文本播放完毕时，前进按钮可见
         if self.game_manager.current_state == self.settings.STATE_GAME:
@@ -181,29 +217,42 @@ class UIManager:
         """绘制所有可见的UI元素"""
         for element_id, element in self.ui_elements.items():
             if element.visible:
-                element.draw(screen)
+                # 绘制UI元素，传递缓存
+                element.draw(screen, self.ui_image_cache)
 
 
-    def _calculate_ui_positions(self, image_display_rect: pygame.Rect):
+    def _calculate_ui_positions(self, current_image_display_rect: pygame.Rect):
         """
-        根据当前的图片显示区域计算并设置UI元素在屏幕上的绝对位置。
+        根据当前的图片显示区域或屏幕尺寸计算并设置UI元素在屏幕上的绝对位置。
         这个方法应该在窗口大小改变或图片加载时被调用。
         """
         screen_width, screen_height = self.screen.get_size()
+        screen_rect = self.screen.get_rect()
 
         for element_id, element in self.ui_elements.items():
+            # 获取元素的原始尺寸 (从加载的图片中获取)
+            element_width, element_height = element.rect.size
+
+            absolute_x, absolute_y = element.rect.topleft # 默认保持当前位置
+
             if element.relative_to == "image_area":
-                 # 相对于图片显示区域定位
-                 # element._original_position 是相对于图片区域左上角的偏移量 (像素或相对比例)
-                 # 假设 _original_position 是相对于图片区域左上角的像素偏移
-                 absolute_x = image_display_rect.left + element._original_position[0]
-                 absolute_y = image_display_rect.top + element._original_position[1]
+                 # 相对于图片显示区域左上角定位
+                 # element._original_position 是相对于图片区域左上角的偏移量 (像素)
+                 absolute_x = current_image_display_rect.left + element._original_position[0]
+                 absolute_y = current_image_display_rect.top + element._original_position[1]
                  element.set_position((absolute_x, absolute_y))
 
                  # TODO: 如果 _original_position 是相对比例 (0-1)，需要乘以 image_display_rect 的尺寸
-                 # absolute_x = image_display_rect.left + int(element._original_position[0] * image_display_rect.width)
-                 # absolute_y = image_display_rect.top + int(element._original_position[1] * image_display_rect.height)
+                 # absolute_x = current_image_display_rect.left + int(element._original_position[0] * current_image_display_rect.width)
+                 # absolute_y = current_image_display_rect.top + int(element._original_position[1] * current_image_display_rect.height)
                  # element.set_position((absolute_x, absolute_y))
+
+            elif element.relative_to == "image_area_bottom_right": # 新增相对定位类型
+                 # 相对于图片显示区域右下角定位
+                 # element._original_position 是相对于图片区域右下角的偏移量 (像素) (通常是负值)
+                 absolute_x = current_image_display_rect.right + element._original_position[0] - element_width # 减去元素自身宽度
+                 absolute_y = current_image_display_rect.bottom + element._original_position[1] - element_height # 减去元素自身高度
+                 element.set_position((absolute_x, absolute_y))
 
 
             elif element.relative_to == "screen":

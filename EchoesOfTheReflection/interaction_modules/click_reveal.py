@@ -1,7 +1,10 @@
-# src/interaction_modules/click_reveal.py
+# interaction_modules/click_reveal.py
 import pygame
+# 导入自定义模块 - 它们现在位于根目录
 from settings import Settings
-from image_renderer import ImageRenderer # 导入用于坐标转换
+from image_renderer import ImageRenderer
+from audio_manager import AudioManager # 需要AudioManager来播放音效
+
 
 class ClickReveal:
     """
@@ -17,12 +20,13 @@ class ClickReveal:
         """
         self.config = config
         self.image_renderer = image_renderer
-        self.settings = image_renderer.settings # 获取设置
+        self.settings: Settings = image_renderer.settings # 获取settings实例
+        self.audio_manager: AudioManager = self.settings.game_manager.audio_manager # 从settings获取GameManager，再获取AudioManager
 
         # 从config中加载点击点信息
-        # click_points 存储的是原始图片中的坐标或相对坐标
+        # click_points 存储的是原始图片中的像素坐标 [x, y]
         self.click_points_config = config.get("click_points", [])
-        # 记录每个点击点是否已被激活
+        # 记录每个点击点是否已被激活 {point_id: True/False}
         self.activated_points = {point["id"]: False for point in self.click_points_config}
 
         # 显影进度控制
@@ -35,22 +39,47 @@ class ClickReveal:
         # 标记是否已完成所有点击
         self._is_completed = False
 
-        # TODO: 初始化与点击点相关的视觉效果（例如，点击点的高亮表面）
+        # TODO: 初始化与点击点相关的视觉效果（例如，点击点的高亮表面或Rects）
         self._init_visual_elements()
+
 
     def _init_visual_elements(self):
         """初始化点击点的视觉表示"""
-        # 例如，为每个点击点创建一个小的 Surface 或 Rect，用于绘制高亮效果
-        self.click_point_surfaces = {}
-        for point_config in self.click_points_config:
-             # 这里需要根据点击点是像素坐标还是相对坐标来创建Surface，并考虑缩放
-             # 假设点击点配置的是相对于原始图片的像素坐标 [x, y]
-             # 你需要在 ImageRenderer 中实现一个方法来将原始图片坐标转换为屏幕坐标
-             # screen_pos = self.image_renderer.get_screen_coords_from_original(point_config["x"], point_config["y"])
-             # self.click_point_surfaces[point_config["id"]] = self._create_highlight_surface(screen_pos) # 创建一个小的 Surface 或Rect
+        # 例如，为每个点击点创建一个 Rect，用于绘制高亮效果和碰撞检测
+        # 这些Rect的位置需要根据 ImageRenderer 的 image_display_rect 动态计算
+        self.click_point_display_rects = {} # {point_id: Pygame.Rect}
+        self.click_point_highlight_surface = None # TODO: 加载点击点的高亮图片资源
 
-             # 最简单的方式是先用Rect占位，绘制时再根据实际显示区域计算位置
-             self.click_point_surfaces[point_config["id"]] = pygame.Rect(0,0, 20, 20) # 占位Rect
+        # TODO: 加载点击点高亮图片 (例如，一个小光点或圆圈)
+        # highlight_image_path = self.settings.EFFECTS_DIR + "click_highlight.png" # 示例资源路径
+        # if os.path.exists(highlight_image_path):
+        #     try:
+        #          self.click_point_highlight_surface = pygame.image.load(highlight_image_path).convert_alpha()
+        #     except pygame.error as e:
+        #          print(f"警告：无法加载点击点高亮图片 {highlight_image_path}: {e}")
+
+        # 初始计算一次点击点的显示Rects (在 resize 或 load_image 后需要重新计算)
+        # self._calculate_point_display_rects(self.image_renderer.image_display_rect)
+
+
+    def _calculate_point_display_rects(self, image_display_rect: pygame.Rect):
+        """根据当前图片显示区域，计算点击点在屏幕上的显示矩形"""
+        self.click_point_display_rects = {}
+        highlight_size = 40 # TODO: 点击点视觉表示的尺寸 (像素)
+
+        for point_config in self.click_points_config:
+            point_id = point_config["id"]
+            original_x = point_config["x"]
+            original_y = point_config["y"]
+
+            # 将原始图片坐标转换为屏幕坐标
+            screen_pos = self.image_renderer.get_screen_coords_from_original(original_x, original_y)
+
+            # 创建一个以屏幕坐标为中心的矩形作为点击区域和绘制区域
+            point_rect = pygame.Rect(0, 0, highlight_size, highlight_size)
+            point_rect.center = screen_pos
+
+            self.click_point_display_rects[point_id] = point_rect
 
 
     def handle_event(self, event, image_display_rect: pygame.Rect):
@@ -58,28 +87,23 @@ class ClickReveal:
         if self._is_completed: # 如果已完成，不再处理点击事件
             return
 
+        # 确保点击点显示Rects已计算 (在窗口resize或图片加载后需要)
+        if not self.click_point_display_rects:
+            self._calculate_point_display_rects(image_display_rect)
+
+
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # 左键点击
             mouse_pos = event.pos # 屏幕坐标
 
-            # 检查点击是否在图片的显示区域内
-            if image_display_rect.collidepoint(mouse_pos):
-                # 将鼠标点击的屏幕坐标转换回原始图片坐标或相对坐标，以便与配置的点击点比较
-                # relative_mouse_pos = self.image_renderer.get_relative_coords(mouse_pos) # 如果配置是相对坐标
-                # 或者 original_image_mouse_pos = self.image_renderer.get_original_image_coords(mouse_pos) # 如果配置是原始像素坐标
+            # 检查点击是否在图片的显示区域内 (可选，如果点击点只在图片内)
+            # if image_display_rect.collidepoint(mouse_pos):
 
-                # 示例：假设 config 中的点击点是相对于原始图片的像素坐标
-                original_image_mouse_pos = self.image_renderer.get_image_coords(mouse_pos) # 需要 ImageRenderer 实现此方法
-
-                for point_config in self.click_points_config:
-                    point_id = point_config["id"]
-                    # 检查点击是否在当前点击点区域内 (假设点击点是圆形的，用阈值判断距离)
-                    # 需要将 config 中的点坐标转换为实际的屏幕坐标进行碰撞检测
-                    point_screen_pos = self.image_renderer.get_screen_coords_from_original(point_config["x"], point_config["y"]) # 需要 ImageRenderer 实现此方法
-                    click_threshold = 30 # 点击容忍度像素
-
-                    if not self.activated_points[point_id] and \
-                       (mouse_pos[0] - point_screen_pos[0])**2 + (mouse_pos[1] - point_screen_pos[1])**2 <= click_threshold**2:
-
+            for point_config in self.click_points_config:
+                point_id = point_config["id"]
+                # 检查点击是否在当前点击点区域内 (使用计算好的显示Rect进行碰撞检测)
+                if not self.activated_points[point_id]:
+                    point_display_rect = self.click_point_display_rects.get(point_id)
+                    if point_display_rect and point_display_rect.collidepoint(mouse_pos):
                         self.activated_points[point_id] = True
                         self._on_point_activated(point_id)
                         break # 一次点击只激活一个点
@@ -92,6 +116,11 @@ class ClickReveal:
         if self._is_completed:
             return True, {} # 已完成，不再更新
 
+        # 确保点击点显示Rects已计算 (在窗口resize或图片加载后需要)
+        if not self.click_point_display_rects:
+            self._calculate_point_display_rects(image_display_rect)
+
+
         # 根据已激活的点击点数量更新显影进度
         activated_count = sum(self.activated_points.values())
         total_points = len(self.click_points_config)
@@ -102,27 +131,26 @@ class ClickReveal:
         else:
              target_progress = 1.0 # 没有点击点则直接完成
 
-        # 可以平滑过渡进度
-        # self.reveal_progress += (target_progress - self.reveal_progress) * 0.1 # 示例平滑过渡
-
-        # 或者直接设置进度
+        # 更新显影进度
         self.reveal_progress = target_progress
 
         # 通知 ImageRenderer 更新显影效果
-        self.image_renderer.update_effect("blur_reveal", self.reveal_progress) # TODO: 实现一个通用的显影效果更新
+        self.image_renderer.update_effect("blur_reveal", self.reveal_progress) # TODO: ImageRenderer需要实现一个通用的显影效果更新
+
 
         # 检查是否所有点击点都已激活
         if activated_count == total_points and total_points > 0:
              self._is_completed = True
-             print(f"Click Reveal for {self.config['file']} Completed!")
-             # 在这里触发 on_all_clicked 叙事事件
-             narrative_events = self._check_and_trigger_narrative_events()
+             print(f"Click Reveal for {self.config.get('file', self.config.get('description', 'current image'))} Completed!")
+             # 在这里触发 on_all_clicked 和 on_complete 叙事事件
+             narrative_events = self._check_and_trigger_narrative_events(check_complete=True) # 检查所有触发器，包括 complete
              return True, narrative_events # 返回完成状态和触发的叙事事件
         elif total_points == 0: # 没有点击点也视为完成
              self._is_completed = True
-             return True, self._check_and_trigger_narrative_events()
+             complete_narrative = self._check_and_trigger_narrative_events(check_complete=True)
+             return True, complete_narrative
 
-        # 检查是否触发了进度相关的叙事事件
+        # 检查是否触发了其他进度相关的叙事事件
         narrative_events = self._check_and_trigger_narrative_events()
 
         return False, narrative_events # 未完成
@@ -130,19 +158,28 @@ class ClickReveal:
     def draw(self, screen: pygame.Surface, image_display_rect: pygame.Rect):
         """绘制点击显现模块的视觉元素（例如，未激活点击点的高亮）"""
         if self._is_completed:
-             # 完成后可能绘制最终状态或无thing
+             # 完成后可能绘制最终状态或无 thing
+             # 最终显现效果由 ImageRenderer 绘制
              return
 
         # 绘制未激活点击点的高亮提示
+        # 确保点击点显示Rects已计算
+        if not self.click_point_display_rects:
+            self._calculate_point_display_rects(image_display_rect)
+
+
         for point_config in self.click_points_config:
             point_id = point_config["id"]
             if not self.activated_points[point_id]:
-                # 将点击点原始坐标转换为屏幕坐标进行绘制
-                point_screen_pos = self.image_renderer.get_screen_coords_from_original(point_config["x"], point_config["y"]) # 需要 ImageRenderer 实现此方法
-                # self._draw_highlight(screen, point_screen_pos) # 绘制高亮圆圈或图标
+                point_display_rect = self.click_point_display_rects.get(point_id)
+                if point_display_rect:
+                    # TODO: 绘制高亮圆圈或图标
+                    # if self.click_point_highlight_surface:
+                    #     screen.blit(self.click_point_highlight_surface, point_display_rect.topleft)
+                    # else:
+                    # 简单示例：绘制一个白点或圆圈
+                    pygame.draw.circle(screen, self.settings.WHITE, point_display_rect.center, 10) # 绘制一个白色圆圈
 
-                # 简单示例：绘制一个白点
-                pygame.draw.circle(screen, self.settings.WHITE, point_screen_pos, 10) # TODO: 替换为实际的高亮特效绘制
 
     def _on_point_activated(self, point_id):
         """处理单个点击点被激活后的逻辑"""
@@ -150,25 +187,34 @@ class ClickReveal:
         # 增加显影进度 (由 update 方法根据 activated_points 统一计算)
 
         # 触发点击反馈特效和音效
-        # self.image_renderer.trigger_effect(self.settings.CLICK_FEEDBACK_EFFECT_ID) # TODO: 实现通用点击反馈特效
-        self.audio_manager.play_sfx("sfx_click") # 示例通用点击音效
+        # TODO: 触发点击反馈特效
+        # if self.settings.CLICK_FEEDBACK_EFFECT_ID: # 示例通用点击反馈特效ID
+        #     self.image_renderer.trigger_effect(self.settings.CLICK_FEEDBACK_EFFECT_ID, self.click_point_display_rects.get(point_id).center) # 传递位置
 
-        # 检查是否触发了点击相关的叙事事件
-        # 这个检查统一放在 update 里处理，避免在事件处理函数中直接修改复杂状态和触发叙事
+        # 播放点击音效
+        if self.audio_manager:
+            self.audio_manager.play_sfx("sfx_click") # 示例通用点击音效ID
 
-    def _check_and_trigger_narrative_events(self) -> dict:
+        # 检查是否触发了点击相关的叙事事件 (这个检查统一放在 update 里处理)
+
+
+    def _check_and_trigger_narrative_events(self, check_complete=False) -> dict:
         """检查当前状态是否触发了叙事事件，并返回未触发过的事件字典"""
         triggered = {}
         config_triggers = self.config.get("narrative_triggers", {})
 
-        # 检查 OnClickAny (点击任意点)
-        if sum(self.activated_points.values()) > 0 and "on_click_any" in config_triggers:
+        # 检查 OnClickAny (点击任意点) - 第一次点击任意点后触发
+        if sum(self.activated_points.values()) == 1 and "on_click_any" in config_triggers: # 只有激活点数量从0变为1时触发
             event_id = "on_click_any"
             if event_id not in self._triggered_narrative_events:
                 triggered[event_id] = config_triggers[event_id]
                 self._triggered_narrative_events.add(event_id)
 
-        # 检查 OnClickSpecificPoint (点击特定点)
+        # 检查 OnClickSpecificPoint (点击特定点) - 每次点击一个特定点后触发 (如果配置了)
+        # 遍历所有点，检查刚刚被激活的点
+        # 需要一种方式判断点是否是“刚刚”被激活
+        # 可以在 _on_point_activated 中设置一个标志，然后在 update 中检查并清除
+        # 或者在 _check_and_trigger_narrative_events 中，将已检查的特定点击事件也添加到 _triggered_narrative_events
         for point_id, is_activated in self.activated_points.items():
              if is_activated:
                   event_id = f"on_click_point_{point_id}"
@@ -176,21 +222,21 @@ class ClickReveal:
                        triggered[event_id] = config_triggers[event_id]
                        self._triggered_narrative_events.add(event_id)
 
-        # 检查 OnAllClicked (所有点都已点击)
+
+        # 检查 OnAllClicked (所有点都已点击) - 只有当所有点都被激活时触发一次
         if all(self.activated_points.values()) and len(self.activated_points) > 0 and "on_all_clicked" in config_triggers:
             event_id = "on_all_clicked"
             if event_id not in self._triggered_narrative_events:
                 triggered[event_id] = config_triggers[event_id]
                 self._triggered_narrative_events.add(event_id)
 
-        # 检查 OnComplete (互动完成) - 这个通常在 GameManager._on_interaction_complete 里处理，但有些类型可能在模块内部触发
-        if self._is_completed and "on_complete" in config_triggers:
+        # 检查 OnComplete (互动完成) - 这个通常在 GameManager._on_interaction_complete 里处理
+        if check_complete and "on_complete" in config_triggers:
              event_id = "on_complete"
              if event_id not in self._triggered_narrative_events:
-                 # 注意：on_complete 可能包含多个文本，且在整个互动流程的最后触发
-                 # GameManager._on_interaction_complete 会确保它被调用，这里也可以触发
-                 # triggered[event_id] = config_triggers[event_id] # 示例
-                 pass # 统一在 GameManager 中处理 on_complete
+                 triggered[event_id] = config_triggers[event_id]
+                 self._triggered_narrative_events.add(event_id)
+
 
         # TODO: 检查进度相关的叙事事件 (例如，on_reveal_progress_50)
         # if self.reveal_progress >= 0.5 and "on_reveal_progress_50" in config_triggers:
@@ -202,17 +248,27 @@ class ClickReveal:
 
         return triggered
 
+    # 在窗口resize时，需要重新计算点击点在屏幕上的显示位置
+    def resize(self, new_width, new_height, image_display_rect: pygame.Rect):
+         """处理窗口大小改变事件，重新计算点击点位置"""
+         self._calculate_point_display_rects(image_display_rect)
+
+
     # TODO: 添加保存和加载模块状态的方法 (用于保存游戏进度)
     # def get_state(self):
     #     return {
-    #         "activated_points": self.activated_points,
-    #         "reveal_progress": self.reveal_progress,
-    #         "triggered_narrative_events": list(self._triggered_narrative_events)
+    #         "activated_points": self.activated_points, # 保存激活状态
+    #         "reveal_progress": self.reveal_progress, # 保存进度
+    #         "triggered_narrative_events": list(self._triggered_narrative_events) # 保存已触发事件
+    #         # _is_completed 可以从 activated_points 计算
     #     }
 
-    # def load_state(self, state_data):
+    # def load_state(self, state_data, image_display_rect: pygame.Rect):
     #     self.activated_points = state_data["activated_points"]
     #     self.reveal_progress = state_data["reveal_progress"]
     #     self._triggered_narrative_events = set(state_data["triggered_narrative_events"])
     #     self._is_completed = all(self.activated_points.values()) if self.activated_points else True # 重新计算完成状态
-    #     # TODO: 根据加载的状态更新视觉效果
+    #     # 需要在加载状态后重新计算点击点位置，因为 image_display_rect 可能变了
+    #     self._calculate_point_display_rects(image_display_rect)
+    #     # TODO: 根据加载的进度更新视觉效果
+    #     self.image_renderer.update_effect("blur_reveal", self.reveal_progress)
