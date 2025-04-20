@@ -17,12 +17,13 @@ BOARD_OFFSET_X = 0
 BOARD_OFFSET_Y = 0
 
 # 图片逻辑尺寸 (一张完整图片被分割成的网格尺寸)
-IMAGE_LOGIC_COLS = 9    # 完整图片的逻辑列数 (宽度方向)
-IMAGE_LOGIC_ROWS = 5    # 完整图片的逻辑行数 (高度方向)
+# 注意：这里是 5列 x 9行
+IMAGE_LOGIC_COLS = 5    # 完整图片的逻辑列数 (宽度方向的碎片数量)
+IMAGE_LOGIC_ROWS = 9    # 完整图片的逻辑行数 (高度方向的碎片数量)
 PIECES_PER_IMAGE = IMAGE_LOGIC_COLS * IMAGE_LOGIC_ROWS # 每张完整图片的碎片数量 (5*9=45)
 
 # 字体设置
-FONT_NAME = "Microsoft YaHei" # 主要游戏字体名称 (请确保系统中有此字体)
+FONT_NAME = "Microsoft YaHei" # 主要游戏字体名称 (使用系统字体名称)
 # 如果需要备用字体，可以添加 FONT_FALLBACK = None 或 "Arial"
 
 # 资源路径
@@ -34,7 +35,7 @@ REGENERATE_PIECES = 0 # 是否重新生成碎片：1-是，0-否。设置为0时
 # 生成的碎片存放目录
 GENERATED_PIECE_DIR = os.path.join(ASSETS_DIR, "pieces") + os.sep
 # 确保碎片目录存在
-os.makedirs(GENERATED_PIECE_DIR, exist_ok=True)
+os.makedirs(GENERATED_PIECE_DIR, exist_ok=True) # 修正了这里的 typo
 # 碎片文件命名格式，用于保存和加载
 PIECE_FILENAME_FORMAT = "image_{}_r{}_c{}.png" # 例如 image_1_r0_c0.png
 
@@ -53,7 +54,7 @@ BACKGROUND_LOAD_DELAY = 0.5 # 每批处理之间的最小延迟 (秒)，避免�
 MIN_LOADING_DURATION = 2.0 # 最小加载持续时间 (秒)
 
 # 加载界面图片文件列表 (从这里随机选择一张作为加载背景)
-LOADING_IMAGE_FILENAMES = ["loading_1.png", "loading_2.png", "loading_3.png", "loading_4.png", "loading_5.png"]
+LOADING_IMAGE_FILENAMES = ["loading_1.png", "loading_2.png", "loading_3.png", "loading_4.png", "loading_5.png"] # 请确保assets中有这些文件
 LOADING_IMAGE_PATHS = [os.path.join(ASSETS_DIR, f) for f in LOADING_IMAGE_FILENAMES]
 
 
@@ -63,16 +64,12 @@ LEFT_BUTTON_PATH = os.path.join(ASSETS_DIR, "left_button.png")
 RIGHT_BUTTON_PATH = os.path.join(ASSETS_DIR, "right_button.png")
 # 原始图片文件前缀, 如 image_1.png, image_2.png
 SOURCE_IMAGE_PREFIX = os.path.join(ASSETS_DIR, "image_")
-# 生成的碎片存放目录 (如果选择保存为文件)
-GENERATED_PIECE_DIR = os.path.join(ASSETS_DIR, "pieces") + os.sep
-# 确保碎片目录存在
-os.makedirs(GENERATED_PIECE_DIR, exist_ok=True)
 
 
 # 初始填充设置
 # 游戏开始时，拼盘中包含的完整图片数量和来自下一张图片的碎片数量
 INITIAL_FULL_IMAGES_COUNT = 3
-INITIAL_PARTIAL_IMAGE_PIECES_COUNT = 9
+INITIAL_PARTIAL_IMAGE_PIECES_COUNT = 9 # 确保初始碎片总数是 16*9=144
 # 初始碎片总数应为 BOARD_COLS * BOARD_ROWS
 EXPECTED_INITIAL_PIECE_COUNT = BOARD_COLS * BOARD_ROWS
 
@@ -107,8 +104,9 @@ GALLERY_THUMBNAIL_GAP_X = 20 # 缩略图水平间距
 GALLERY_THUMBNAIL_GAP_Y = 20 # 缩略图垂直间距
 # 计算缩略图宽度，考虑了窗口宽度、内边距和水平间距
 GALLERY_THUMBNAIL_WIDTH = (GALLERY_WIDTH - 2 * GALLERY_PADDING - (GALLERY_IMAGES_PER_ROW - 1) * GALLERY_THUMBNAIL_GAP_X) // GALLERY_IMAGES_PER_ROW
-# 保持原始图片逻辑比例 (宽度:高度 = 9:5) 来计算缩略图高度
-GALLERY_THUMBNAIL_HEIGHT = int(GALLERY_THUMBNAIL_WIDTH * (IMAGE_LOGIC_ROWS / IMAGE_LOGIC_COLS))
+# 保持原始图片逻辑比例 (宽度:高度 = 5:9) 来计算缩略图高度
+GALLERY_THUMBNAIL_HEIGHT = int(GALLERY_THUMBNAIL_WIDTH * (IMAGE_LOGIC_ROWS / IMAGE_LOGIC_COLS)) # 注意这里是 Rows / Cols
+
 GALLERY_SCROLL_SPEED = 30 # 图库滑动速度 (像素/帧)
 
 
