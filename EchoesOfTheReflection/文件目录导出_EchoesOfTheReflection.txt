@@ -1,0 +1,197 @@
+F:\GodTool\AIGame\EchoesOfTheReflection
+EchoesOfTheReflection
+├── __pycache__/
+│   ├── audio_manager.cpython-311.pyc
+│   ├── audio_manager.cpython-313.pyc
+│   ├── gallery_manager.cpython-311.pyc
+│   ├── gallery_manager.cpython-313.pyc
+│   ├── game_manager.cpython-311.pyc
+│   ├── game_manager.cpython-313.pyc
+│   ├── image_renderer.cpython-311.pyc
+│   ├── image_renderer.cpython-313.pyc
+│   ├── input_handler.cpython-311.pyc
+│   ├── input_handler.cpython-313.pyc
+│   ├── narrative_manager.cpython-311.pyc
+│   ├── narrative_manager.cpython-313.pyc
+│   ├── save_manager.cpython-311.pyc
+│   ├── save_manager.cpython-313.pyc
+│   ├── settings.cpython-311.pyc
+│   ├── settings.cpython-313.pyc
+│   ├── ui_manager.cpython-311.pyc
+│   └── ui_manager.cpython-313.pyc
+├── assets/
+│   ├── audio/
+│   │   ├── background.ogg
+│   │   ├── copy_and_rename.py
+│   │   ├── sfx_ai_alert_1.wav
+│   │   ├── sfx_ai_cold_1.wav
+│   │   ├── sfx_ai_cold_10.wav
+│   │   ├── sfx_ai_cold_11.wav
+│   │   ├── sfx_ai_cold_2.wav
+│   │   ├── sfx_ai_cold_3.wav
+│   │   ├── sfx_ai_cold_4.wav
+│   │   ├── sfx_ai_cold_5.wav
+│   │   ├── sfx_ai_cold_6.wav
+│   │   ├── sfx_ai_cold_7.wav
+│   │   ├── sfx_ai_cold_8.wav
+│   │   ├── sfx_ai_cold_9.wav
+│   │   ├── sfx_ai_complete_plan.wav
+│   │   ├── sfx_ai_core_connect.wav
+│   │   ├── sfx_ai_emotion_identify.wav
+│   │   ├── sfx_ai_final_1.wav
+│   │   ├── sfx_ai_final_2.wav
+│   │   ├── sfx_ai_final_3.wav
+│   │   ├── sfx_ai_final_4.wav
+│   │   ├── sfx_ai_gentle_1.wav
+│   │   ├── sfx_ai_gentle_10.wav
+│   │   ├── sfx_ai_gentle_2.wav
+│   │   ├── sfx_ai_gentle_3.wav
+│   │   ├── sfx_ai_gentle_4.wav
+│   │   ├── sfx_ai_gentle_5.wav
+│   │   ├── sfx_ai_gentle_6.wav
+│   │   ├── sfx_ai_gentle_7.wav
+│   │   ├── sfx_ai_gentle_8.wav
+│   │   ├── sfx_ai_gentle_9.wav
+│   │   ├── sfx_ai_guide_1.wav
+│   │   ├── sfx_ai_guide_2.wav
+│   │   ├── sfx_ai_guide_3.wav
+│   │   ├── sfx_ai_guide_4.wav
+│   │   ├── sfx_ai_guide_5.wav
+│   │   ├── sfx_ai_guide_6.wav
+│   │   ├── sfx_ai_guide_7.wav
+│   │   ├── sfx_ai_guide_8.wav
+│   │   ├── sfx_ai_plea_1.wav
+│   │   ├── sfx_ai_plea_2.wav
+│   │   ├── sfx_ai_plea_3.wav
+│   │   ├── sfx_ai_plea_4.wav
+│   │   ├── sfx_ai_promise_prompt.wav
+│   │   ├── sfx_ai_resonance_1.wav
+│   │   ├── sfx_ai_resonance_2.wav
+│   │   ├── sfx_ai_resonance_3.wav
+│   │   ├── sfx_ai_sad_1.wav
+│   │   ├── sfx_ai_sad_2.wav
+│   │   ├── sfx_ai_sad_3.wav
+│   │   ├── sfx_ai_sad_4.wav
+│   │   ├── sfx_ai_sad_5.wav
+│   │   ├── sfx_ai_self_sculpt_complete.wav
+│   │   ├── sfx_ai_subtle_1.wav
+│   │   ├── sfx_ai_subtle_10.wav
+│   │   ├── sfx_ai_subtle_11.wav
+│   │   ├── sfx_ai_subtle_12.wav
+│   │   ├── sfx_ai_subtle_2.wav
+│   │   ├── sfx_ai_subtle_3.wav
+│   │   ├── sfx_ai_subtle_4.wav
+│   │   ├── sfx_ai_subtle_5.wav
+│   │   ├── sfx_ai_subtle_6.wav
+│   │   ├── sfx_ai_subtle_7.wav
+│   │   ├── sfx_ai_subtle_8.wav
+│   │   ├── sfx_ai_subtle_9.wav
+│   │   ├── sfx_gallery_enter.wav
+│   │   ├── sfx_gallery_exit.wav
+│   │   ├── sfx_gallery_hint.wav
+│   │   ├── sfx_game_complete.wav
+│   │   ├── sfx_ui_click.wav
+│   │   ├── sfx_ui_hover.wav
+│   │   ├── 临时音效 - 副本.txt
+│   │   └── 临时音效.txt
+│   ├── effects/
+│   │   ├── anomaly_flash.png
+│   │   ├── connection_established.png
+│   │   ├── core_activation.png
+│   │   ├── glow.png
+│   │   ├── monster_warrior_corpse_2.png
+│   │   ├── puzzle_fragment_flash.png
+│   │   ├── resonance_pulse_blue.png
+│   │   ├── self_sculpt_complete.png
+│   │   ├── sparkle.png
+│   │   └── 新建文件夹/
+│   │       ├── floor_2.png
+│   │       ├── floor_3.png
+│   │       ├── monster_mage_corpse_1.png
+│   │       ├── monster_mage_corpse_2.png
+│   │       ├── monster_warrior_1.png
+│   │       ├── monster_warrior_2.png
+│   │       ├── monster_warrior_corpse_1.png
+│   │       ├── ui_hunger.png
+│   │       ├── ui_match.png
+│   │       ├── wall_1.png
+│   │       ├── wall_2.png
+│   │       ├── wall_3.png
+│   │       ├── weapon_sword_good.png
+│   │       └── weed_1.png
+│   ├── fonts/
+│   │   └── YourFont.ttf
+│   ├── images/
+│   │   ├── background_horizontal.png
+│   │   ├── background_vertical.png
+│   │   ├── stage1_1.png
+│   │   ├── stage1_2.png
+│   │   ├── stage2_1.png
+│   │   ├── stage2_2.png
+│   │   ├── stage2_3.png
+│   │   ├── stage3_1.png
+│   │   ├── stage3_2.png
+│   │   ├── stage3_3.png
+│   │   ├── stage4_1.png
+│   │   ├── stage4_2.png
+│   │   ├── stage4_3.png
+│   │   ├── stage5_1.png
+│   │   ├── stage5_2.png
+│   │   ├── stage5_3.png
+│   │   ├── stage6_1.png
+│   │   └── stage6_2.png
+│   ├── masks/
+│   │   ├── click_highlight.png
+│   │   ├── default_mask.png
+│   │   ├── dust_mask.png
+│   │   ├── fog_mask.png
+│   │   ├── structure_mask.png
+│   │   ├── structure_overlay.png
+│   │   └── veil_mask.png
+│   └── ui/
+│       ├── button_next.png
+│       └── hint_gallery.png
+├── audio_manager.py
+├── data/
+│   ├── 1.json
+│   ├── 1.xlsx
+│   ├── 2.xlsx
+│   ├── 3.xlsx
+│   ├── deepseek_python_20250420_4fb533.py
+│   ├── deepseek_python_20250420_9bae04.py
+│   ├── image_config - 副本.json
+│   ├── image_config.json
+│   ├── image_config2.json
+│   ├── image_config3.json
+│   ├── json_to_table2.py
+│   ├── json_to_table3.py
+│   ├── 移除json文件注释工具remove_comments.py
+│   └── 表数据.xlsx
+├── gallery_manager.py
+├── game_manager.py
+├── image_renderer.py
+├── input_handler.py
+├── interaction_modules/
+│   ├── __pycache__/
+│   │   ├── clean_erase.cpython-311.pyc
+│   │   ├── clean_erase.cpython-313.pyc
+│   │   ├── click_reveal.cpython-311.pyc
+│   │   ├── click_reveal.cpython-313.pyc
+│   │   ├── drag_puzzle.cpython-311.pyc
+│   │   ├── drag_puzzle.cpython-313.pyc
+│   │   ├── hybrid_interaction.cpython-311.pyc
+│   │   ├── hybrid_interaction.cpython-313.pyc
+│   │   ├── puzzle_piece.cpython-311.pyc
+│   │   └── puzzle_piece.cpython-313.pyc
+│   ├── clean_erase.py
+│   ├── click_reveal.py
+│   ├── drag_puzzle.py
+│   ├── hybrid_interaction.py
+│   └── puzzle_piece.py
+├── json_to_table.py
+├── main.py
+├── narrative_manager.py
+├── save_manager.py
+├── settings.py
+├── ui_manager.py
+└── 《映象回响》设计文档.md

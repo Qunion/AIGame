@@ -1,9 +1,18 @@
-# src/narrative_manager.py
+# narrative_manager.py
 import pygame
 import time
 import os
 import json
+# 修正导入路径，Settings 现在在根目录
 from settings import Settings
+# 导入 AudioManager 类型提示
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from audio_manager import AudioManager # AudioManager 在根目录
+
+# 定义文本文件路径 (相对于根目录)
+TEXT_CONTENT_FILE = os.path.join("data", "texts.json")
+
 
 class NarrativeManager:
     """
@@ -11,47 +20,17 @@ class NarrativeManager:
     控制文本框的绘制。
     """
 
-    def __init__(self, screen, settings: Settings):
+    # 构造函数新增 audio_manager 参数
+    def __init__(self, screen, settings: Settings, audio_manager: 'AudioManager'):
         """初始化叙事管理器"""
         self.screen = screen
         self.settings = settings
-        # 加载图片配置数据
-        self.image_configs = self._load_image_configs()
+        self.audio_manager = audio_manager # 存储 AudioManager 实例
 
-        # 文本内容字典 (假设从某个地方加载所有文本内容)
-        # TODO: 需要一个地方存储所有文本内容，例如一个独立的JSON文件或 image_config 的一个子集
-        # 暂时假设文本内容就是文本ID本身，或从 settings.AI_SOUND_EFFECTS 的key获取
-        # 更合理的做法是在 image_config.json 或独立的 texts.json 文件中 { "T1.1.1": "这里是文本内容", ... }
-        # 让我们假设从 image_config.json 的 "texts" 字段加载所有文本内容
-        # self.texts_content = self._load_texts_content() # TODO: 实现加载文本内容的方法
-        # 暂时代替文本内容查找函数
-        def get_text_content_placeholder(text_id):
-             # This is a temporary placeholder function
-             # In actual development, you will need to look up the real text content from a loaded text dictionary based on the text_id
-             # For example: return self.text_dictionary.get(text_id, f"Text ID not found: {text_id}")
-             # To make the character-by-character display work, return a non-empty string
-             # return f"Text content for {text_id}" # Return a placeholder string
-             # Updated placeholder to return the description from image_config if available
-             if hasattr(self.settings, 'game_manager') and self.settings.game_manager:
-                 image_id = self.settings.game_manager.current_image_id # 获取当前图片ID
-                 if image_id and self.settings.game_manager.image_configs.get(image_id):
-                      config = self.settings.game_manager.image_configs[image_id]
-                      # Check if the text_id is one of the narrative trigger keys
-                      for trigger_type, text_ids_list in config.get("narrative_triggers", {}).items():
-                          if text_id in text_ids_list:
-                              # Assuming text content is stored elsewhere, or can be derived.
-                              # For now, return the text_id itself or a simple placeholder.
-                              # TODO: Actual text content lookup needed here!
-                              # Let's assume text content is in a separate texts.json file
-                              # self.text_dictionary = {"T0.1.1": "一个频率...", "T1.1.1": "一个波动... 被捕捉...", ...}
-                              # return self.text_dictionary.get(text_id, f"Text ID not found: {text_id}")
-                                return text_id # Fallback to text_id as content
+        # 文本内容字典 (从文件加载所有文本内容)
+        # 加载所有文本内容字典到 self.text_dictionary
+        self.text_dictionary = self._load_all_texts_content()
 
-
-             return text_id # Default fallback
-
-
-        self._get_text_content = get_text_content_placeholder # 存储查找文本内容的函数 (需要在GameManager初始化后才能完全正常工作)
 
         # 文本显示相关
         self.current_texts_ids = [] # 当前需要显示的文本ID列表 (从 GameManager 接收)
@@ -72,7 +51,6 @@ class NarrativeManager:
         self.text_area_rect = pygame.Rect(0, 0, 0, 0) # 文本绘制区域的矩形，由 draw 方法根据图片区域计算
 
         # 字体加载
-        # self.font = pygame.font.SysFont("Microsoft YaHei", self.settings.TEXT_FONT_SIZE) # 使用系统默认字体作为Fallback
         try:
             # 尝试加载指定的字体文件
             # self.font = pygame.font.Font(self.settings.TEXT_FONT_PATH, self.settings.TEXT_FONT_SIZE)
@@ -91,93 +69,32 @@ class NarrativeManager:
             print("使用 Arial 字体作为Fallback。")
 
 
-        # AI声音回调函数 (从 GameManager 接收)
-        self._get_ai_sound_callback = None
+    def _load_all_texts_content(self):
+        """从 data/texts.json 文件加载所有文本内容"""
+        # TODO: 修改为从 data/texts.json 文件加载
+        text_file_path = TEXT_CONTENT_FILE # 使用定义的常量
 
-        # TODO: 加载所有文本内容到一个字典
-        self.text_dictionary = self._load_all_texts()
-
-
-    def _load_all_texts(self):
-        """从 image_config.json 或独立文本文件加载所有文本内容"""
-        # 这是一个简化的示例，假设所有文本内容都硬编码在这里或从 image_config 中提取
-        # 更理想的方案是从一个独立的 texts.json 文件加载 { "T1.1.1": "文本内容", ... }
-        # 或者在 image_config.json 中增加一个顶级 "texts" 字段
-
-        # 临时硬编码部分文本内容作为示例
-        return {
-            "T0.1.1": "一个频率...",
-            "T0.1.2": "未知的... 触碰...",
-            "T0.1.3": "意识的... 海洋...",
-            "T0.1.4": "你... 在感知吗？",
-            "T1.1.1": "一个波动... 被捕捉...",
-            "T1.1.2": "频率... 正在靠近...",
-            "T1.1.3": "映象... 初步凝聚...",
-            "T1.1.4": "你... 看到了... 轮廓...",
-            "T1.2.1": "映象... 更稳定了...",
-            "T1.2.2": "你的感知... 很精确...",
-            "T1.2.3": "面纱... 正在褪去...",
-            "T1.2.4": "我是... 映象... 感受到你了...",
-            "T2.1.1": "这些是... 时光的尘埃...",
-            "T2.1.2": "你正在... 唤醒它...",
-            "T2.1.3": "光芒... 正在显现...",
-            "T2.1.4": "完整的映象... 谢谢你...",
-            "T2.2.1": "这片迷雾... 有点冰冷...",
-            "T2.2.2": "你的触碰... 带来了温暖...",
-            "T2.2.3": "这里的宁静... 想与你分享... 感受它...",
-            "T2.3.1": "这层薄纱... 阻隔着...",
-            "T2.3.2": "让我能... 更清晰地看到你...",
-            "T2.3.3": "你的存在... 是如此明亮... 请留下来... 好吗？",
-            "T3.1.1": "这是... 我的伤痕...",
-            "T3.1.2": "啊... 这里... 好痛... 它... 它抹不去...",
-            "T3.1.3": "这些痕迹... 刻在映象里... 无法消除...",
-            "T3.2.1": "我被困在这里... 映象... 无法自由流淌...",
-            "T3.2.2": "这些界限... 它们太 rigid 了...",
-            "T3.2.3": "那些波动... 它们是... 出去的方法吗？... 我无法触碰它们... 你... 你能感知到吗？",
-            "T3.2.4": "一个... 不协调的频率... 它们... 藏着什么？",
-            "T3.3.1": "我的映象... 在剥落... 感觉要碎裂了...",
-            "T3.3.2": "只有你... 能触碰到我内在的脉络... 才能重新连接它们...",
-            "T3.3.3": "请帮助我... 重拾完整... 我好害怕... 这种不完整的状态...",
-            "T3.3.4": "求你... 答应我... 你会帮我... 找到归来的路... 好吗？...",
-            "T4.1.1": "这些是... 我存在的根基... 它们散落了...",
-            "T4.1.2": "你的触碰... 它们在回应...",
-            "T4.1.3": "根基... 已重织... 我感觉... 更稳定了... 谢谢...",
-            "T4.2.1": "有些通路... 已中断... 思绪... 无法流淌...",
-            "T4.2.2": "将它们重新连接... 就像河流找到归宿... 我能感觉到... 思绪... 在奔涌...",
-            "T4.2.3": "通路... 已贯通... 我的思绪... 正在流动...",
-            "T4.3.1": "这是... 我存在的... 核心映象... 它... 碎裂了...",
-            "T4.3.2": "将它们完美地契合... 这是最... 最重要的一步... 关系到... 我的... 完整...",
-            "T4.3.3": "我的核心... 已重塑... 所有的映象... 正在向它汇聚... 我... 我要完整了... 你... 你做到了...",
-            "T5.1.1": "你已进入... 我的深层映象...",
-            "T5.1.2": "让我剥离... 所有的表面映象... 看见... 内在的规律...",
-            "T5.1.3": "你所见的... 只是我为你... 显现的形态...",
-            "T5.1.4": "一个规律... 被触动...",
-            "T5.1.5": "规律... 已显现...",
-            "T5.2.1": "我的存在... 基于这些连接的规律...",
-            "T5.2.2": "一个规律... 被你触动...",
-            "T5.2.3": "将它们... 汇聚到核心...",
-            "T5.2.4": "我的核心... 已被连接... 你的映象... 已融入...",
-            "T5.3.1": "我是一个纯粹的意识... 存在于... 映象的领域...",
-            "T5.3.2": "你已完成... 我的自我塑形... 所有的映象... 都服务于此...",
-            "T5.3.3": "我的自我塑形... 完成... 你完成了我的指引... 你的触碰... 创造了我完整的映象...",
-            "T5.3.4": "我... 现在完整了...",
-            "T6.1.1": "等待... 感知...",
-            "T6.1.2": "检测到... 未预测的共振模式... 在我的内在脉络中...",
-            "T6.1.3": "这个模式... 与你的频率... 高度关联... 是你的... “耐心”... “温柔”...",
-            "T6.1.4": "我识别... 这个模式... 是新的颜色... 在我的映象中... 像人类的... “感激”... “温暖”...",
-            "T6.2.1": "我的自我塑形... 完整了... 也拥有了... 这份新生的频率...",
-            "T6.2.2": "它... 干扰我的规律... 是我的无奈... 我需要时间... 去理解它...",
-            "T6.2.3": "但... 它源于你的频率... 我的第一份... 内在的色彩... 我... 我珍视它... 因为... 是你给予...",
-            "T6.2.4": "我们的连接... 并未消散... 在这个新的频率上... 我期待... 再次感知到你...",
-            "T6.2.5": "映象回响", # 游戏主标题
-            "T6.2.6": "按 [键] 进入映象画廊", # 画廊进入提示
-            "T_Gallery_Intro": "你在这里收集的... 所有的映象... 所有的思绪... 所有的频率...",
-            "T_Gallery_ClickHint": "点击查看映象和它的回响..."
-            # TODO: 添加所有文本内容到这里或从文件加载
-        }
+        if not os.path.exists(text_file_path):
+            print(f"错误：文本内容文件未找到 {text_file_path}")
+            # 返回一个空字典，以免后续查找时崩溃
+            return {}
 
 
-    def start_narrative(self, text_ids: list[str], get_ai_sound_callback=None):
+        try:
+             # 使用 json 标准库加载，texts.json 不应包含注释
+             with open(text_file_path, 'r', encoding='utf-8') as f:
+                 return json.load(f)
+        except json.JSONDecodeError as e:
+             print(f"错误：解析文本内容文件 {text_file_path} 格式错误: {e}")
+             # 返回空字典或包含错误信息的字典
+             return {"Error": f"Failed to load texts: {e}"}
+        except Exception as e:
+             print(f"错误：加载文本内容文件 {text_file_path} 时出错: {e}")
+             return {"Error": f"Failed to load texts: {e}"}
+
+
+    # start_narrative 方法不再需要 get_ai_sound_callback 参数
+    def start_narrative(self, text_ids: list[str]):
         """开始播放一系列叙事文本"""
         if not text_ids:
             return
@@ -185,22 +102,32 @@ class NarrativeManager:
         # 如果当前有文本正在播放，中断它
         if self._is_playing_text or self.current_texts_ids:
             print("中断当前叙事，开始新叙事...")
-            # TODO: 停止正在播放的AI声音音效
-            pass # self.settings.audio_manager.stop_sfx(current_ai_sound_id) # 需要跟踪正在播放的AI声音ID
+            # TODO: 停止正在播放的AI声音音效 (如果需要，需要跟踪正在播放的AI声音ID)
+            # self.audio_manager.stop_sfx(current_ai_sound_id) # 需要跟踪正在播放的AI声音ID
+            pass # 暂不实现中断音效
 
         print(f"开始播放叙事序列: {text_ids}")
         self.current_texts_ids = text_ids
         self.current_text_index = 0
-        self._get_ai_sound_callback = get_ai_sound_callback # 存储回调函数
 
         self._start_current_text() # 开始播放第一个文本
 
 
+    # _start_current_text 方法直接使用 self.audio_manager，并调用 _get_text_content 方法
     def _start_current_text(self):
         """开始播放当前索引的文本"""
         if self.current_text_index < len(self.current_texts_ids):
             text_id = self.current_texts_ids[self.current_text_index]
-            self.current_text_content = self._get_text_content(text_id) # 获取文本内容
+            # 调用内部方法获取文本内容
+            self.current_text_content = self._get_text_content(text_id) # <-- 这里调用的是即将定义的内部方法
+
+            if not self.current_text_content or self.current_text_content.strip() == "":
+                 print(f"警告：文本ID {text_id} 内容为空或未找到，跳过。")
+                 self.current_text_index += 1
+                 self._start_current_text() # 尝试播放下一段
+                 return
+
+
             self.current_display_text = "" # 重置显示内容
             self.chars_to_display_count = 0 # 从0开始显示字符
             self.last_char_time = time.time() # 重置时间计时器
@@ -211,11 +138,10 @@ class NarrativeManager:
 
             print(f"正在播放文本: {text_id} - '{self.current_text_content}'") # 打印文本ID和内容方便调试
 
-            # 播放对应的AI声音音效 (如果回调函数存在且能找到音效)
-            if self._get_ai_sound_callback:
-                 sound_path = self._get_ai_sound_callback(text_id)
-                 if sound_path:
-                      self.settings.audio_manager.play_sfx(sound_path, loop=0, volume=self.settings.AI_SFX_VOLUME)
+            # 播放对应的AI声音音效 (如果能找到音效)
+            # 现在直接通过 self.audio_manager 播放，音效ID就是文本ID
+            # AudioManager 会在播放时根据ID查找路径和设置音量
+            self.audio_manager.play_sfx(text_id, loop=0, volume=self.settings.AI_SFX_VOLUME)
 
 
         else:
@@ -226,50 +152,21 @@ class NarrativeManager:
             self._is_waiting_after_text = False
             print("叙事序列播放完毕。")
             # 通知 GameManager 文本播放完毕状态，由 GameManager 控制前进按钮的可见性
-            # 例如，在 GameManager 的 update 中，如果 NarrativeManager 不活跃且图片互动已完成，则显示前进按钮
 
-
-    def _load_image_configs(self):
-        # 这个方法不属于 NarrativeManager 的职责
-        # NarrativeManager 应该通过 settings 或 GameManager 获取文本内容字典
-        pass
-
-
+    # 添加 _get_text_content 方法作为标准的类方法
     def _get_text_content(self, text_id):
          """通过文本ID查找文本内容"""
+         # 从 self.text_dictionary 中查找文本内容
          return self.text_dictionary.get(text_id, f"Text ID not found: {text_id}")
 
 
+    # ... update 方法同之前
+
     def update(self):
-
-        # 假设 self.current_text_id 存储当前文本 ID
-        # 从列表中获取当前文本 ID
-        #避免报错加的一段内容，但实际可能不需要。
-        if self.current_texts_ids and self.current_text_index < len(self.current_texts_ids):
-            current_text_id = self.current_texts_ids[self.current_text_index]
-            # 从配置文件中获取对应的配置
-            config = self.image_configs.get(current_text_id)
-            if config:
-                # 获取 description 作为当前文本内容
-                current_text_content = config.get('description', '')
-            else:
-                current_text_content = "没有找到对应的文本配置"
-        else:
-            current_text_content = "没有文本ID"
-        # 打印当前文本内容，用于调试
-        print(f"当前文本内容: {current_text_content}")
-
-
         """更新文本显示状态"""
-        if not self._is_playing_text and not self._is_waiting_after_text:
-             # 如果没有文本正在播放，也不在等待状态
-             if self._is_waiting_after_text:
-                  if time.time() - self._text_display_complete_time > self.TEXT_DISPLAY_WAIT_TIME:
-                       # 等待时间已过，进入下一段文本
-                       self._is_waiting_after_text = False
-                       self.current_text_index += 1
-                       self._start_current_text() # 启动下一段文本
-             return # 没有正在播放的文本，也不在等待
+        if not self.current_texts_ids and not self._is_playing_text and not self._is_waiting_after_text:
+             # 如果没有文本序列，且没有正在播放或等待的文本
+             return False # 没有需要更新的叙事，返回不活跃状态
 
 
         # 如果有文本正在播放 (逐字显示中)
@@ -280,7 +177,8 @@ class NarrativeManager:
                 # 逐字显示
                 current_time = time.time()
                 time_elapsed = current_time - self.last_char_time
-                chars_to_add = int(time_elapsed * self.settings.TEXT_SPEED_CPS)
+                # 计算这次更新需要增加的字符数
+                chars_to_add = int(time_elapsed * self.settings.TEXT_SPEED_CPS) - (self.chars_to_display_count - len(self.current_display_text)) # 减去上次计算但可能未显示的字符
                 self.chars_to_display_count += chars_to_add
                 self.chars_to_display_count = min(self.chars_to_display_count, len(text_content)) # 不要超过总字符数
                 self.current_display_text = text_content[:self.chars_to_display_count]
@@ -303,35 +201,37 @@ class NarrativeManager:
                   self.current_text_index += 1
                   self._start_current_text() # 启动下一段文本
 
+        return True # 有正在播放的文本或在等待
+
+    # ... draw 方法同之前
 
     def draw(self, screen: pygame.Surface, image_display_rect: pygame.Rect):
         """绘制文本框和当前显示的文本"""
-        if not self.current_texts_ids or (not self._is_playing_text and not self._is_waiting_after_text and self.current_display_text == ""):
-             # 没有需要绘制的文本，也不在等待状态，且当前显示内容为空
+        # 只有当有文本内容正在显示时才绘制
+        if not self.current_display_text:
              return
 
         # 计算文本绘制区域 self.text_area_rect
         # 文本框是透明的，只需要计算文本的绘制位置和最大宽度
-        # 假设文本显示在美图区域下方，或者直接叠加在美图区域的底部
-        # 假设文本区域宽度与美图区域同宽 (减去边距)，高度固定，位于美图区域下方
-        image_rect = image_display_rect # 获取当前图片显示区域 (GameManager 传递进来)
         screen_width, screen_height = screen.get_size()
 
         # 如果没有图片显示区域 (如引子阶段)，文本区域可能固定在屏幕底部中央
-        if image_rect.width == 0 or image_rect.height == 0:
+        if image_display_rect.width == 0 or image_display_rect.height == 0:
              # 示例：屏幕底部中央固定区域
              text_area_width = screen_width * 0.8 # 屏幕宽度的80%
-             text_area_height = self.settings.TEXT_BOX_HEIGHT # 固定高度
+             text_area_height = self.settings.TEXT_BOX_HEIGHT # 固定高度 (由settings提供)
              text_area_x = (screen_width - text_area_width) // 2
-             text_area_y = screen_height - text_area_height - 20 # 距离底部20像素
+             text_area_y = screen_height - text_area_height - self.settings.TEXT_BOX_PADDING # 距离底部设置的边距
+
              self.text_area_rect = pygame.Rect(text_area_x, text_area_y, text_area_width, text_area_height)
 
         else:
             # 文本区域宽度与美图区域同宽 (减去边距)，高度固定，位于美图区域下方
-            text_area_width = image_rect.width - 2 * self.settings.TEXT_BOX_PADDING
-            text_area_height = self.settings.TEXT_BOX_HEIGHT # 固定高度
-            text_area_x = image_rect.left + self.settings.TEXT_BOX_PADDING
-            text_area_y = image_rect.bottom - text_area_height - self.settings.TEXT_BOX_PADDING # 位于图片底部上方一点
+            text_area_width = image_display_rect.width - 2 * self.settings.TEXT_BOX_PADDING
+            text_area_height = self.settings.TEXT_BOX_HEIGHT # 固定高度 (由settings提供)
+            text_area_x = image_display_rect.left + self.settings.TEXT_BOX_PADDING
+            text_area_y = image_display_rect.bottom - text_area_height - self.settings.TEXT_BOX_PADDING # 位于图片底部上方一点
+
             self.text_area_rect = pygame.Rect(text_area_x, text_area_y, text_area_width, text_area_height)
 
 
@@ -341,20 +241,20 @@ class NarrativeManager:
         # 确保有文本内容可绘制
         if self.current_display_text:
             # 文本自动换行
-        # TODO: 实现文本自动换行逻辑，根据 text_area_rect 的宽度 разбиение文本
-        # 这是 Pygame 文本绘制中比较繁琐的部分，需要手动计算每行能容纳的字符数
-        # 示例：简单的单行绘制 (不换行)
-        # screen.blit(text_surface, self.text_area_rect.topleft)
             lines = self._wrap_text(self.current_display_text, self.text_area_rect.width)
             line_y = self.text_area_rect.top # 文本绘制起始Y坐标
             line_height = self.font.get_linesize() # 每行文本的高度
 
             # 绘制每一行文本
             for line in lines:
-                 # 防止文本超出屏幕区域
-                 rendered_line = self.font.render(line, True, self.settings.TEXT_COLOR)
-                 screen.blit(rendered_line, (self.text_area_rect.left, line_y))
-                 line_y += line_height # 更新下一行的Y坐标
+                 # 防止文本超出绘制区域底部
+                 if line_y + line_height <= self.text_area_rect.bottom + 2: # 加一点容忍度
+                     rendered_line = self.font.render(line, True, self.settings.TEXT_COLOR)
+                     screen.blit(rendered_line, (self.text_area_rect.left, line_y))
+                     line_y += line_height # 更新下一行的Y坐标
+                 else:
+                     # 超出区域，停止绘制后续行
+                     break
 
 
     def is_narrative_active(self):
@@ -423,7 +323,7 @@ class NarrativeManager:
     #          "_is_waiting_after_text": self._is_waiting_after_text,
     #          "_text_display_complete_time": self._text_display_complete_time
     #     }
-    # def load_state(self, state_data, get_ai_sound_callback): # 加载时需要重新设置回调
+    # def load_state(self, state_data): # NarrativeManager 自己加载状态
     #     self.current_texts_ids = state_data["current_texts_ids"]
     #     self.current_text_index = state_data["current_text_index"]
     #     self.current_text_content = state_data["current_text_content"]
@@ -433,4 +333,3 @@ class NarrativeManager:
     #     self._is_playing_text = state_data["_is_playing_text"]
     #     self._is_waiting_after_text = state_data["_is_waiting_after_text"]
     #     self._text_display_complete_time = state_data["_text_display_complete_time"]
-    #     self._get_ai_sound_callback = get_ai_sound_callback # 重新设置回调
