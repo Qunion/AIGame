@@ -3,6 +3,8 @@
 
 import pygame
 import settings
+import utils # 导入utils用于坐标转换
+
 
 class Piece(pygame.sprite.Sprite):
     def __init__(self, image_surface, original_image_id, original_row, original_col, initial_grid_row=-1, initial_grid_col=-1):
@@ -19,8 +21,17 @@ class Piece(pygame.sprite.Sprite):
         """
         super().__init__() # 如果继承Sprite需要调用父类初始化
 
-        self.image = image_surface
-        # self.image = pygame.transform.scale(image_surface, (settings.PIECE_SIZE, settings.PIECE_SIZE)) # 假设传入的surface已经是正确尺寸的
+        # 确保传入的 Surface 尺寸正确
+        if image_surface.get_size() != (settings.PIECE_SIZE, settings.PIECE_SIZE):
+             print(f"警告: 碎片 image_surface 尺寸不正确 {image_surface.get_size()}，应为 {settings.PIECE_SIZE}x{settings.PIECE_SIZE}。尝试缩放。")
+             try:
+                 self.image = pygame.transform.scale(image_surface, (settings.PIECE_SIZE, settings.PIECE_SIZE))
+             except pygame.error as e:
+                 print(f"错误: 碎片 Surface 缩放失败: {e}. 使用原始 Surface (可能尺寸错误)。")
+                 self.image = image_surface # 缩放失败，使用原始 Surface
+        else:
+             self.image = image_surface
+
 
         # 存储碎片的原始信息，用于判断是否归位
         self.original_image_id = original_image_id
@@ -34,40 +45,67 @@ class Piece(pygame.sprite.Sprite):
         # 初始化屏幕位置，如果在初始化时已知网格位置
         if initial_grid_row != -1 and initial_grid_col != -1:
              self.rect = self.image.get_rect()
-             self.set_grid_position(initial_grid_row, initial_grid_col)
+             self.set_grid_position(initial_grid_row, initial_grid_col, animate=False) # 初始位置不动画
         else:
-             # 如果初始位置未知，先创建一个空的rect，后续set_grid_position会设置
-             self.rect = pygame.Rect(0, 0, settings.PIECE_SIZE, settings.PIECE_SIZE)
+             # 如果初始位置未知，先创建一个位于屏幕外的 Rect，后续set_grid_position会设置
+             self.rect = pygame.Rect(-settings.PIECE_SIZE, -settings.PIECE_SIZE, settings.PIECE_SIZE, settings.PIECE_SIZE)
 
 
         # 动画相关属性 (当下落时可能需要)
-        # self.is_falling = False
-        # self.fall_target_y = -1 # 碎片下落的目标屏幕Y坐标
+        self.is_falling = False
+        self.fall_target_y = -1 # 碎片下落的目标屏幕Y坐标
+
 
     def draw(self, surface):
         """在指定的surface上绘制碎片"""
         surface.blit(self.image, self.rect)
 
-    # def update(self, dt):
-    #     """更新碎片状态 (如下落动画)"""
-    #     if self.is_falling:
-    #         # 计算下一帧的位置
-    #         new_y = self.rect.y + settings.FALL_SPEED_PIXELS_PER_FRAME
-    #         if new_y >= self.fall_target_y:
-    #             # 到达目标位置或超过，停止下落
-    #             self.rect.y = self.fall_target_y
-    #             self.is_falling = False
-    #             # TODO: 可能需要通知 Board 碎片已到达新位置
-    #         else:
-    #             self.rect.y = new_y
+
+    def update(self, dt):
+        """更新碎片状态 (如下落动画)"""
+        if self.is_falling:
+            # 根据下落速度和时间差计算移动距离
+            move_distance = settings.FALL_SPEED_PIXELS_PER_SECOND * dt
+            new_y = self.rect.y + move_distance
+
+            # 检查是否到达目标位置或超过
+            if new_y >= self.fall_target_y:
+                # 到达目标位置或超过，停止下落，精确设置位置
+                self.rect.y = self.fall_target_y
+                self.is_falling = False
+                # TODO: 通知 Board 碎片已到达新位置 (或者 Board 在 update 中检查 is_falling)
+            else:
+                # 继续下落
+                self.rect.y = new_y
 
 
-    def set_grid_position(self, row, col):
-        """设置碎片在拼盘中的新网格位置并更新其屏幕坐标"""
+    def set_grid_position(self, row, col, animate=False):
+        """
+        设置碎片在拼盘中的新网格位置并更新其屏幕坐标。
+        可以选择是否启用下落动画。
+
+        Args:
+            row (int): 目标网格行
+            col (int): 目标网格列
+            animate (bool): 是否以动画方式移动到新位置 (仅支持下落动画)
+        """
         self.current_grid_row = row
         self.current_grid_col = col
-        self.rect.x = settings.BOARD_OFFSET_X + self.current_grid_col * settings.PIECE_SIZE
-        self.rect.y = settings.BOARD_OFFSET_Y + self.current_grid_row * settings.PIECE_SIZE
-        # 如果有下落动画，这里只是设置了最终位置，动画会逐步移动到这里
-        # self.fall_target_y = self.rect.y # 设置下落目标Y坐标
-        # self.is_falling = True # 开始下落动画
+
+        target_x, target_y = utils.grid_to_screen(row, col)
+
+        if animate and target_y > self.rect.y:
+            # 如果启用动画且是向下移动 (下落)
+            self.fall_target_y = target_y
+            self.is_falling = True
+            # 当前位置保持不变，update 方法会使其下落到 target_y
+        else:
+            # 如果不启用动画，或者向上/水平移动，则直接跳到目标位置
+            self.rect.x = target_x
+            self.rect.y = target_y
+            self.is_falling = False # 停止任何可能的下落动画
+
+
+    def get_original_info(self):
+        """返回碎片的原始图片ID、行、列信息"""
+        return (self.original_image_id, self.original_row, self.original_col)
