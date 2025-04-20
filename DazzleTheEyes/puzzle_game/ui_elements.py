@@ -17,6 +17,7 @@ class Button(pygame.sprite.Sprite):
             callback (function): 点击按钮时要执行的回调函数。
         """
         super().__init__()
+
         try:
             self.image = pygame.image.load(image_path).convert_alpha()
         except pygame.error as e:
@@ -59,6 +60,7 @@ class PopupText(pygame.sprite.Sprite):
             game_instance (Game): Game实例，用于访问字体等全局资源。
         """
         super().__init__()
+        self.game = game_instance # <--- 添加这一行
         # 使用 Game 实例传递的字体，避免重复创建
         self.font = game_instance.font_tip # 假设Game实例有一个 font_tip 属性
         self.text_surface = None
@@ -96,7 +98,18 @@ class PopupText(pygame.sprite.Sprite):
             position (tuple): 文字显示的中心位置 (像素)。默认为屏幕中心
          """
          # 确保字体已加载 (这里直接使用传入的字体，应该没问题)
-         self.text_surface = self.font.render(text, True, color)
+        #  self.font = self.game.font_tip # 确保使用Game实例中的字体
+        #  self.text_surface = self.font.render(text, True, color)
+
+         # 使用 self.game 中已经初始化好的字体来渲染文本
+         if self.game and hasattr(self.game, 'font_tip') and self.game.font_tip: # 安全检查
+             self.text_surface = self.game.font_tip.render(text, True, color)
+         else:
+              # 如果 Game 实例或字体有问题，回退到默认字体或跳过渲染
+              print("警告: 无法获取 Game 实例或字体，使用默认字体渲染提示文本。")
+              font_fallback = pygame.font.Font(None, settings.TIP_FONT_SIZE)
+              self.text_surface = font_fallback.render(text, True, color)
+
          self.rect = self.text_surface.get_rect(center=position)
 
          self.duration = duration_seconds

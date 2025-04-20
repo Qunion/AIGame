@@ -1,11 +1,14 @@
 # board.py
 # 管理拼盘的状态、碎片布局、交换、完成检测、动态填充及动画
 
+from ast import Return
 import pygame
 import settings
 import random # 用于随机打乱碎片
 import time # 用于计时
 from piece import Piece # 导入Piece类
+# from image_manager import ImageManager # image_manager 在 __init__ 中传入了
+# from main import Game # Board 可能需要 Game 实例来触发状态改变 (如图片完成提示)
 import utils # 导入工具函数
 
 
@@ -16,7 +19,7 @@ class Board:
 
         Args:
             image_manager (ImageManager): 图像管理器实例
-            game_instance (Game): Game实例，用于触发事件或状态改变 (例如显示提示或切换图库状态)
+            # game_instance (Game): Game实例，用于触发事件或状态改变 (例如显示提示或切换图库状态) - 通过ImageManager间接访问
         """
         self.image_manager = image_manager
         # self.game = game_instance # 持有Game实例引用，用于调用Game方法
@@ -50,6 +53,9 @@ class Board:
                 if self.grid[r][c]:
                     self.all_pieces_group.add(self.grid[r][c])
 
+        # 动画完成后的回调队列 (当下落动画完成后，需要触发填充等后续流程)
+        self._animation_completion_callbacks = []
+
 
     def fill_initial_pieces(self):
         """根据settings填充初始碎片并随机打乱"""
@@ -58,10 +64,11 @@ class Board:
         # 确保获取到的碎片数量符合预期
         total_required_pieces = settings.BOARD_COLS * settings.BOARD_ROWS
         if len(initial_pieces) != total_required_pieces:
-             print(f"错误: 获取的初始碎片数量 {len(initial_pieces)} ({[p.get_original_info() for p in initial_pieces][:20]}...) 与预期 {total_required_pieces} 不符。无法填充拼盘。")
+             print(f"错误: 获取的初始碎片数量 {len(initial_pieces)} 与预期 {total_required_pieces} 不符。无法填充拼盘。")
              # 如果数量不匹配，清空grid，避免后续错误
              self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
              self.all_pieces_group.empty() # 清空Sprite Group
+             # TODO: 填充一些空白或错误提示碎片
              return # 碎片数量不匹配，停止填充
 
         print(f"获取了 {len(initial_pieces)} 个初始碎片，开始填充拼盘。") # 调试信息
@@ -147,7 +154,7 @@ class Board:
 
         self.selected_piece = piece
         # 计算选中高亮框的位置和大小，直接使用碎片的rect
-        # 使用 inflate 和 topleft 计算边框位置，而不是直接用 piece.rect
+        # 使用 inflate 和 topleft 计算边框位置
         border_thickness = 5 # 和 draw 中的一致
         self.selection_rect = piece.rect.inflate(border_thickness * 2, border_thickness * 2)
         self.selection_rect.topleft = (piece.rect.left - border_thickness, piece.rect.top - border_thickness)
@@ -216,8 +223,9 @@ class Board:
             self.image_manager.set_image_state(completed_image_id, 'lit')
 
             # TODO: 可以在这里触发一个全局的游戏事件，比如播放音效，显示祝贺信息等
-            # if hasattr(self.game, 'show_completion_effect'):
-            #     self.game.show_completion_effect(completed_image_id)
+            # 可以通过 ImageManager 间接访问 Game 实例来调用 Game 的方法
+            # if hasattr(self.image_manager.game, 'show_completion_effect'):
+            #     self.image_manager.game.show_completion_effect(completed_image_id)
 
             return True # 有图片完成
         return False # 没有图片完成
@@ -253,6 +261,10 @@ class Board:
                     for dc in range(settings.IMAGE_LOGIC_COLS): # 0 to 8
                         current_row = start_row + dr
                         current_col = start_col + dc
+                        # 确保在板子范围内检查
+                        if not (0 <= current_row < settings.BOARD_ROWS and 0 <= current_col < settings.BOARD_COLS):
+                            is_complete = False # 区域超出版子范围 (理论上不会发生，因为外层循环已限制)
+                            break
                         current_piece = self.grid[current_row][current_col]
 
                         # 检查当前位置是否有碎片
@@ -280,48 +292,59 @@ class Board:
 
 
     def _process_completed_picture(self):
-        """处理已完成图片的流程：移除 -> 下落 -> 填充"""
+        """
+        处理已完成图片的流程状态机。
+        根据 current_board_state 执行相应的步骤。
+        这个方法在 Board 的 update 中被调用。
+        """
         if self.current_board_state == settings.BOARD_STATE_PICTURE_COMPLETED:
-            print(f"处理完成的图片 {self._completed_image_id_pending_process}，状态切换到移除碎片。") # 调试信息
+            # 状态：图片已检测完成，刚进入处理流程
+            print(f"Board State: PICTURE_COMPLETED -> REMOVING_PIECES for image {self._completed_image_id_pending_process}") # 调试信息
             self.current_board_state = settings.BOARD_STATE_REMOVING_PIECES
-            # 移除碎片
+            # 移除碎片 (瞬间完成)
             self.remove_completed_pieces()
-            # 移除完成后，立即触发下落
+            # 移除完成后，立即切换到下落状态并启动下落动画
             self.current_board_state = settings.BOARD_STATE_PIECES_FALLING
             self.initiate_fall_down_pieces()
 
 
-        # 下落动画的更新和状态切换在 update 方法中进行
-        # 当所有碎片停止下落时，update 方法会将状态切换到 BOARD_STATE_PENDING_FILL
+        elif self.current_board_state == settings.BOARD_STATE_PIECES_FALLING:
+             # 状态：碎片正在下落动画中
+             # 碎片下落动画的更新由 Piece 的 update 方法处理，并在 Board 的 update 中调用 group.update
+             # 在 Board 的 update 方法中会检查是否所有碎片都已停止下落，并切换到 PENDING_FILL 状态
+             return # 等待下落动画完成
 
-        if self.current_board_state == settings.BOARD_STATE_PENDING_FILL:
-            print("碎片下落完成，状态切换到填充新碎片。") # 调试信息
-            self.current_board_state = settings.BOARD_STATE_PLAYING # 填充完成后回到PLAYING
-            # 填充新碎片
+
+        elif self.current_board_state == settings.BOARD_STATE_PENDING_FILL:
+            # 状态：碎片下落完成，等待填充
+            print("Board State: PENDING_FILL -> PLAYING (after fill)") # 调试信息
+            # 填充新碎片 (瞬间完成)
             self.fill_new_pieces()
 
             # 清理完成图片的记录
             self._completed_image_id_pending_process = None
             self._completed_area_start_pos = None
 
-            # TODO: 通知 Game 或 Gallery 更新图库 (Game实例需要传递进来)
-            # if hasattr(self.game, 'gallery'): # 检查Game实例是否有gallery属性
-            #      self.game.gallery.add_completed_image(completed_image_id) # 通知Gallery更新列表
+            # 填充完成后，切换回 PLAYING 状态
+            self.current_board_state = settings.BOARD_STATE_PLAYING
 
-            print("填充完成，Board状态回到 PLAYING。") # 调试信息
+            # TODO: 通知 Game 或 Gallery 图库需要刷新 (Board不能直接访问Gallery，通过Game间接通知)
+            if hasattr(self.image_manager.game, 'gallery'): # 检查Game实例是否有gallery属性
+                print("通知 Gallery 更新列表...") # Debug
+                self.image_manager.game.gallery._update_picture_list() # 直接调用更新方法
+
 
 
     def remove_completed_pieces(self):
-        """根据记录的 completed_area_start_pos，从拼盘中移除已完成图片的碎片"""
+        """根据记录的 _completed_area_start_pos，从拼盘中移除已完成图片的碎片"""
         if self._completed_area_start_pos is None or self._completed_image_id_pending_process is None:
              print("错误: 没有记录已完成区域或图片ID，无法移除碎片。")
              return
 
         start_row, start_col = self._completed_area_start_pos
         completed_image_id = self._completed_image_id_pending_process
-        print(f"移除图片 {completed_image_id} 在 ({start_row},{start_col}) 开始的 5x9 区域碎片...") # 调试信息
+        # print(f"移除图片 {completed_image_id} 在 ({start_row},{start_col}) 开始的 5x9 区域碎片...") # Debug
 
-        pieces_to_remove_count = 0
         pieces_to_remove_list = [] # 收集要移除的碎片对象
 
         for dr in range(settings.IMAGE_LOGIC_ROWS):
@@ -336,51 +359,42 @@ class Board:
                        piece_to_remove.original_row == dr and piece_to_remove.original_col == dc:
                          pieces_to_remove_list.append(piece_to_remove)
                          self.grid[r][c] = None # 将网格位置设为 None
-                         pieces_to_remove_count += 1
                     # else:
-                         # print(f"警告: 区域 ({r},{c}) 碎片不属于完成的图片 {completed_image_id} 或为空。")
+                         # print(f"警告: 尝试移除的区域 ({r},{c}) 没有属于完成图片 {completed_image_id} 的碎片或为空。") # Debug
 
         # 从 Sprite Group 中移除收集到的碎片
         self.all_pieces_group.remove(*pieces_to_remove_list)
-
-        print(f"共移除了 {pieces_to_remove_count} 个碎片。") # 调试信息
-        # Note: _completed_area_start_pos 和 _completed_image_id_pending_process 在 _process_completed_picture 末尾清理
+        # TODO: 可以添加一个效果，让移除的碎片消失或爆炸等 (可选)
 
 
     def initiate_fall_down_pieces(self):
         """启动碎片下落动画：计算所有碎片的最终目标位置，并标记它们为正在下落"""
-        print("启动碎片下落动画...") # 调试信息
+        # print("启动碎片下落动画...") # Debug
         # 遍历每一列，确定每个非空碎片的最终下落位置
         for c in range(settings.BOARD_COLS): # 遍历每一列
             bottom_row_index_to_fill = settings.BOARD_ROWS - 1 # 当前列底部可以填充的行索引
 
             # 从底向上遍历当前列
+            pieces_in_column = [] # 临时存储本列非空碎片
             for r in range(settings.BOARD_ROWS - 1, -1, -1):
-                piece = self.grid[r][c]
-                if piece:
-                    # 如果这个碎片不在它可以下落到的最底位置
-                    if piece.current_grid_row != bottom_row_index_to_fill:
-                        # 计算这个碎片新的网格位置和屏幕Y坐标目标
-                        new_grid_row = bottom_row_index_to_fill
-                        # new_grid_col = c # 列不变
-                        # new_screen_y = utils.grid_to_screen(new_grid_row, new_grid_col)[1]
+                if self.grid[r][c]:
+                     pieces_in_column.append(self.grid[r][c])
+                     self.grid[r][c] = None # 先将原位置设为None
 
-                        # 将碎片从当前网格位置移除 (因为它要移动)
-                        self.grid[r][c] = None
-
-                        # 将碎片放置到新的网格位置上
-                        self.grid[new_grid_row][c] = piece
-
-                        # 更新碎片的网格位置并启动下落动画到新的屏幕Y坐标
-                        piece.set_grid_position(new_grid_row, c, animate=True)
-                    # 无论是否移动，这个位置现在已经被占用，下一个可填充的行索引向上移动
-                    bottom_row_index_to_fill -= 1
-                # 如果当前位置是 None，bottom_row_index_to_fill 保持不变，意味着这个空位是下一个碎片可以下落到的位置
+            # 从底向上重新放置收集到的碎片，并启动下落动画
+            current_row = settings.BOARD_ROWS - 1
+            for piece in pieces_in_column:
+                 self.grid[current_row][c] = piece
+                 # 更新碎片的网格位置并启动下落动画到新的屏幕Y坐标
+                 piece.set_grid_position(current_row, c, animate=True)
+                 current_row -= 1
 
         # 动画的实际更新由各个 Piece 的 update 方法处理，并在 Board 的 update 方法中调用 Sprite Group 的 update
 
+
     def is_any_piece_falling(self):
         """检查是否有任何碎片正在下落动画中"""
+        # 遍历 Sprite Group 中的所有碎片，检查 is_falling 属性
         for piece in self.all_pieces_group:
              if piece.is_falling:
                  return True
@@ -389,7 +403,7 @@ class Board:
 
     def fill_new_pieces(self):
         """根据填充规则，从 image_manager 获取新碎片填充顶部空位"""
-        print("触发填充新碎片...") # 调试信息
+        # print("触发填充新碎片...") # Debug
         # 统计有多少个空槽位需要填充 (即网格中为 None 的位置)
         empty_slots_positions = [] # 记录空槽位的位置 (从上往下，从左往右遍历获取)
         for r in range(settings.BOARD_ROWS):
@@ -398,15 +412,15 @@ class Board:
                      empty_slots_positions.append((r, c)) # 记录空位位置
 
         empty_slots_count = len(empty_slots_positions)
-        print(f"检测到 {empty_slots_count} 个空槽位需要填充。") # 调试信息
+        # print(f"检测到 {empty_slots_count} 个空槽位需要填充。") # Debug
 
         if empty_slots_count == 0:
-             print("没有空槽位需要填充。")
+             # print("没有空槽位需要填充。")
              return
 
         # 从 ImageManager 获取相应数量的新碎片
         new_pieces = self.image_manager.get_next_fill_pieces(empty_slots_count)
-        print(f"ImageManager 提供了 {len(new_pieces)} 个新碎片。") # 调试信息
+        # print(f"ImageManager 提供了 {len(new_pieces)} 个新碎片。") # Debug
 
         # 将新碎片放置到空槽位中
         for i, piece in enumerate(new_pieces):
@@ -428,29 +442,30 @@ class Board:
     def draw(self, surface):
         """在指定的surface上绘制拼盘中的所有碎片和选中效果"""
         # 绘制所有非拖拽中的碎片
-        # 使用 Sprite Group 的 draw 方法更方便
-        # 确保在绘制 Group 之前，将 dragging_piece 从 Group 中移除
-        # self.all_pieces_group.draw(surface)
+        # 使用 Sprite Group 的 draw 方法绘制所有碎片，除了正在拖拽的那个
+        # 先将拖拽碎片临时从 group 中移除，绘制完 group 后再绘制拖拽碎片，确保其在最上层
+        if self.dragging_piece and self.dragging_piece in self.all_pieces_group:
+             self.all_pieces_group.remove(self.dragging_piece)
 
-        # 手动绘制，以便控制绘制顺序 (先绘制非拖拽，再绘制选中框，最后绘制拖拽碎片)
-        for piece in self.all_pieces_group:
-            if piece != self.dragging_piece:
-                 piece.draw(surface)
+        self.all_pieces_group.draw(surface)
 
         # 绘制选中碎片的特殊效果 (例如绘制边框)
         if self.selection_rect:
-             # 确保选中高亮框的位置与选中碎片 rect 同步 (如果碎片有动画的话)
+             # 确保选中高亮框的位置与选中碎片 rect 同步
              if self.selected_piece:
                  border_thickness = 5
                  self.selection_rect.topleft = (self.selected_piece.rect.left - border_thickness, self.selected_piece.rect.top - border_thickness)
-
              pygame.draw.rect(surface, settings.HIGHLIGHT_COLOR, self.selection_rect, 5) # 绘制边框，最后一个参数是线条宽度
 
 
         # 在最后绘制正在拖拽的碎片，使其显示在最上层
-        # 绘制正在拖拽的碎片 (由 InputHandler 更新其 rect.center)
         if self.dragging_piece:
+             # InputHandler 会在 MOUSEMOTION 中实时更新 dragging_piece.rect 的位置
              self.dragging_piece.draw(surface)
+
+        # 绘制完成后，将拖拽碎片加回 group
+        if self.dragging_piece and self.dragging_piece not in self.all_pieces_group:
+             self.all_pieces_group.add(self.dragging_piece)
 
 
     def update(self, dt):
@@ -460,35 +475,26 @@ class Board:
          Args:
              dt (float): 自上一帧以来的时间（秒）
          """
-         # 更新 Board 内部状态的流程
-         if self.current_board_state == settings.BOARD_STATE_PICTURE_COMPLETED:
-             # 如果有图片完成待处理，立即启动处理流程
-             self._process_completed_picture()
+         # 如果 Board 状态不是 PLAYING，则调用 _process_completed_picture 处理状态机
+         if self.current_board_state != settings.BOARD_STATE_PLAYING:
+             self._process_completed_picture() # 处理完成流程状态机
 
-         elif self.current_board_state == settings.BOARD_STATE_PIECES_FALLING:
-              # 如果碎片正在下落，更新所有碎片的状态 (特别是正在下落的)
-              self.all_pieces_group.update(dt)
+         # 更新所有碎片的动画 (特别是正在下落的碎片)
+         # 即使 Board 状态不是 FALLING，也需要更新，因为 Board 可能会在 PLAYING 状态下突然切换到 FALLING
+         # 碎片 Piece 的 update 方法会根据自身的 is_falling 属性决定是否移动
+         self.all_pieces_group.update(dt)
 
-              # 检查是否所有碎片都已停止下落
+         # 如果 Board 状态是 FALLING，检查是否所有碎片都已停止下落，然后切换状态
+         if self.current_board_state == settings.BOARD_STATE_PIECES_FALLING:
               if not self.is_any_piece_falling():
-                   print("所有碎片下落完成。") # 调试信息
+                   print("所有碎片下落完成。状态切换到 PENDING_FILL。") # Debug
                    self.current_board_state = settings.BOARD_STATE_PENDING_FILL # 切换状态，等待填充
-
-
-         elif self.current_board_state == settings.BOARD_STATE_PENDING_FILL:
-              # 如果下落完成，等待填充，立即进行填充
-              self._process_completed_picture() # 调用 _process_completed_picture 会进入填充逻辑并切换回 PLAYING
-
-
-         # Note: BOARD_STATE_PLAYING, BOARD_STATE_REMOVING_PIECES 状态下，Board 自身没有连续 update 逻辑，
-         # 主要靠 InputHandler 的操作或 _process_completed_picture 的一步完成。
-         # BOARD_STATE_REMOVING_PIECES 状态非常短暂，在 _process_completed_picture 中立即切换到 FALLING 了。
 
 
     def get_piece_at_grid(self, row, col):
          """获取指定网格位置的碎片对象，或None"""
          if 0 <= row < settings.BOARD_ROWS and 0 <= col < settings.BOARD_COLS:
-             return self.grid[row][c] # 注意这里是 c，不是 col
+             return self.grid[row][col]
          return None # 坐标无效
 
     # 提供给 InputHandler 用于判断点击或拖拽是否在 Board 区域内
@@ -497,3 +503,5 @@ class Board:
         return pygame.Rect(settings.BOARD_OFFSET_X, settings.BOARD_OFFSET_Y,
                            settings.BOARD_COLS * settings.PIECE_SIZE,
                            settings.BOARD_ROWS * settings.PIECE_SIZE)
+
+    # def _update_falling_pieces(self, dt): ... (已整合到 all_pieces_group.update)

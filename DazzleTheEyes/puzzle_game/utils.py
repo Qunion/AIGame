@@ -55,30 +55,40 @@ def grayscale_surface(surface):
         pygame.Surface: 灰度化后的新 Surface。
     """
     # 创建一个新的 Surface，确保有 alpha 通道
-    gray_surface = pygame.Surface(surface.get_size(), depth=surface.get_bitsize())
-    gray_surface.fill((0, 0, 0, 0)) # 填充透明或黑色，取决于你的需求
-    gray_surface = gray_surface.convert_alpha() # 确保透明度
-
-    # 将原 Surface 绘制到新 Surface 上
-    gray_surface.blit(surface, (0, 0))
+    # 使用原 surface 的 get_flags() 和 get_bitsize() 来创建兼容的新 surface
+    new_surface = pygame.Surface(surface.get_size(), flags=surface.get_flags(), depth=surface.get_bitsize())
+    new_surface.blit(surface, (0, 0)) # 将原图绘制到新 surface 上
 
     # 获取像素数组进行处理
-    pixel_array = pygame.PixelArray(gray_surface)
+    pixel_array = pygame.PixelArray(new_surface)
 
-    for x in range(surface.get_width()):
-        for y in range(surface.get_height()):
+    for x in range(new_surface.get_width()):
+        for y in range(new_surface.get_height()):
             # 获取颜色 (带 alpha)
-            color = gray_surface.get_at((x, y))
+            color = new_surface.get_at((x, y))
             # 提取 RGB
             r, g, b = color[:3]
             # 计算灰度值 (常见的加权平均法)
             gray = int(0.2989 * r + 0.5870 * g + 0.1140 * b)
             # 设置像素颜色 (保持 alpha 通道)
-            pixel_array[x, y] = (gray, gray, gray, color[3] if len(color) > 3 else 255) # 兼容没有alpha的情况
+            # pixel_array[x, y] = (gray, gray, gray, color[3] if len(color) > 3 else 255) # 兼容没有alpha的情况
+            # Simplified way using set_at on the new surface after pixel array is closed:
+            pixel_array[x, y] = (gray, gray, gray) # Set RGB parts to gray
 
     # 完成像素数组操作，返回 Surface
     pixel_array.close()
-    return gray_surface
+
+    # 重新设置 alpha 通道，如果原图有 alpha
+    if surface.get_flags() & pygame.SRCALPHA:
+        alpha_surface = surface.convert_alpha() # 获取原图的alpha层
+        for x in range(new_surface.get_width()):
+            for y in range(new_surface.get_height()):
+                alpha = alpha_surface.get_at((x, y))[3] # 获取原图的alpha值
+                color = new_surface.get_at((x, y))[:3] # 获取灰度图的RGB值
+                new_surface.set_at((x, y), color + (alpha,)) # 设置新的RGBA颜色
+
+    return new_surface
+
 
 def center_rect_in_parent(rect_to_center, parent_rect):
     """

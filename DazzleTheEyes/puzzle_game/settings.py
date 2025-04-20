@@ -21,6 +21,10 @@ IMAGE_LOGIC_COLS = 9    # 完整图片的逻辑列数 (宽度方向)
 IMAGE_LOGIC_ROWS = 5    # 完整图片的逻辑行数 (高度方向)
 PIECES_PER_IMAGE = IMAGE_LOGIC_COLS * IMAGE_LOGIC_ROWS # 每张完整图片的碎片数量 (5*9=45)
 
+# 字体设置
+FONT_NAME = "Microsoft YaHei" # 主要游戏字体名称 (请确保系统中有此字体)
+# 如果需要备用字体，可以添加 FONT_FALLBACK = None 或 "Arial"
+
 # 资源路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # 获取当前文件所在目录的绝对路径
 ASSETS_DIR = os.path.join(BASE_DIR, "assets") + os.sep # assets文件夹路径

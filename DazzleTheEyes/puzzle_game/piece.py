@@ -69,11 +69,13 @@ class Piece(pygame.sprite.Sprite):
             new_y = self.rect.y + move_distance
 
             # 检查是否到达目标位置或超过
-            if new_y >= self.fall_target_y:
+            if (settings.FALL_SPEED_PIXELS_PER_SECOND > 0 and new_y >= self.fall_target_y) or \
+               (settings.FALL_SPEED_PIXELS_PER_SECOND < 0 and new_y <= self.fall_target_y) or \
+               settings.FALL_SPEED_PIXELS_PER_SECOND == 0: # 如果速度为0或方向错误，也停止
                 # 到达目标位置或超过，停止下落，精确设置位置
                 self.rect.y = self.fall_target_y
                 self.is_falling = False
-                # TODO: 通知 Board 碎片已到达新位置 (或者 Board 在 update 中检查 is_falling)
+                # TODO: 可能需要通知 Board 碎片已到达新位置 (或者 Board 在 update 中检查 is_falling)
             else:
                 # 继续下落
                 self.rect.y = new_y
@@ -87,23 +89,25 @@ class Piece(pygame.sprite.Sprite):
         Args:
             row (int): 目标网格行
             col (int): 目标网格列
-            animate (bool): 是否以动画方式移动到新位置 (仅支持下落动画)
+            animate (bool): 是否以动画方式移动到新位置 (目前仅支持向下动画)
         """
         self.current_grid_row = row
         self.current_grid_col = col
 
         target_x, target_y = utils.grid_to_screen(row, col)
 
+        # 只有当目标位置在当前位置下方且启用动画时，才启动下落动画
         if animate and target_y > self.rect.y:
-            # 如果启用动画且是向下移动 (下落)
             self.fall_target_y = target_y
             self.is_falling = True
+            # print(f"碎片 {self.original_image_id}_{self.original_row}_{self.original_col} 开始下落到 ({row},{col})") # 调试信息
             # 当前位置保持不变，update 方法会使其下落到 target_y
         else:
             # 如果不启用动画，或者向上/水平移动，则直接跳到目标位置
             self.rect.x = target_x
             self.rect.y = target_y
             self.is_falling = False # 停止任何可能的下落动画
+            # print(f"碎片 {self.original_image_id}_{self.original_row}_{self.original_col} 跳到 ({row},{col})") # 调试信息
 
 
     def get_original_info(self):
