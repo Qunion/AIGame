@@ -25,6 +25,19 @@ PIECES_PER_IMAGE = IMAGE_LOGIC_COLS * IMAGE_LOGIC_ROWS # 每张完整图片的�
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # 获取当前文件所在目录的绝对路径
 ASSETS_DIR = os.path.join(BASE_DIR, "assets") + os.sep # assets文件夹路径
 
+# 碎片生成与缓存设置
+REGENERATE_PIECES = 0 # 是否重新生成碎片：1-是，0-否。设置为0时优先从文件加载。
+# 生成的碎片存放目录
+GENERATED_PIECE_DIR = os.path.join(ASSETS_DIR, "pieces") + os.sep
+# 确保碎片目录存在 (这一行已经有了，确认一下)
+os.makedirs(GENERATED_PIECE_DIR, exist_ok=True)
+# 碎片文件命名格式，用于保存和加载
+PIECE_FILENAME_FORMAT = "image_{}_r{}_c{}.png" # 例如 image_1_r0_c0.png
+
+# 加载界面图片
+LOADING_IMAGE_PATH = os.path.join(ASSETS_DIR, "loading.png")
+
+
 # UI元素图片路径
 GALLERY_ICON_PATH = os.path.join(ASSETS_DIR, "gallery_icon.png")
 LEFT_BUTTON_PATH = os.path.join(ASSETS_DIR, "left_button.png")
