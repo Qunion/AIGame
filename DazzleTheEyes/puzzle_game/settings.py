@@ -33,7 +33,18 @@ GENERATED_PIECE_DIR = os.path.join(ASSETS_DIR, "pieces") + os.sep
 os.makedirs(GENERATED_PIECE_DIR, exist_ok=True)
 # 碎片文件命名格式，用于保存和加载
 PIECE_FILENAME_FORMAT = "image_{}_r{}_c{}.png" # 例如 image_1_r0_c0.png
+# 图片加载与后台处理设置
 
+# 第一次进入游戏时加载的图片数量 (用于初始拼盘和前期的图库)
+INITIAL_LOAD_IMAGE_COUNT = 5 # 根据你的需求调整这个数量
+# 后台加载图片的速度控制 (每批处理的图片数量，或每次处理的碎片数量，取决于实现方式)
+BACKGROUND_LOAD_BATCH_SIZE = 1 # 每次后台处理1张图片 (可以调整)
+BACKGROUND_LOAD_DELAY = 1 # 每批处理之间的延迟 (秒，避免完全占用CPU)
+
+# 加载界面图片文件列表
+# 请确保 assets 文件夹中存在这些文件
+LOADING_IMAGE_FILENAMES = ["loading_1.png", "loading_2.png", "loading_3.png", "loading_4.png", "loading_5.png"]
+LOADING_IMAGE_PATHS = [os.path.join(ASSETS_DIR, f) for f in LOADING_IMAGE_FILENAMES]
 # 加载界面图片
 LOADING_IMAGE_PATH = os.path.join(ASSETS_DIR, "loading.png")
 
@@ -68,6 +79,7 @@ OVERLAY_COLOR = (0, 0, 0, 180) # 全屏覆盖层颜色 (带透明度)
 
 
 # 游戏状态常量
+GAME_STATE_LOADING = -1 # 或者其他不与现有状态冲突的值
 GAME_STATE_PLAYING = 0           # 正在玩拼图
 GAME_STATE_GALLERY_LIST = 1      # 打开图库列表界面
 GAME_STATE_GALLERY_VIEW_LIT = 2  # 打开图库已点亮图片大图查看界面
