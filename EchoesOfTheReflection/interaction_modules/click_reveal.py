@@ -32,7 +32,7 @@ class ClickReveal:
 
         # 从config中加载点击点信息
         # click_points 存储的是原始图片中的坐标 [x, y] 和 ID
-        # 格式示例: [{"x": 850, "y": 520, "id": "point1", "radius": 30}, ...]
+        # 格式示例: [{"x": 850, "y": 520, "id": "point1", "radius": 30, "sfx_id": "sfx_click_special"}, ...]
         self.click_points_config = config.get("click_points", [])
         # 记录每个点击点是否已被激活
         self.activated_points = {point["id"]: False for point in self.click_points_config}
@@ -49,7 +49,6 @@ class ClickReveal:
 
         # TODO: 初始化与点击点相关的视觉效果（例如，点击点的高亮表面）
         self._init_visual_elements()
-
 
     def _init_visual_elements(self):
         """初始化点击点的视觉表示 (例如加载高亮纹理)"""
@@ -88,7 +87,7 @@ class ClickReveal:
                 # 假设点击点是圆形的，用阈值判断距离
                 click_threshold_pixels = point_config.get("radius", 30) # 从config获取点击半径，默认30像素 # TODO: 可移动到settings或config
 
-                if not self.activated_points[point_id]:
+                if not self.activated_points.get(point_id, False): # 检查点是否存在且未激活
                    # 检查点击是否在以点击点原始坐标为中心，click_threshold_pixels 为半径的圆内
                    # 使用原始图片坐标进行距离计算
                    distance_sq = (original_image_mouse_pos[0] - point_config["x"])**2 + (original_image_mouse_pos[1] - point_config["y"])**2
@@ -124,6 +123,7 @@ class ClickReveal:
             # effect_type 可以在 config 中定义
             effect_type = self.config.get("initial_effect", {}).get("type", "blur_reveal") # 默认使用 blur_reveal
             # ImageRenderer update_effect 方法需要知道图片ID
+            # self.config["id"] 是图片的唯一ID
             self.image_renderer.update_effect(effect_type, self.reveal_progress, self.config.get("id")) # 示例传递图片ID
 
 
@@ -141,10 +141,12 @@ class ClickReveal:
                 print(f"Click Reveal for {self.config.get('file', 'current image')} Completed!")
 
                 # 检查并触发完成相关的叙事事件 (on_all_clicked, on_complete)
+                # on_all_clicked 应该在所有点激活后触发一次
+                # on_complete 在互动模块的 _is_completed 第一次为 True 时由 GameManager._on_interaction_complete 触发
                 narrative_events = self._check_and_trigger_narrative_events(check_complete=True)
                 return True, narrative_events # 返回完成状态和触发的叙事事件
 
-        elif total_points == 0: # 没有点击点也视为完成
+        elif total_points == 0: # 没有点击点也视为完成 (理论上 Stage 1 应该有点击点)
              if not self._is_completed: # 第一次完成时
                  self._is_completed = True
                  print(f"Click Reveal for {self.config.get('file', 'current image')} Completed (no points).")
@@ -168,8 +170,9 @@ class ClickReveal:
         # 绘制未激活点击点的高亮提示
         for point_config in self.click_points_config:
             point_id = point_config["id"]
-            if not self.activated_points[point_id]:
-                # 将点击点原始坐标转换为屏幕坐标进行绘制
+            # 只有未激活的点才需要绘制提示
+            if not self.activated_points.get(point_id, False):
+                # 将点击点原始图片坐标转换为屏幕坐标进行绘制
                 point_screen_pos = self.image_renderer.get_screen_coords_from_original(point_config["x"], point_config["y"])
 
                 # TODO: 绘制高亮圆圈或图标或特效
@@ -180,6 +183,7 @@ class ClickReveal:
                 highlight_radius = visual_style.get("radius", 10)
                 highlight_width = visual_style.get("width", 0) # 0表示填充圆，>0表示圆圈边框
                 highlight_type = visual_style.get("type", "circle")
+                highlight_texture_id = visual_style.get("texture_id") # 纹理图标的ID
 
                 if highlight_type == "circle":
                     # 检查屏幕坐标是否有效
@@ -188,13 +192,18 @@ class ClickReveal:
                               pygame.draw.circle(screen, highlight_color, point_screen_pos, highlight_radius)
                          else:
                               pygame.draw.circle(screen, highlight_color, point_screen_pos, highlight_radius, highlight_width)
-                # TODO: 实现绘制其他形状的点击点提示 (如纹理图标)
-                # elif highlight_type == "icon":
-                #    texture_id = visual_style.get("texture_id", "default_click_icon")
-                #    icon_texture = self.image_renderer.get_effect_texture(texture_id)
-                #    if icon_texture:
-                #        icon_rect = icon_texture.get_rect(center=point_screen_pos)
-                #        screen.blit(icon_texture, icon_rect)
+                elif highlight_type == "icon" and highlight_texture_id:
+                    # 绘制纹理图标
+                    icon_texture = self.image_renderer.get_effect_texture(highlight_texture_id)
+                    if icon_texture:
+                        # 纹理图标的尺寸可以固定，或者根据配置调整
+                        # 可以根据 highlight_radius 作为图标期望的显示半径，然后缩放纹理
+                        # icon_size = (highlight_radius * 2, highlight_radius * 2) # 示例
+                        # scaled_icon = pygame.transform.scale(icon_texture, icon_size)
+                        scaled_icon = icon_texture # 暂时不缩放纹理
+                        icon_rect = scaled_icon.get_rect(center=point_screen_pos)
+                        screen.blit(scaled_icon, icon_rect)
+                # TODO: 实现绘制其他形状的点击点提示
 
 
     # 修正：_on_point_activated 方法接收 point_config 参数
@@ -221,6 +230,7 @@ class ClickReveal:
         config_triggers = self.config.get("narrative_triggers", {})
 
         # 检查 OnClickAny (点击任意点)
+        # 只有当至少有一个点被激活时才检查
         if sum(self.activated_points.values()) > 0 and "on_click_any" in config_triggers:
             event_id = "on_click_any"
             if event_id not in self._triggered_narrative_events:
@@ -230,7 +240,7 @@ class ClickReveal:
         # 检查 OnClickSpecificPoint (点击特定点)
         for point_config in self.click_points_config: # 遍历配置，而不是已激活的字典
              point_id = point_config["id"]
-             if self.activated_points.get(point_id, False): # 如果这个点被激活了
+             if self.activated_points.get(point_id, False): # 如果这个点被激活了 (使用.get安全访问)
                   event_id = f"on_click_point_{point_id}"
                   # 如果这个事件ID在配置中存在且尚未触发过
                   if event_id in config_triggers and event_id not in self._triggered_narrative_events:
@@ -239,7 +249,7 @@ class ClickReveal:
 
         # 检查 OnAllClicked (所有点都已点击)
         # 这个事件只在所有点第一次被激活时触发一次
-        if all(self.activated_points.values()) and len(self.activated_points) > 0 and "on_all_clicked" in config_triggers:
+        if all(self.activated_points.values()) and len(self.click_points_config) > 0 and "on_all_clicked" in config_triggers: # 检查点击点列表非空
             event_id = "on_all_clicked"
             if event_id not in self._triggered_narrative_events:
                 triggered[event_id] = config_triggers[event_id]
@@ -272,15 +282,19 @@ class ClickReveal:
     #     return {
     #         "activated_points": self.activated_points,
     #         "reveal_progress": self.reveal_progress, # 只对纯 Click Reveal 有效
-    #         "triggered_narrative_events": list(self._triggered_narrative_events)
+    #         "triggered_narrative_events": list(self._triggered_narrative_events),
+    #         "_is_completed": self._is_completed # 保存完成状态
     #     }
 
     # def load_state(self, state_data, image_display_rect: pygame.Rect): # 加载时需要传递当前显示区域
     #     self.activated_points = state_data.get("activated_points", {})
     #     self.reveal_progress = state_data.get("reveal_progress", 0.0) # 提供默认值
     #     self._triggered_narrative_events = set(state_data.get("triggered_narrative_events", []))
-    #     # 重新计算完成状态：如果所有点已激活，则视为完成
-    #     self._is_completed = all(self.activated_points.values()) if self.activated_points else True
+    #     self._is_completed = state_data.get("_is_completed", False) # 加载完成状态
+    #     # 重新计算完成状态：如果所有点已激活，则视为完成 (如果在保存时未完成)
+    #     if not self._is_completed:
+    #          self._is_completed = all(self.activated_points.values()) if self.click_points_config else True
+
     #     # TODO: 根据加载的状态更新视觉效果 (调用 image_renderer 的方法)
     #     # if self.config.get("type") == self.settings.INTERACTION_CLICK_REVEAL:
     #     #    effect_type = self.config.get("initial_effect", {}).get("type", "blur_reveal")

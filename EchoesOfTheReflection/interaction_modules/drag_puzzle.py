@@ -326,7 +326,8 @@ class DragPuzzle:
         if not self._pieces_initialized:
              self._create_puzzle_pieces(image_display_rect)
              if not self._pieces_initialized: # 如果创建失败
-                  return # 无法处理事件
+                 self._is_completed = True
+                 return # 无法处理事件
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # 左键按下
             mouse_pos = event.pos
