@@ -13,9 +13,10 @@ from input_handler import InputHandler
 from interaction_modules import click_reveal, clean_erase, drag_puzzle, hybrid_interaction
 from gallery_manager import GalleryManager
 from save_manager import SaveManager
-from ui_manager import UIManager # 导入UIManager
+from ui_manager import UIManager
 from jsoncomment import JsonComment # 确保你已经安装了这个库
 import os # 导入 os 模块
+
 
 class GameManager:
     """管理游戏状态、阶段、图片加载和流程控制"""
@@ -33,53 +34,41 @@ class GameManager:
         except FileNotFoundError:
             print(f"错误：图片配置文件未找到 {self.settings.IMAGE_CONFIG_FILE}")
             # TODO: 处理错误，例如退出游戏或显示错误信息
-            sys.exit()
+            self.should_quit = True # 无法加载配置，标记退出
+            return {} # 返回空字典避免后续错误
         except Exception as e: # 捕获更广泛的异常，包括 jsoncomment 的解析错误
             print(f"错误：解析图片配置文件时出错 {self.settings.IMAGE_CONFIG_FILE}: {e}")
             # TODO: 处理错误
-            sys.exit()
+            self.should_quit = True # 解析错误，标记退出
+            return {} # 返回空字典
 
 
     def __init__(self, screen, settings: Settings):
         """初始化游戏管理器"""
         self.screen = screen
         self.settings = settings
-        # # 加载图片配置数据
-        # self.image_configs = self._load_image_configs()
-        # # self.current_state = settings.STATE_GAME # 初始状态设置为游戏 (跳过菜单) - 改在加载或开始新游戏里设置
 
-        # # 标记首次进入某个阶段，用于触发on_stage_enter文本
-        # self._entered_stages = {stage_id: False for stage_id in [
-        #     self.settings.STAGE_INTRO, self.settings.STAGE_1, self.settings.STAGE_2,
-        #     self.settings.STAGE_3, self.settings.STAGE_4, self.settings.STAGE_5,
-        #     self.settings.STAGE_6, self.settings.STAGE_GALLERY
-        # ]}
-
-        # # 初始化子系统 (UI Manager 需要在 ImageRenderer 和 NarrativeManager 之后初始化，因为它可能需要访问它们)
-        # self.image_renderer = ImageRenderer(screen, settings)
-        # # 将自身实例赋值给 settings 的 game_manager 属性
-        # self.settings.game_manager = self
-#------------------------------------------------------
-        # 在初始化 ImageRenderer 之前赋值 GameManager 引用给 settings 是错误的，因为 settings 还不知道 GameManager
-        # 应该在 GameManager 初始化自身所有必要组件后，再将 GameManager 引用传递给需要它的组件
+        # 将 GameManager 引用赋值给 settings，以便其他模块可以访问
+        self.settings.game_manager = self
 
         # 初始化子系统 (ImageRenderer 需要在最前面初始化，因为它负责显示)
         self.image_renderer = ImageRenderer(screen, settings) # ImageRenderer 在 __init__ 中不需要 GameManager 引用
 
         # 初始化其他管理器
         self.audio_manager = AudioManager(settings) # AudioManager 在 __init__ 中也不需要 GameManager 引用
-        self.narrative_manager = NarrativeManager(screen, settings) # NarrativeManager 需要 settings 才能获取文本
-        self.audio_manager = AudioManager(settings)
+        # NarrativeManager 需要 settings 才能获取文本
+        self.narrative_manager = NarrativeManager(screen, settings)
+        # NarrativeManager 在 __init__ 中加载文本时需要 settings.game_manager 引用，所以在赋值 settings.game_manager = self 之后初始化它
+
         self.input_handler = InputHandler()
 
         # UIManager 需要 GameManager 引用
-        self.ui_manager = UIManager(screen, settings, self) # UIManager 需要 GameManager 引用
-        self.gallery_manager = GalleryManager(screen, settings, self) # GalleryManager 也需要 GameManager 引用
+        self.ui_manager = UIManager(screen, settings, self)
+        self.gallery_manager = GalleryManager(screen, settings, self)
         self.save_manager = SaveManager(settings.SAVE_FILE_PATH)
 
         # 加载图片配置数据 (在所有管理器初始化后加载，因为它们可能需要在加载时访问settings或彼此)
         self.image_configs = self._load_image_configs()
-
 
         # 游戏进度变量
         self.current_stage_id = None
@@ -98,7 +87,8 @@ class GameManager:
         self.should_quit = False
 
         # 加载或开始新游戏
-        self._load_or_start_game() # _load_or_start_game 会设置初始状态和加载第一张图/阶段
+        if not self.should_quit: # 只有在加载配置没有错误时才开始游戏流程
+            self._load_or_start_game() # _load_or_start_game 会设置初始状态和加载第一张图/阶段
 
 
     def _load_or_start_game(self):
@@ -109,23 +99,30 @@ class GameManager:
             self.current_stage_id = saved_game.get("current_stage_id", self.settings.STAGE_INTRO)
             self.current_image_id = saved_game.get("current_image_id", None)
             self.unlocked_images = saved_game.get("unlocked_images", {})
-            self._entered_stages = saved_game.get("_entered_stages", self._entered_stages) # 加载已进入过的阶段
-            # TODO: 加载更详细的当前图片互动状态
+            self._entered_stages = saved_game.get("_entered_stages", {stage_id: False for stage_id in self._entered_stages}) # 加载已进入过的阶段，确保字典结构正确
+            # TODO: 加载更详细的当前图片互动模块的状态 (需要每个互动模块实现保存和加载自身状态的方法)
+            # saved_interaction_state_data = saved_game.get("current_interaction_state_data") # 示例
+
 
             # 根据加载的进度跳转到对应的阶段和图片
             if self.current_stage_id == self.settings.STAGE_GALLERY:
                 self._set_state(self.settings.STATE_GALLERY)
-                # 画廊加载在 _set_state 中完成
-                # 如果加载时就在画廊，需要通知画廊管理器恢复状态
-                # if self.current_image_id: # 如果画廊状态还保存了当前查看的图片
-                #     self.gallery_manager.display_image_detail(self.current_image_id) # 示例
-            else:
+                # 如果加载时就在画廊，可能需要恢复画廊查看的具体图片
+                if self.current_image_id: # 如果画廊状态还保存了当前查看的图片ID
+                    self.gallery_manager.display_image_detail(self.current_image_id) # 通知画廊管理器显示详情
+                    self.gallery_manager.detail_text_manager.update() # 立即更新一次文本显示
+
+            else: # 游戏阶段
                  self._set_state(self.settings.STATE_GAME)
                  # 加载时需要判断是继续当前图片还是进入下一张/阶段
                  if self.current_image_id:
-                      # 加载图片并恢复状态
-                       self._load_image(self.current_image_id) # 加载图片会重新创建互动模块
-                       # TODO: 恢复互动模块状态 self.current_image_interaction_state.load_state(...)
+                      # 加载图片
+                       self._load_image(self.current_image_id)
+                       # 恢复互动模块状态 (在 _load_image 创建模块后)
+                       # if self.current_image_interaction_state and saved_interaction_state_data:
+                       #    if hasattr(self.current_image_interaction_state, 'load_state'):
+                       #         self.current_image_interaction_state.load_state(saved_interaction_state_data, self.image_renderer.image_display_rect) # 示例
+
                  else:
                       # 从当前阶段的第一张图开始 (如果 current_image_id 为 None)
                       self._load_stage(self.current_stage_id)
@@ -137,36 +134,39 @@ class GameManager:
             self._set_state(self.settings.STATE_GAME) # 初始状态设为 GAME
             self.unlocked_images = {}
             self._entered_stages = {stage_id: False for stage_id in self._entered_stages} # 重置已进入过的阶段
-            self._load_stage(self.settings.STAGE_INTRO) # 从引子阶段开始
+            self.current_image_id = "intro_title" # 明确从引子开始
+            self._load_stage(self.settings.STAGE_INTRO) # 从引子阶段开始加载
+
 
     def _set_state(self, new_state):
         """设置当前游戏状态"""
         # 检查是否已经在目标状态
-        if self.current_state == new_state:
+        if hasattr(self, 'current_state') and self.current_state == new_state:
              return
 
         # 停止当前状态可能有的循环音效等
         # TODO: 停止当前互动模块的循环音效
-        # if self.current_state == self.settings.STATE_GAME and self.current_image_interaction_state and hasattr(self.current_image_interaction_state, 'stop_looping_sfx'):
+        # if hasattr(self, 'current_state') and self.current_state == self.settings.STATE_GAME and self.current_image_interaction_state and hasattr(self.current_image_interaction_state, 'stop_looping_sfx'):
         #     self.current_image_interaction_state.stop_looping_sfx() # 示例停止互动模块的循环音效
         # TODO: 停止当前阶段的背景音乐
         self.audio_manager.stop_bgm()
 
 
-        old_state = self.current_state
+        old_state = getattr(self, 'current_state', None) # 获取旧状态，处理第一次初始化
         self.current_state = new_state
         print(f"游戏状态切换：从 {old_state} 到 {self.current_state}")
 
         # 根据状态切换，控制不同管理器的启用/禁用，UI集合的激活
         if new_state == self.settings.STATE_GAME:
            self.ui_manager.set_ui_set_active("game_ui")
-           # TODO: 播放游戏背景音乐 (根据当前阶段播放，可能在 _load_stage 里更合适)
-           # self.audio_manager.play_bgm(f"bgm_stage{self.current_stage_id}.ogg") # 示例
+           # 游戏阶段背景音乐在 _load_stage 里加载第一张图时播放
            self.image_renderer.switch_background("vertical") # 切换到竖屏背景 (默认窗口)
            pass
         elif new_state == self.settings.STATE_GALLERY:
            self.ui_manager.set_ui_set_active("gallery_ui")
-           self.gallery_manager.enter_gallery(self.unlocked_images) # 进入画廊并加载缩略图
+           # GalleryManager.enter_gallery 在这里调用，它内部加载缩略图和触发画廊进入文本
+           # 它需要知道已解锁的图片列表
+           self.gallery_manager.enter_gallery(self.unlocked_images)
            # TODO: 播放画廊背景音乐
            # self.audio_manager.play_bgm("bgm_gallery.ogg") # 示例
            self.image_renderer.switch_background("horizontal") # 切换到横屏背景
@@ -185,15 +185,15 @@ class GameManager:
 
     def _load_stage(self, stage_id, image_id=None):
         """加载指定阶段"""
-        # ... _load_stage 方法内容同之前
+        # ... _load_stage 方法内容同之前，确保逻辑正确
         print(f"加载阶段: {stage_id}")
         self.current_stage_id = stage_id
 
-
+        # 激活当前阶段对应的UI集合 (已经在 _set_state 中处理)
 
         # TODO: 根据阶段ID加载背景音乐 (在这里播放背景音乐更合适)
-        if stage_id != self.settings.STAGE_INTRO and stage_id != self.settings.STAGE_GALLERY:
-             # 只有游戏阶段播放阶段背景音乐
+        # Stage 1, 2, 3, 4, 5, 6 是游戏阶段
+        if stage_id in [self.settings.STAGE_1, self.settings.STAGE_2, self.settings.STAGE_3, self.settings.STAGE_4, self.settings.STAGE_5, self.settings.STAGE_6]:
              self.audio_manager.play_bgm(f"bgm_stage{stage_id}.ogg") # 示例，需要根据实际Stage ID映射到音乐文件
 
 
@@ -203,10 +203,12 @@ class GameManager:
             # 找到该阶段的第一张图或引子配置，看是否有on_stage_enter文本
             if stage_id == self.settings.STAGE_INTRO:
                  config = self.image_configs.get("intro_title")
+            elif stage_id == self.settings.STAGE_GALLERY: # 画廊阶段也有进入文本
+                 config = self.image_configs.get("gallery_intro")
             else:
                  # 找到该阶段的第一张图配置
                  first_image_id_in_stage = None
-                 # 按照 index 找到第一张图
+                 # 按照 index 找到该阶段 index 为 1 的图片ID
                  for img_id, cfg in self.image_configs.items():
                      if cfg.get("stage") == stage_id and cfg.get("index") == 1:
                          first_image_id_in_stage = img_id
@@ -218,13 +220,14 @@ class GameManager:
                  # 引子阶段没有图片，加载引子文本后，当文本播放完毕，_go_to_next_image 会被调用
 
         # 加载该阶段的第一张图片或指定的图片
-        if stage_id != self.settings.STAGE_INTRO: # 引子阶段没有图片
+        # 只有游戏阶段 (Stage 1-6) 有图片需要加载
+        if stage_id in [self.settings.STAGE_1, self.settings.STAGE_2, self.settings.STAGE_3, self.settings.STAGE_4, self.settings.STAGE_5, self.settings.STAGE_6]:
              if image_id:
                  self._load_image(image_id)
              else:
                  # 找到该阶段的第一张图片ID
                  first_image_id_in_stage = None
-                 # 按照 index 找到第一张图
+                 # 按照 index 找到该阶段 index 为 1 的图片ID
                  for img_id, cfg in self.image_configs.items():
                      if cfg.get("stage") == stage_id and cfg.get("index") == 1:
                          first_image_id_in_stage = img_id
@@ -232,14 +235,13 @@ class GameManager:
                  if first_image_id_in_stage:
                       self._load_image(first_image_id_in_stage)
                  else:
-                      print(f"错误：未找到阶段 {stage_id} 的第一张图片配置")
+                      print(f"错误：游戏阶段 {stage_id} 没有配置 index 为 1 的图片。")
                       # TODO: 错误处理，例如加载一个错误占位图或进入错误状态
-
 
 
     def _load_image(self, image_id):
         """加载指定图片及其互动配置"""
-        # ... _load_image 方法内容同之前，在加载图片后和创建互动模块后新增UI更新
+        # ... _load_image 方法内容同之前，确保逻辑正确
         config = self.image_configs.get(image_id)
         if not config:
             print(f"错误：未找到图片配置 {image_id}")
@@ -269,8 +271,8 @@ class GameManager:
 
              # 应用初始效果
              if config.get("initial_effect"):
-                 self.image_renderer.apply_effect(config["initial_effect"]["type"], config["initial_effect"].get("strength")) # 示例参数
-                 # TODO: Stage 5/6 的 initial_effect 可能是叠加纹理，需要在 ImageRenderer 中实现
+                 # ImageRenderer 应用效果时需要知道当前图片ID，以便在draw中根据状态绘制不同效果
+                 self.image_renderer.apply_effect(config["initial_effect"]["type"], config["initial_effect"].get("strength"), image_id) # 传递 image_id
 
         else: # 纯文本图片 (如引子), 没有文件，清空当前图片显示
             self.image_renderer.current_image = None
@@ -381,10 +383,6 @@ class GameManager:
                                 print(f"触发叙事事件: {event_type}, 文本ID: {text_ids}")
                                 # narrative_manager.start_narrative 现在接收 AI声音回调
                                 self.narrative_manager.start_narrative(text_ids, self._get_ai_sound_for_text_id) # 传递获取音效的函数
-            else:
-                # 对于只有文本的图片 (如引子)，等待文本播放完毕自动进入下一图
-                if self.image_configs.get(self.current_image_id) and self.image_configs[self.current_image_id].get("type") in [self.settings.INTERACTION_INTRO] and not self.narrative_manager.is_narrative_active():
-                     self._go_to_next_image()
 
             # 更新叙事文本显示
             # NarrativeManager.update 返回是否有叙事正在播放，用于控制前进按钮
@@ -483,7 +481,7 @@ class GameManager:
 
     def _go_to_next_image(self):
         """加载下一张图片"""
-        # ... _go_to_next_image 方法内容同之前
+        # ... _go_to_next_image 方法同之前
         config = self.image_configs.get(self.current_image_id)
         if not config:
             print(f"错误：无法找到当前图片配置 {self.current_image_id} 来确定下一张图片。")

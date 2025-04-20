@@ -2,7 +2,7 @@
 import pygame
 # 导入自定义模块 - 它们现在位于根目录
 from settings import Settings
-from image_renderer import ImageRenderer
+from image_renderer import ImageRenderer # 导入用于坐标转换
 from audio_manager import AudioManager # 需要AudioManager来播放音效
 
 
@@ -30,7 +30,7 @@ class ClickReveal:
         self.activated_points = {point["id"]: False for point in self.click_points_config}
 
         # 显影进度控制
-        self.reveal_progress = 0.0
+        self.reveal_progress = 0.0 # 0.0 到 1.0
         self.reveal_progress_per_click = config.get("reveal_progress_per_click", 0.25) # 每次点击增加的进度比例
 
         # 跟踪已触发的叙事事件，避免重复触发
@@ -64,8 +64,10 @@ class ClickReveal:
 
     def _calculate_point_display_rects(self, image_display_rect: pygame.Rect):
         """根据当前图片显示区域，计算点击点在屏幕上的显示矩形"""
+        # 这个方法需要在 resize 或 ImageRenderer.load_image 后被调用
         self.click_point_display_rects = {}
-        highlight_size = 40 # TODO: 点击点视觉表示的尺寸 (像素)
+        # TODO: 点击点视觉表示的尺寸 (像素)
+        highlight_size = 40 # 例如，圆圈半径或图片边长
 
         for point_config in self.click_points_config:
             point_id = point_config["id"]
@@ -89,7 +91,9 @@ class ClickReveal:
 
         # 确保点击点显示Rects已计算 (在窗口resize或图片加载后需要)
         if not self.click_point_display_rects:
-            self._calculate_point_display_rects(image_display_rect)
+            # 在 handle_event 里计算位置不太理想，因为每帧鼠标移动都会触发
+            # 位置计算应该在 resize 和 load_image 时统一进行
+            self._calculate_point_display_rects(image_display_rect) # 不在这里计算位置
 
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # 左键点击
@@ -98,6 +102,7 @@ class ClickReveal:
             # 检查点击是否在图片的显示区域内 (可选，如果点击点只在图片内)
             # if image_display_rect.collidepoint(mouse_pos):
 
+            # 遍历所有点击点，检查是否点击到未激活的点
             for point_config in self.click_points_config:
                 point_id = point_config["id"]
                 # 检查点击是否在当前点击点区域内 (使用计算好的显示Rect进行碰撞检测)
@@ -118,6 +123,7 @@ class ClickReveal:
 
         # 确保点击点显示Rects已计算 (在窗口resize或图片加载后需要)
         if not self.click_point_display_rects:
+             # 如果在update里发现位置还没算，强制算一次
             self._calculate_point_display_rects(image_display_rect)
 
 
@@ -134,7 +140,7 @@ class ClickReveal:
         # 更新显影进度
         self.reveal_progress = target_progress
 
-        # 通知 ImageRenderer 更新显影效果
+        # 通知 ImageRenderer 更新显影效果 (例如模糊效果)
         self.image_renderer.update_effect("blur_reveal", self.reveal_progress) # TODO: ImageRenderer需要实现一个通用的显影效果更新
 
 
@@ -174,10 +180,10 @@ class ClickReveal:
                 point_display_rect = self.click_point_display_rects.get(point_id)
                 if point_display_rect:
                     # TODO: 绘制高亮圆圈或图标
-                    # if self.click_point_highlight_surface:
+                    # if self.click_point_highlight_surface: # 如果有加载高亮图片
+                    #     # 根据 Rect 位置绘制图片
                     #     screen.blit(self.click_point_highlight_surface, point_display_rect.topleft)
-                    # else:
-                    # 简单示例：绘制一个白点或圆圈
+                    # else: # 简单示例：绘制一个白点或圆圈
                     pygame.draw.circle(screen, self.settings.WHITE, point_display_rect.center, 10) # 绘制一个白色圆圈
 
 
@@ -189,7 +195,10 @@ class ClickReveal:
         # 触发点击反馈特效和音效
         # TODO: 触发点击反馈特效
         # if self.settings.CLICK_FEEDBACK_EFFECT_ID: # 示例通用点击反馈特效ID
-        #     self.image_renderer.trigger_effect(self.settings.CLICK_FEEDBACK_EFFECT_ID, self.click_point_display_rects.get(point_id).center) # 传递位置
+        #     # 需要传递位置给 ImageRenderer 或特效管理器
+        #     point_display_rect = self.click_point_display_rects.get(point_id)
+        #     if point_display_rect:
+        #          self.image_renderer.trigger_effect(self.settings.CLICK_FEEDBACK_EFFECT_ID, point_display_rect.center) # 传递位置
 
         # 播放点击音效
         if self.audio_manager:
@@ -251,6 +260,8 @@ class ClickReveal:
     # 在窗口resize时，需要重新计算点击点在屏幕上的显示位置
     def resize(self, new_width, new_height, image_display_rect: pygame.Rect):
          """处理窗口大小改变事件，重新计算点击点位置"""
+         # ImageRenderer 已经在 resize 中更新了 image_display_rect
+         # 只需要根据新的 image_display_rect 重新计算点击点在屏幕上的位置
          self._calculate_point_display_rects(image_display_rect)
 
 

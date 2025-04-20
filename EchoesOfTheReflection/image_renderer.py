@@ -1,7 +1,7 @@
 # image_renderer.py
 import pygame
 import os
-# 导入自定义模块 - 现在它们位于根目录
+# 导入自定义模块 - 它们现在位于根目录
 from settings import Settings
 # 导入 GameManager 类型提示，避免循环引用
 from typing import TYPE_CHECKING
@@ -22,7 +22,8 @@ class ImageRenderer:
 
         # 需要 GameManager 引用以获取当前图片ID和配置，以便重新加载图片进行resize
         # GameManager 会在初始化自身后将自身实例赋值给 settings.game_manager
-        self.game_manager: 'GameManager' = None # 初始为None，稍后赋值
+        self.game_manager: 'GameManager' = None # 初始为None, GameManager 初始化后赋值
+
 
         self.current_image_id = None # 新增：当前加载的图片的ID
         self.current_image = None # 当前加载的 Pygame Surface (已缩放裁剪到显示尺寸)
@@ -30,16 +31,16 @@ class ImageRenderer:
         self.original_image_size = (0, 0) # 原始图片的尺寸
         self.image_display_rect = pygame.Rect(0, 0, 0, 0) # 图片在屏幕上的实际显示区域 (Rect对象)
 
-        # TODO: 特效系统 (需要根据设计和资源实现)
-        self.current_effects = {} # {effect_type: effect_params}
-        self.effect_surfaces = {} # 用于复杂特效的Surface，例如 Render Texture 模拟
+        # 特效系统
+        self.current_effects = {} # {effect_type: effect_params}. Stage 5/6 的 overlay texture 也可以放在这里
+        self.effect_surfaces = {} # 用于复杂特效的Surface，例如 Render Texture 模拟，或模糊后的Surface
 
-        # TODO: 蒙版纹理加载 (用于清洁擦除)
+        # 蒙版纹理加载 (用于清洁擦除)
         self.mask_textures = {} # {mask_id: Pygame Surface}
         self._load_mask_textures() # 加载所有需要的蒙版纹理
 
-        # TODO: 其他艺术化资源的加载 (粒子纹理、光晕纹理等)
-        self.effect_textures = {}
+        # 其他艺术化资源的加载 (粒子纹理、光晕纹理等)
+        self.effect_textures = {} # {effect_id: Pygame Surface}
         self._load_effect_textures()
 
         # 背景图加载 (横屏和竖屏)
@@ -65,8 +66,8 @@ class ImageRenderer:
             "dust_mask.png",
             "fog_mask.png",
             "veil_mask.png",
-            "structure_mask.png",
-            "structure_overlay.png"
+            "structure_mask.png", # Stage 5 剥离蒙版
+            "structure_overlay.png" # Stage 5 叠加效果
             # TODO: 添加其他蒙版纹理文件路径
         ]
         for file_name in mask_files:
@@ -81,7 +82,6 @@ class ImageRenderer:
                  print(f"警告：蒙版纹理文件未找到 {file_path}")
 
 
-    # ... _load_effect_textures 方法同之前
     def _load_effect_textures(self):
          """加载所有预定义的特效纹理"""
          # 示例特效纹理文件路径
@@ -108,7 +108,6 @@ class ImageRenderer:
                   print(f"警告：特效纹理文件未找到 {file_path}")
 
 
-    # ... _load_backgrounds 方法同之前
     def _load_backgrounds(self):
         """加载横屏和竖屏背景图"""
         # 示例背景图文件路径 (需要在 assets/images 目录下准备这些图片)
@@ -134,7 +133,6 @@ class ImageRenderer:
             print(f"警告：横屏背景图文件未找到 {bg_horizontal_path}")
 
 
-
     def load_image(self, image_path):
         """加载指定图片，并进行缩放裁剪"""
         try:
@@ -149,7 +147,7 @@ class ImageRenderer:
             print(f"图片加载成功: {image_path}, 原始尺寸: {self.original_image_size}, 显示尺寸: {self.current_image.get_size()}")
 
             # TODO: 初始化特定于当前图片的特效或效果表面 (例如，Clean Erase 的 Render Texture 模拟)
-            # 这部分逻辑可能更适合放在对应的互动模块里，由互动模块在初始化时调用ImageRenderer的方法来设置
+            # 这个应该由互动模块在初始化时调用ImageRenderer的方法来设置
 
         except pygame.error as e:
             print(f"警告：无法加载图片 {image_path}: {e}")
@@ -159,7 +157,6 @@ class ImageRenderer:
             self.image_display_rect = pygame.Rect(0, 0, 0, 0)
 
 
-    # ... _scale_and_crop_image 方法同之前
     def _scale_and_crop_image(self, original_image: pygame.Surface, screen_size: tuple[int, int]) -> pygame.Surface:
         """
         根据屏幕的16:9显示区域，对原始图片进行缩放和裁剪。
@@ -209,7 +206,6 @@ class ImageRenderer:
         return cropped_image
 
 
-    # ... _calculate_display_rect 方法同之前
     def _calculate_display_rect(self, screen_size: tuple[int, int]):
         """
         计算图片在屏幕上的实际显示区域（居中）。
@@ -263,34 +259,40 @@ class ImageRenderer:
         if self.current_image:
             # 绘制图片本体
             # TODO: 这里需要根据当前的互动状态来决定如何绘制图片本体
-            # 例如，如果是清洁擦除，需要绘制 Render Texture 模拟的表面
-            # 如果是拼图，需要绘制每个碎片
+            # 例如，如果是清洁擦除，需要绘制 Render Texture 模拟的表面 (CleanErase 模块绘制蒙版，ImageRenderer 绘制底层图)
+            # 如果是拼图，需要绘制每个碎片 (DragPuzzle 模块绘制碎片)
             # 如果是混合玩法，需要协调绘制多个层/效果
 
             # 简单的示例：直接绘制缩放裁剪后的图片
-            self.screen.blit(self.current_image, self.image_display_rect.topleft)
+            # ImageRenderer 负责绘制基础图片和一些全局效果（如模糊）
+            # 互动模块负责绘制叠加在图片上的互动元素（如点击点、蒙版、碎片）
 
-            # TODO: 绘制额外的艺术化效果层 (叠加在图片上层的效果)
-            # self._draw_effects()
+            # 应用全局效果（例如模糊）
+            rendered_image_with_effects = self.current_image.copy() # 复制一份避免修改原图
+            if "blur" in self.current_effects:
+                 # TODO: 实现模糊效果的应用到 rendered_image_with_effects
+                 # rendered_image_with_effects = self._apply_blur_to_surface(rendered_image_with_effects, self.current_effects["blur"]["strength"])
+                 pass # 待实现
 
-            # TODO: 绘制蒙版 (如果当前互动是清洁擦除)
-            # if self._current_interaction_is_clean_erase():
-            #     self._draw_erase_mask() # 需要 CleanErase 模块提供绘制蒙版的方法
 
-            # TODO: 绘制拼图碎片 (如果当前互动是拼图)
-            # if self._current_interaction_is_drag_puzzle():
-            #     self._draw_puzzle_pieces() # 需要 DragPuzzle 模块提供绘制碎片的方法
+            self.screen.blit(rendered_image_with_effects, self.image_display_rect.topleft)
 
+            # TODO: 绘制额外的艺术化效果层 (叠加在图片上层的效果，例如 Stage 5/6 的结构叠加纹理)
+            # if "overlay" in self.current_effects:
+            #      overlay_texture_name = self.current_effects["overlay"].get("texture")
+            #      if overlay_texture_name and overlay_texture_name in self.mask_textures: # 假设叠加纹理也放在mask_textures里
+            #          overlay_surface = self.mask_textures[overlay_texture_name]
+            #          scaled_overlay = pygame.transform.scale(overlay_surface, self.image_display_rect.size)
+            #          self.screen.blit(scaled_overlay, self.image_display_rect.topleft, special_flags=pygame.BLEND_RGBA_MULT) # 示例混合模式
+            #      pass # 待实现
+
+
+    # ... draw_background 方法同之前
     def draw_background(self, screen_size: tuple[int, int]):
         """绘制背景图，适应屏幕尺寸"""
         screen_width, screen_height = screen_size
 
         # 判断当前是横屏还是竖屏模式，选择背景图
-        # 如果窗口宽高比 > 1 (宽大于高)，通常是横屏
-        # 如果窗口宽高比 <= 1 (高大于等于宽)，通常是竖屏
-        # 游戏设计是 16:9，所以默认是横屏比例。全屏时如果屏幕是带鱼屏等，可能会是更宽的横屏。
-        # 让我们简单判断当前窗口是否比 1:1 更宽，作为横竖屏判断（或者直接根据 settings 中的标志判断）
-        # 根据设计，全屏时切换横屏背景，默认窗口用竖屏背景。
         # self.current_background_type 会由 GameManager 在全屏切换时设置
 
         if self.current_background_type == "vertical" and self.background_vertical:
@@ -317,23 +319,19 @@ class ImageRenderer:
 
     # 实现各种艺术化效果的方法 (例如，模糊、噪点、光晕叠加、结构线叠加等)
     # 这些方法会被 ImageRenderer 的 draw_image 或 apply_effect 调用
-    def apply_effect(self, effect_type, params=None):
+    def apply_effect(self, effect_type, params=None, image_id=None):
         """应用一个艺术化效果"""
         # 这是一个高级功能，Pygame 原生支持有限，可能需要模拟或额外库
         # 简单的效果可以直接修改 self.current_image 或叠加 Surface
         # 复杂的效果（如 Render Texture for blur/erase）需要更多逻辑
-        print(f"TODO: 实现应用艺术化效果: {effect_type} with params {params}")
-        self.current_effects[effect_type] = params # 存储当前应用的效果类型和参数
-
-        # TODO: 根据效果类型，可能需要创建 Render Texture 或其他 Surface 来实现复杂效果
-        # 例如，对于模糊效果，需要创建模糊后的Surface并在draw_image中绘制
+        print(f"TODO: 实现应用艺术化效果: {effect_type} with params {params} for image {image_id}")
+        # 存储当前应用的效果类型和参数
+        # Stage 1 的模糊效果需要保存初始强度
         if effect_type == "blur":
-             # 需要将当前图片进行模糊处理并存储
-             # Pygame 的 transform.gaussian_blur 需要 Pygame 2.1 以上
-             # 或者使用 PIL/Pillow 库进行模糊处理
-             # blurred_image = pygame.transform.gaussian_blur(self.current_image, params) # params 是模糊半径/强度
-             # self.effect_surfaces["blurred"] = blurred_image
-             pass # 待实现具体的模糊处理
+             self.current_effects[effect_type] = {"strength": params}
+        elif effect_type == "overlay": # Stage 5/6 的叠加纹理
+             self.current_effects[effect_type] = {"texture": params}
+        # TODO: 添加其他效果类型的处理
 
 
     def update_effect(self, effect_type, progress):
@@ -342,13 +340,14 @@ class ImageRenderer:
          # progress 从 0.0 到 1.0
          print(f"TODO: 实现更新艺术化效果进度: {effect_type} with progress {progress}")
          if effect_type == "blur_reveal" and "blur" in self.current_effects:
-            # 模糊强度从初始强度 self.current_effects["blur"]["strength"] 降到 0
+            # 模糊强度从初始强度 self.current_effects["blur"]["strength"] (apply_effect时保存的) 降到 0
+            # progress 从 0 到 1
             initial_strength = self.current_effects["blur"].get("strength", 50) # 获取初始强度
             current_strength = initial_strength * (1.0 - progress)
             # 更新应用的效果参数
             self.current_effects["blur"]["strength"] = current_strength
-            # TODO: 重新应用模糊效果并更新 effect_surfaces["blurred"]
-            # self._apply_blur_effect(current_strength)
+            # TODO: 重新应用模糊效果并更新 effect_surfaces["blurred"] (如果在effect_surfaces里绘制)
+            # self._apply_blur_effect_to_surface(self.current_image, current_strength) # 需要实现模糊应用方法
 
 
     # def _draw_effects(self):
@@ -358,7 +357,7 @@ class ImageRenderer:
     #         # 绘制模糊后的 Surface
     #         self.screen.blit(self.effect_surfaces["blurred"], self.image_display_rect.topleft)
 
-    #     # TODO: 绘制其他效果，例如叠加纹理、粒子系统等
+    #     # TODO: 绘制其他效果，例如叠加纹理、粒子系统等 (如果它们不在互动模块绘制)
 
 
     # 坐标转换方法 (将原始图片坐标或相对坐标转换为屏幕坐标)
@@ -366,8 +365,8 @@ class ImageRenderer:
     def get_screen_coords_from_original(self, original_x: int, original_y: int) -> tuple[int, int]:
         """将原始图片像素坐标转换为屏幕坐标"""
         if self.original_image_size == (0, 0) or self.image_display_rect.size == (0, 0) or self.original_image is None:
-            print("警告：无法转换坐标，原始图片或显示区域无效。")
-            return (0, 0) # 无效状态
+            print("警告：无法转换坐标，原始图片或显示区域无效。") # 避免频繁打印
+            return (0, 0) # 返回原点作为无效坐标
 
         original_width, original_height = self.original_image_size
         display_width, display_height = self.image_display_rect.size
@@ -383,6 +382,7 @@ class ImageRenderer:
         scaled_original_height = 0
         crop_offset_x = 0
         crop_offset_y = 0
+        scale_factor = 1.0 # 初始比例
 
         if original_aspect > display_aspect:
              # 原始图片更宽，按显示区域高度缩放，宽度会超出
@@ -421,8 +421,8 @@ class ImageRenderer:
     def get_image_coords(self, screen_x: int, screen_y: int) -> tuple[int, int]:
         """将屏幕像素坐标转换回原始图片像素坐标"""
         if self.original_image_size == (0, 0) or self.image_display_rect.size == (0, 0) or self.original_image is None:
-             print("警告：无法转换坐标，原始图片或显示区域无效。")
-             return (0, 0) # 无效状态
+             # print("警告：无法转换坐标，原始图片或显示区域无效。") # 避免频繁打印
+             return (0, 0) # 返回原点作为无效坐标
 
         original_width, original_height = self.original_image_size
         display_width, display_height = self.image_display_rect.size
@@ -471,13 +471,20 @@ class ImageRenderer:
 
 
     # TODO: 其他辅助方法，例如获取某个特效纹理
-    # def get_effect_texture(self, effect_id):
-    #     return self.effect_textures.get(effect_id)
+    def get_effect_texture(self, effect_id):
+        """根据特效ID获取预加载的特效纹理Surface"""
+        return self.effect_textures.get(effect_id)
 
     # TODO: 实现应用模糊效果的方法
-    # def _apply_blur_effect(self, strength):
-    #     """使用PIL/Pillow或其他方式对 current_image 应用模糊"""
-    #     # 这是一个复杂的功能，需要导入 PIL 或使用其他图像处理库
-    #     # Pygame 原生模糊 transform.gaussian_blur 在旧版本可能没有
+    # def _apply_blur_effect_to_surface(self, surface: pygame.Surface, strength: int) -> pygame.Surface:
+    #     """对给定的Surface应用高斯模糊效果，返回新的Surface"""
+    #     # 这是一个复杂的功能，需要 Pygame 2.1+ 的 transform.gaussian_blur 或其他库
+    #     # 如果 Pygame 版本不支持，可以考虑使用 PIL/Pillow
     #     print(f"TODO: 实现模糊效果应用，强度: {strength}")
-    #     pass # 待实现
+    #     # 示例：使用 PIL/Pillow
+    #     # from PIL import Image, ImageFilter
+    #     # pil_image = Image.frombuffer("RGBA", surface.get_size(), pygame.image.tostring(surface, "RGBA"))
+    #     # blurred_pil_image = pil_image.filter(ImageFilter.GaussianBlur(radius=strength))
+    #     # blurred_surface = pygame.image.fromstring(blurred_pil_image.tobytes(), blurred_pil_image.size, "RGBA")
+    #     # return blurred_surface
+    #     return surface.copy() # 临时占位，返回原图副本

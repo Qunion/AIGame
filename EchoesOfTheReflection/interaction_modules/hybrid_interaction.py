@@ -51,10 +51,10 @@ class HybridInteraction:
 
     def _setup_sequence_and_interactions(self):
         """根据 hybrid_type 和 config 设置互动序列和子模块"""
-        print(f"设置混合互动类型: {self.hybrid_type} for image {self.config.get('file', self.config.get('description'))}")
+        print(f"设置混合互动类型: {self.hybrid_type} for image {self.config.get('file', self.config.get('description', 'current image'))}")
         # sequence_config = self.config.get("interaction_sequence", []) # 在image_config中为混合玩法定义序列 - 使用硬编码的序列逻辑更清晰
 
-        # 示例 Stage 3.2: hybrid_erase_then_click
+        # 示例 Stage 3.2 & 5.1: hybrid_erase_then_click
         if self.hybrid_type == self.settings.INTERACTION_HYBRID_ERASE_THEN_CLICK:
              # Sequence: Erase -> Click
              self.interaction_sequence = [("step1_erase", self.settings.INTERACTION_CLEAN_ERASE), ("step2_click", self.settings.INTERACTION_CLICK_REVEAL)]
@@ -64,19 +64,26 @@ class HybridInteraction:
                  "mask_texture": self.config.get("mask_texture"),
                  "unerasable_areas": self.config.get("unerasable_areas", []),
                  "erase_threshold": self.config.get("erase_threshold", 0.95),
-                 "narrative_triggers": self.config.get("narrative_triggers", {}) # 传递叙事触发给子模块
+                 # 传递叙事触发给子模块，但只传递与该步骤相关的触发器
+                 # 示例：找到所有以 "on_start_erase" 或 "on_erase_progress_" 或 "on_hit_unerasable" 开头的触发器
+                 "narrative_triggers": {k: v for k, v in self.config.get("narrative_triggers", {}).items() if k.startswith("on_start_erase") or k.startswith("on_erase_progress_") or k.startswith("on_hit_unerasable")} # 传递子模块可能需要的触发器
              }
+             # CleanErase 在完成时会返回 on_complete_erase 事件
+             if "on_complete_erase" in self.config.get("narrative_triggers", {}):
+                  erase_config["narrative_triggers"]["on_complete_erase"] = self.config["narrative_triggers"]["on_complete_erase"]
+
+
              self.sub_interactions["step1_erase"] = CleanErase(erase_config, self.image_renderer, self.screen)
 
              # Step 2: Click Reveal (点击显现点) - 这个点击点在擦除后才“出现”
              click_config = {
                  "click_points": self.config.get("post_erase_click_points", []), # 点击点是擦除后才出现的
-                 "narrative_triggers": self.config.get("narrative_triggers", {}) # 传递叙事触发给子模块
+                 # 传递叙事触发给子模块，只传递与点击相关的触发器
+                 "narrative_triggers": {k: v for k, v in self.config.get("narrative_triggers", {}).items() if k.startswith("on_click_")} # 示例
              }
              self.sub_interactions["step2_click"] = ClickReveal(click_config, self.image_renderer)
 
 
-        # 示例 Stage 5.1: hybrid_erase_then_click (同 Stage 3.2，但叙事和画面不同)
         # 示例 Stage 5.2: hybrid_click_then_drag
         elif self.hybrid_type == self.settings.INTERACTION_HYBRID_CLICK_THEN_DRAG:
              # Sequence: Click Nodes -> Drag Puzzle
@@ -85,16 +92,25 @@ class HybridInteraction:
              # Step 1: Click (点击节点生成碎片)
              click_config = {
                  "click_points": self.config.get("clickable_nodes", []), # 可点击的节点是点击点
-                 "narrative_triggers": self.config.get("narrative_triggers", {}) # 传递叙事触发给子模块
+                 # 传递叙事触发给子模块
+                 "narrative_triggers": {k: v for k, v in self.config.get("narrative_triggers", {}).items() if k.startswith("on_click_")} # 示例
+                 # ClickReveal 完成时需要触发 HybridInteraction 的下一步
+                 # 可以通过 ClickReveal 返回一个特殊事件，或者 HybridInteraction 监听 ClickReveal 的完成状态
              }
              self.sub_interactions["step1_click_nodes"] = ClickReveal(click_config, self.image_renderer) # 需要 ClickReveal 支持生成碎片或触发 HybridInteraction 来生成
 
              # Step 2: Drag Puzzle (拖拽拼合碎片)
              puzzle_config = {
-                 "pieces": self.config.get("puzzle_pieces", []), # 需要知道碎片定义和目标区域
-                 "drop_target": self.config.get("puzzle_drop_target"),
-                 "narrative_triggers": self.config.get("narrative_triggers", {}) # 传递叙事触发给子模块
+                 "pieces": self.config.get("puzzle_config", {}).get("pieces", []), # 需要知道碎片定义和目标区域
+                 "drop_target": self.config.get("puzzle_config", {}).get("drop_target"),
+                  "snap_threshold": self.config.get("puzzle_config", {}).get("snap_threshold", 20),
+                 # 传递叙事触发给子模块
+                 "narrative_triggers": {k: v for k, v in self.config.get("narrative_triggers", {}).items() if k.startswith("on_puzzle_")} # 示例
              }
+             # DragPuzzle 完成时需要触发 HybridInteraction 的完成
+             if "on_complete" in self.config.get("narrative_triggers", {}):
+                  puzzle_config["narrative_triggers"]["on_complete"] = self.config["narrative_triggers"]["on_complete"]
+
              self.sub_interactions["step2_drag_puzzle"] = DragPuzzle(puzzle_config, self.image_renderer) # TODO: DragPuzzle 初始化需要调整以接受这种配置
 
 
@@ -104,9 +120,11 @@ class HybridInteraction:
              self.interaction_sequence = [("step1_activate", self.settings.INTERACTION_CLICK_REVEAL)]
              click_config = {
                  "click_points": [self.config.get("final_activation_point")].copy() if self.config.get("final_activation_point") else [],
-                 "narrative_triggers": self.config.get("narrative_triggers", {}) # 传递叙事触发给子模块
+                 # 传递叙事触发给子模块
+                 "narrative_triggers": {k: v for k, v in self.config.get("narrative_triggers", {}).items() if k.startswith("on_final_activation_click")} # 示例
              }
              self.sub_interactions["step1_activate"] = ClickReveal(click_config, self.image_renderer)
+             # ClickReveal 完成时需要触发 HybridInteraction 的完成
 
 
         # 示例 Stage 6.1: hybrid_resonance_perceive
@@ -115,7 +133,8 @@ class HybridInteraction:
              self.interaction_sequence = [("step1_perceive", self.settings.INTERACTION_CLICK_REVEAL)]
              click_config = {
                  "click_points": self.config.get("resonance_points", []),
-                 "narrative_triggers": self.config.get("narrative_triggers", {}) # 传递叙事触发给子模块
+                 # 传递叙事触发给子模块
+                 "narrative_triggers": {k: v for k, v in self.config.get("narrative_triggers", {}).items() if k.startswith("on_click_any_resonance_point") or k.startswith("on_click_point_") or k.startswith("on_all_resonance_points_clicked")} # 示例
              }
              self.sub_interactions["step1_perceive"] = ClickReveal(click_config, self.image_renderer) # 可以复用ClickReveal
 
@@ -126,7 +145,8 @@ class HybridInteraction:
              self.interaction_sequence = [("step1_connect", self.settings.INTERACTION_CLICK_REVEAL)]
              click_config = {
                  "click_points": [self.config.get("final_connection_point")].copy() if self.config.get("final_connection_point") else [],
-                 "narrative_triggers": self.config.get("narrative_triggers", {}) # 传递叙事触发给子模块
+                 # 传递叙事触发给子模块
+                 "narrative_triggers": {k: v for k, v in self.config.get("narrative_triggers", {}).items() if k.startswith("on_click_connection_point")} # 示例
              }
              self.sub_interactions["step1_connect"] = ClickReveal(click_config, self.image_renderer) # 复用ClickReveal
 
@@ -135,9 +155,15 @@ class HybridInteraction:
              self.interaction_sequence = [] # 清空序列
              self._is_completed = True # 未知类型直接标记完成
 
+        # TODO: 可以根据 config 定义更复杂的序列，例如并行步骤，或者基于条件的跳转
+
 
     def _set_active_interaction(self, step_id):
         """设置当前活动的互动步骤"""
+        # 确保旧的互动停止循环音效等
+        if self.current_active_interaction and hasattr(self.current_active_interaction, 'stop_looping_sfx'):
+             self.current_active_interaction.stop_looping_sfx() # 示例停止循环音效
+
         self.current_active_step_id = step_id
         self.current_active_interaction = self.sub_interactions.get(step_id)
         print(f"激活混合互动步骤: {step_id}")
@@ -149,12 +175,9 @@ class HybridInteraction:
         # 这需要 HybridInteraction 监听子模块的特定事件，或者子模块返回更详细的状态
 
         # 示例：监听 ClickReveal 的 "on_all_clicked" 事件来触发下一步
-        if isinstance(self.current_active_interaction, ClickReveal):
-             pass # ClickReveal 的完成状态在 update 中检查
+        # 这个可以在 update 中检查子模块返回的事件类型
 
-        # 示例：监听 CleanErase 的 "on_complete_erase" 事件来触发下一步
-        if isinstance(self.current_active_interaction, CleanErase):
-             pass # CleanErase 的完成状态在 update 中检查
+        pass # 这个方法主要负责切换 active interaction
 
 
     def handle_event(self, event, image_display_rect: pygame.Rect):
@@ -168,7 +191,15 @@ class HybridInteraction:
     def update(self, image_display_rect: pygame.Rect) -> tuple[bool, dict]:
         """更新混合互动状态"""
         if self._is_completed or not self.current_active_interaction:
-            return True, {} # 已完成或无活动互动
+            # 如果已完成，或者没有活动的互动，但整个 HybridInteraction 还未标记完成 (理论上不发生)
+            # 检查是否所有步骤都已完成但总 Hybrid 未标记完成
+            if self.current_step_index >= len(self.interaction_sequence) and not self._is_completed:
+                 self._is_completed = True
+                 print(f"混合互动 {self.hybrid_type} 完成 (在 update 中二次确认)。")
+                 complete_narrative = self._check_and_trigger_narrative_events(check_complete=True)
+                 return True, complete_narrative
+            return self._is_completed, {} # 如果已完成，返回True和空事件
+
 
         # 更新当前活动的子互动模块
         # 子模块返回 (是否完成当前步骤, 触发的叙事事件字典)
@@ -179,50 +210,49 @@ class HybridInteraction:
         # 合并子模块和自身的叙事事件
         all_narrative_events = {**narrative_events, **hybrid_narrative_events}
 
+        # TODO: Stage 5.2 特殊处理：在 ClickReveal 的 "on_all_clicked" 事件发生后，触发生成碎片和切换到 DragPuzzle
+        # ClickReveal 的 update 方法会返回这个 narrative event
+        # 我们在这里检查返回的事件是否包含 "on_all_clicked"
+        if self.hybrid_type == self.settings.INTERACTION_HYBRID_CLICK_THEN_DRAG and "on_all_clicked" in narrative_events:
+             # 这个事件表示 ClickReveal 步骤已经完成所有点击
+             # 此时 ClickReveal 模块会返回 is_step_completed = True
+             # 但我们需要在这里拦截，先生成碎片，再激活 DragPuzzle
+             print("Stage 5.2 Click Reveal 完成，触发碎片生成和拖拽步骤。")
+             # TODO: 生成拼图碎片，并传递给 DragPuzzle 子模块
+             self._generate_puzzle_pieces_for_drag_step() # 需要实现此方法
+             # 标记当前步骤已完成
+             self.current_step_index += 1
+             # 激活下一个步骤 (DragPuzzle)
+             if self.current_step_index < len(self.interaction_sequence):
+                 next_step_id, _ = self.interaction_sequence[self.current_step_index]
+                 self._set_active_interaction(next_step_id)
+                 # 返回 False，因为整个 Hybrid 互动未完成，只是步骤切换
+                 return False, all_narrative_events
+             else:
+                 # 理论上不应该走到这里，除非 ClickReveal 是 Hybrid 的最后一个步骤，但 Stage 5.2 不是
+                 print("错误：Stage 5.2 Click Reveal 是最后一个步骤？检查配置或序列。")
+                 self._is_completed = True
+                 return True, all_narrative_events # 标记完成
+
 
         if is_step_completed:
             print(f"混合互动步骤 {self.current_active_step_id} 完成。")
 
-            # 处理步骤完成后的逻辑，根据 hybrid_type 执行特定操作或进入下一阶段
-            current_step_id, current_interaction_type = self.interaction_sequence[self.current_step_index]
+            # 处理步骤完成后的逻辑，进入下一阶段或激活下一个步骤
+            self.current_step_index += 1
 
-            if self.hybrid_type == self.settings.INTERACTION_HYBRID_ERASE_THEN_CLICK and current_step_id == "step1_erase":
-                 # Stage 3.2 & 5.1: 擦除完成 -> 显现点击点，激活点击步骤
-                 # 显现点击点已经在 CleanErase 模块的 draw 方法中根据状态实现
-                 self.current_step_index += 1
-                 next_step_id, _ = self.interaction_sequence[self.current_step_index]
-                 self._set_active_interaction(next_step_id)
-                 # CleanErase 模块的 on_complete_erase 事件在这里返回，GameManager会处理其叙事
-                 # 返回False，因为整个Hybrid互动未完成
-                 return False, all_narrative_events
-
-            elif self.hybrid_type == self.settings.INTERACTION_HYBRID_CLICK_THEN_DRAG and current_step_id == "step1_click_nodes":
-                 # Stage 5.2: 点击节点完成 -> 生成碎片，激活拖拽步骤
-                 # TODO: 在这里生成拼图碎片 (需要访问 ImageRenderer 和 DragPuzzle 子模块)
-                 # self._generate_puzzle_pieces_for_drag_step() # 需要实现此方法
-                 self.current_step_index += 1
-                 next_step_id, _ = self.interaction_sequence[self.current_step_index]
-                 self._set_active_interaction(next_step_id)
-                 # 返回False，因为整个Hybrid互动未完成
-                 return False, all_narrative_events
-
-
+            if self.current_step_index < len(self.interaction_sequence):
+                # 还有后续步骤，激活下一个
+                next_step_id, _ = self.interaction_sequence[self.current_step_index]
+                self._set_active_interaction(next_step_id)
+                return False, all_narrative_events # 返回False，整个Hybrid互动未完成
             else:
-                # 其他类型的步骤完成，或者这是序列的最后一个步骤
-                self.current_step_index += 1 # 尝试进入下一个索引
-
-                if self.current_step_index < len(self.interaction_sequence):
-                    # 还有后续步骤，激活下一个
-                    next_step_id, _ = self.interaction_sequence[self.current_step_index]
-                    self._set_active_interaction(next_step_id)
-                    return False, all_narrative_events # 返回False，整个Hybrid互动未完成
-                else:
-                    # 所有步骤都完成了
-                    self._is_completed = True
-                    print(f"混合互动 {self.hybrid_type} 完成。")
-                    # 触发整个混合互动完成的叙事 (on_complete)
-                    complete_narrative = self._check_and_trigger_narrative_events(check_complete=True)
-                    return True, {**all_narrative_events, **complete_narrative} # 返回完成状态和所有触发的叙事事件
+                # 所有步骤都完成了
+                self._is_completed = True
+                print(f"混合互动 {self.hybrid_type} 完成。")
+                # 触发整个混合互动完成的叙事 (on_complete)
+                complete_narrative = self._check_and_trigger_narrative_events(check_complete=True)
+                return True, {**all_narrative_events, **complete_narrative} # 返回完成状态和所有触发的叙事事件
 
 
         return False, all_narrative_events # 未完成，返回子模块和自身触发的叙事
@@ -234,14 +264,53 @@ class HybridInteraction:
             # TODO: 根据互动类型和当前步骤，决定是否绘制该子模块
             # 例如，CleanErase 模块在擦除完成但点击未开始前，需要绘制蒙版最终状态
             # DragPuzzle 模块在碎片生成后，即使点击步骤完成，碎片也需要绘制
-            # 简单示例：绘制当前活动的，和已完成且需要持续显示的子模块
-            # if interaction is self.current_active_interaction or (interaction._is_completed and self._should_draw_after_complete(step_id)): # _should_draw_after_complete 需要实现
-            if interaction: # 临时：绘制所有已初始化的子模块，由子模块内部控制可见性
+            # 示例：绘制所有已初始化的子模块，由子模块内部控制可见性
+            # 只有当互动模块不是 None 时才尝试绘制
+            if interaction:
                  interaction.draw(screen, image_display_rect)
 
 
-    # TODO: 实现判断步骤完成后是否需要持续绘制的方法 (_should_draw_after_complete)
-    # 例如，拖拽拼图完成后的碎片需要持续绘制，但 ClickReveal 完成后可能不需要绘制点击点
+    # TODO: 实现 Stage 5.2 生成拼图碎片的方法
+    # def _generate_puzzle_pieces_for_drag_step(self):
+    #     """在 Stage 5.2 Click Reveal 完成后，生成碎片并传递给 DragPuzzle"""
+    #     if self.hybrid_type != self.settings.INTERACTION_HYBRID_CLICK_THEN_DRAG:
+    #         return
+
+    #     drag_puzzle_interaction = self.sub_interactions.get("step2_drag_puzzle")
+    #     click_nodes_interaction = self.sub_interactions.get("step1_click_nodes")
+
+    #     if drag_puzzle_interaction and click_nodes_interaction:
+    #         # 获取点击节点和它们生成碎片的配置
+    #         clickable_nodes_config = self.config.get("clickable_nodes", [])
+    #         puzzle_pieces_config = self.config.get("puzzle_config", {}).get("pieces", [])
+
+    #         # 创建碎片列表 (这里的碎片可能是简单的 Surface 或更复杂的对象)
+    #         generated_pieces = []
+    #         for node_config in clickable_nodes_config:
+    #              if click_nodes_interaction.activated_points.get(node_config["id"]): # 如果这个节点被点击了
+    #                   # 找到这个节点对应的碎片配置
+    #                   piece_config = next((p for p in puzzle_pieces_config if p.get("source_node") == node_config["id"]), None)
+    #                   if piece_config:
+    #                       piece_id = piece_config["id"]
+    #                       correct_pos_local = tuple(piece_config.get("correct_pos_local", (0,0)))
+    #                       # TODO: **创建实际的碎片 Surface** (可能需要从某个资源加载或生成)
+    #                       # 这里是关键，碎片的视觉是什么样的？是抽象符号还是图片一部分？
+    #                       # 假设碎片是简单的颜色块或预加载的小纹理
+    #                       # piece_surface = self.image_renderer.get_effect_texture(f"puzzle_piece_{piece_id}") # 示例
+    #                       # if not piece_surface: piece_surface = pygame.Surface((50, 50)).convert_alpha() # 默认占位
+    #                       # piece_surface.fill((200, 200, 200, 200)) # 示例灰色半透明块
+
+    #                       # 创建 PuzzlePiece 实例
+    #                       # generated_pieces.append(puzzle_piece.PuzzlePiece(piece_id, piece_surface, correct_pos_local))
+    #                       pass # 待实现碎片Surface创建和PuzzlePiece实例化
+
+    #         # 将生成的碎片传递给 DragPuzzle 子模块并启用它
+    #         if generated_pieces:
+    #             drag_puzzle_interaction.set_pieces(generated_pieces) # DragPuzzle 需要添加 set_pieces 方法
+    #             drag_puzzle_interaction.enable_dragging() # DragPuzzle 需要添加 enable_dragging 方法
+
+    #     else:
+    #         print("警告：无法生成 Stage 5.2 拼图碎片，子模块未找到。")
 
 
     def _check_and_trigger_narrative_events(self, check_complete=False) -> dict:

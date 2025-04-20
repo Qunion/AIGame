@@ -2,7 +2,7 @@
 import pygame
 import sys
 
-# 导入自定义模块
+# 导入自定义模块 - 它们现在位于根目录
 from settings import Settings
 from game_manager import GameManager
 # from ui_manager import UIManager # 由GameManager内部创建和管理
@@ -47,8 +47,9 @@ def run_game():
         clock.tick(60) # 设定帧率为60 FPS
 
         # 检查是否应该退出游戏 (例如，通过InputHandler和GameManager设置的内部标志)
-        if game_manager.should_quit: # 示例内部退出标志
-            running = False
+        if game_manager.should_quit:
+             running = False
+
     pygame.quit() # 退出 Pygame
     sys.exit()
 

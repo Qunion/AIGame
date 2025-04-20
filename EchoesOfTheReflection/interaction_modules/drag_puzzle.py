@@ -55,9 +55,9 @@ class DragPuzzle:
             print("错误：无法创建拼图碎片，图片未加载！")
             return
 
-        # 获取要切割的原始 Surface (可能是缩放裁剪后的图片)
+        # 获取要切割的原始 Surface (可能是缩放裁剪后的图片，这是在 ImageRenderer 中已经处理好的显示尺寸的图片)
         source_surface = self.image_renderer.current_image
-        img_width, img_height = source_surface.get_size()
+        img_width, img_height = source_surface.get_size() # 这是图片的显示尺寸
 
         piece_width = img_width // self.cols
         piece_height = img_height // self.rows
@@ -67,41 +67,58 @@ class DragPuzzle:
         if pieces_config:
              # TODO: 根据更复杂的 piece config 创建碎片 (例如，Stage 5.2 由点击生成碎片)
              # For Stage 4, assume pieces config is not used, use default grid
-             pass # 待实现
+             # 如果 pieces config 存在，它定义了碎片的 ID 和正确本地坐标
+             # 需要根据这些信息从 source_surface 中截取对应的碎片 Surface
+             self.pieces = []
+             for piece_cfg in pieces_config:
+                  piece_id = piece_cfg["id"]
+                  correct_pos_local = tuple(piece_cfg["correct_pos_local"]) # 假设是本地坐标 [x, y]
+                  # 根据本地坐标和碎片尺寸截取 Surface
+                  piece_rect_local = pygame.Rect(correct_pos_local[0], correct_pos_local[1], piece_width, piece_height) # 假设所有碎片尺寸相同
+                  piece_surface = source_surface.subsurface(piece_rect_local)
+                  grid_pos = piece_cfg.get("grid_pos") # 可选的网格位置信息
 
-        # 默认简单网格切割:
-        self.pieces = []
-        all_correct_positions_local = [] # 存储所有正确位置的本地图片坐标 (相对于图片显示区域左上角)
-        for r in range(self.rows):
-            for c in range(self.cols):
-                piece_index = r * self.cols + c
-                piece_rect_local = pygame.Rect(c * piece_width, r * piece_height, piece_width, piece_height)
-                piece_surface = source_surface.subsurface(piece_rect_local)
+                  self.pieces.append(puzzle_piece.PuzzlePiece(piece_id, piece_surface, correct_pos_local, grid_pos))
 
-                correct_pos_local = (piece_rect_local.x, piece_rect_local.y) # 正确位置是其在切割前的本地坐标
-                grid_pos = (r, c) # 网格位置
+        else:
+            # 默认简单网格切割:
+            self.pieces = []
+            for r in range(self.rows):
+                for c in range(self.cols):
+                    piece_index = r * self.cols + c
+                    piece_rect_local = pygame.Rect(c * piece_width, r * piece_height, piece_width, piece_height)
+                    piece_surface = source_surface.subsurface(piece_rect_local)
 
-                self.pieces.append(puzzle_piece.PuzzlePiece(f"piece_{r}_{c}", piece_surface, correct_pos_local, grid_pos))
-                all_correct_positions_local.append(correct_pos_local)
+                    correct_pos_local = (piece_rect_local.x, piece_rect_local.y) # 正确位置是其在切割前的本地坐标
+                    grid_pos = (r, c) # 网格位置
+
+                    self.pieces.append(puzzle_piece.PuzzlePiece(f"piece_{r}_{c}", piece_surface, correct_pos_local, grid_pos))
 
 
         # 计算碎片的初始随机散开位置 (在图片显示区域范围内)
-        image_display_rect = self.image_renderer.image_display_rect # 需要当前的显示区域
+        image_display_rect = self.image_renderer.image_display_rect # 图片在屏幕上的显示区域
         scatter_width = image_display_rect.width * self.initial_scatter_range
         scatter_height = image_display_rect.height * self.initial_scatter_range
 
         initial_positions_screen = [] # 存储打乱后的初始屏幕位置
-        correct_positions_screen = [ (image_display_rect.left + pos[0], image_display_rect.top + pos[1]) for pos in all_correct_positions_local ] # 所有正确位置的屏幕坐标
 
-        # 生成随机散开的位置
-        for correct_screen_pos in correct_positions_screen:
+        # 遍历所有碎片，计算它们的正确屏幕位置，并生成随机散开的初始位置
+        correct_positions_screen = []
+        for piece in self.pieces:
+            correct_screen_pos = (
+                image_display_rect.left + piece.correct_pos_local[0],
+                image_display_rect.top + piece.correct_pos_local[1]
+            )
+            correct_positions_screen.append(correct_screen_pos) # 存储正确屏幕位置
+
+            # 生成随机散开的初始位置
             initial_pos_screen = (
                 correct_screen_pos[0] + random.uniform(-scatter_width, scatter_width),
                 correct_screen_pos[1] + random.uniform(-scatter_height, scatter_height)
             )
             initial_positions_screen.append(initial_pos_screen)
 
-        # 将打乱后的位置赋予碎片
+        # 将打乱后的初始屏幕位置赋予碎片
         random.shuffle(initial_positions_screen)
         for i, piece in enumerate(self.pieces):
              piece.set_position(initial_positions_screen[i])
@@ -123,6 +140,7 @@ class DragPuzzle:
             for piece in reversed(self.pieces): # 从后往前检查，确保点击到最上面的碎片
                 if not piece.is_locked() and piece.rect.collidepoint(mouse_pos):
                     self._dragging_piece = piece
+                    # 计算拖拽偏移：鼠标位置相对于碎片左上角的位置
                     self._drag_offset = (mouse_pos[0] - piece.rect.left, mouse_pos[1] - piece.rect.top)
                     # 将被拖拽的碎片放到列表末尾，使其绘制在最上层
                     self.pieces.remove(piece)
@@ -144,13 +162,15 @@ class DragPuzzle:
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1: # 左键抬起
             if self._dragging_piece:
                 # 检查是否吸附到正确位置
-                snap_threshold = 20 # 吸附容忍度像素
+                # TODO: 吸附容忍度可以从 config 中读取
+                snap_threshold = self.puzzle_config.get("snap_threshold", 20) # 吸附容忍度像素
+
                 # 计算碎片的正确屏幕位置
                 correct_screen_pos = (
                     image_display_rect.left + self._dragging_piece.correct_pos_local[0],
                     image_display_rect.top + self._dragging_piece.correct_pos_local[1]
                 )
-                # 检查当前位置是否接近正确位置
+                # 检查当前位置是否接近正确位置 (使用碎片左上角进行距离判断)
                 if (self._dragging_piece.rect.left - correct_screen_pos[0])**2 + \
                    (self._dragging_piece.rect.top - correct_screen_pos[1])**2 <= snap_threshold**2:
                     # 吸附到位
@@ -167,7 +187,7 @@ class DragPuzzle:
                 self._dragging_piece = None # 停止拖拽
 
                 # TODO: 停止拖拽音效 (如果使用循环音效)
-                # if self.audio_manager.is_sfx_playing("sfx_puzzle_dragging_looping"):
+                # if self.audio_manager and self.audio_manager.is_sfx_playing("sfx_puzzle_dragging_looping"):
                 #     self.audio_manager.stop_sfx("sfx_puzzle_dragging_looping")
 
 
@@ -180,7 +200,7 @@ class DragPuzzle:
                 self._dragging_piece.set_position((new_x, new_y))
 
                 # TODO: 播放拖拽音效 sfx_puzzle_dragging_looping (循环音效)
-                # if not self.audio_manager.is_sfx_playing("sfx_puzzle_dragging_looping"): # 避免重复播放
+                # if self.audio_manager and not self.audio_manager.is_sfx_playing("sfx_puzzle_dragging_looping"): # 避免重复播放
                 #     self.audio_manager.play_sfx("sfx_puzzle_dragging_looping", loop=-1)
 
 
@@ -216,7 +236,28 @@ class DragPuzzle:
             piece.draw(screen)
 
         # TODO: 绘制吸附目标的视觉提示 (可选)
+        # 例如，在正确位置绘制一个半透明的区域或边框
+        # if not self._is_completed:
+        #      for piece in self.pieces:
+        #          if not piece.is_locked():
+        #               correct_screen_pos = (
+        #                   image_display_rect.left + piece.correct_pos_local[0],
+        #                   image_display_rect.top + piece.correct_pos_local[1]
+        #               )
+        #               target_rect = pygame.Rect(correct_screen_pos, piece.rect.size)
+        #               pygame.draw.rect(screen, (255, 255, 255, 50), target_rect, 2) # 半透明白色边框
+
         # TODO: 绘制拖拽碎片的视觉效果 (例如，阴影或高亮)
+        # if self._dragging_piece:
+        #     # 在拖拽碎片的当前位置下方绘制一个半透明阴影
+        #     shadow_offset = (5, 5)
+        #     shadow_color = (0, 0, 0, 100) # 半透明黑色
+        #     shadow_rect = self._dragging_piece.rect.copy()
+        #     shadow_rect.move_ip(shadow_offset)
+        #     shadow_surface = pygame.Surface(shadow_rect.size, pygame.SRCALPHA)
+        #     shadow_surface.fill(shadow_color)
+        #     screen.blit(shadow_surface, shadow_rect.topleft)
+        #     # self._dragging_piece.draw(screen) # 绘制碎片本身，它已经在主循环的最后绘制了，因为它在 pieces 列表的末尾
 
 
     def _check_and_trigger_narrative_events(self, check_complete=False) -> dict:
@@ -249,7 +290,7 @@ class DragPuzzle:
             if event_id not in self._triggered_narrative_events:
                  triggered[event_id] = config_triggers[event_id]
                  self._triggered_narrative_events.add(event_id)
-        # TODO: 检查其他进度触发点
+        # TODO: 检查其他进度触发点，例如 25%, 75% 等
 
 
         # 检查 on_complete (互动完成)
@@ -265,9 +306,14 @@ class DragPuzzle:
     def resize(self, new_width, new_height, image_display_rect: pygame.Rect):
          """处理窗口大小改变事件，重新计算碎片位置和吸附点"""
          if self.pieces:
-             # 重新计算每个碎片的正确屏幕位置 (吸附点)
+             # 获取旧的图片显示区域，以便计算相对位置
+             # 需要在 resize 前保存旧的 image_display_rect，或者在 GameManager 中传递旧的
+             # 简化的方法：假设 resize 发生时，未锁定的碎片保持它们相对于旧图片区域的比例位置
+             # 已锁定的碎片则直接更新到新的正确屏幕位置
+
+             # 先重新计算所有碎片的正确屏幕位置 (吸附点)
              for piece in self.pieces:
-                 # 将原始本地坐标转换为新的屏幕坐标
+                 # correct_pos_local 是相对于图片显示区域的本地坐标
                  correct_screen_pos = (
                      image_display_rect.left + piece.correct_pos_local[0],
                      image_display_rect.top + piece.correct_pos_local[1]
@@ -275,43 +321,65 @@ class DragPuzzle:
                  # 如果碎片已锁定，更新其位置到新的正确屏幕位置
                  if piece.is_locked():
                      piece.set_position(correct_screen_pos)
-                 # 如果碎片未锁定，它的屏幕位置需要保持相对位置或重新计算散开位置
-                 # 最简单的方式是让未锁定碎片保持当前相对位置，或者重新随机散开（可能丢失进度）
-                 # 保持相对位置：(当前屏幕位置 - 旧图片区域左上角) / 旧图片区域尺寸 * 新图片区域尺寸 + 新图片区域左上角
-                 # TODO: 实现复杂的未锁定碎片位置更新逻辑
+                 else:
+                      # 对于未锁定的碎片，需要根据它们的旧屏幕位置和旧的图片显示区域来计算新的屏幕位置
+                      # 这是一个复杂的问题，涉及到状态保存或更复杂的坐标转换
+                      # 最简单的临时方案：让未锁定的碎片保持当前屏幕位置，或者重新随机散开
+                      # 保持当前屏幕位置：不做任何事，缺点是如果图片区域移动，碎片位置不对
+                      # 重新随机散开：调用 _create_puzzle_pieces() 会重新散开，丢失未锁定碎片的相对位置进度
+
+                      # 更合理的方案：保存未锁定碎片的相对位置 (相对于旧图片区域)，在 resize 时根据新图片区域重新计算绝对位置
+                      # 需要在 PuzzlePiece 中保存相对位置，或者在 DragPuzzle 中统一管理
+                      pass # TODO: 实现复杂的未锁定碎片位置更新逻辑
 
     # TODO: 添加保存和加载模块状态的方法
     # def get_state(self):
     #     return {
-    #         "piece_positions": {piece.id: piece.rect.topleft for piece in self.pieces},
-    #         "piece_locked_status": {piece.id: piece.is_locked() for piece in self.pieces},
+    #         "piece_positions": {str(piece.id): piece.rect.topleft for piece in self.pieces}, # 保存屏幕坐标
+    #         "piece_locked_status": {str(piece.id): piece.is_locked() for piece in self.pieces},
     #         "triggered_narrative_events": list(self._triggered_narrative_events),
     #         "_has_started_dragging": self._has_started_dragging,
+    #         # TODO: 如果拖拽中的碎片也需要保存，需要保存 _dragging_piece 的ID和偏移量
+    #         # "_dragging_piece_id": self._dragging_piece.id if self._dragging_piece else None,
+    #         # "_drag_offset": self._drag_offset
     #     }
 
     # def load_state(self, state_data, image_display_rect: pygame.Rect):
     #     # 重新创建碎片 (它们的原始本地位置已确定)
-    #     self._create_puzzle_pieces() # 这个方法创建了碎片，并计算了初始散开位置和正确本地位置
+    #     # 需要在加载前判断是否已经创建过碎片 (例如在 __init__ 里)
+    #     if not self.pieces: # 如果还没有创建碎片 (第一次加载)
+    #         self._create_puzzle_pieces() # 创建碎片，并计算了初始散开位置和正确本地位置
+
     #     # 现在根据保存的状态设置位置和锁定状态
-    #     loaded_positions = state_data["piece_positions"]
-    #     loaded_locked_status = state_data["piece_locked_status"]
-    #     self._triggered_narrative_events = set(state_data["triggered_narrative_events"])
-    #     self._has_started_dragging = state_data["_has_started_dragging"]
+    #     loaded_positions = state_data.get("piece_positions", {})
+    #     loaded_locked_status = state_data.get("piece_locked_status", {})
+    #     self._triggered_narrative_events = set(state_data.get("triggered_narrative_events", []))
+    #     self._has_started_dragging = state_data.get("_has_started_dragging", False)
 
     #     # 创建一个字典方便通过 ID 查找碎片
     #     pieces_by_id = {piece.id: piece for piece in self.pieces}
 
     #     for piece_id_str, pos_list in loaded_positions.items():
-    #          piece_id = int(piece_id_str) if piece_id_str.isdigit() else piece_id_str # 确保ID类型一致
+    #          # 确保 ID 类型一致，保存时转为字符串，加载时转回原始类型（这里是 int 或 str）
+    #          piece_id = piece_id_str # Assuming ID is string
     #          if piece_id in pieces_by_id:
     #              piece = pieces_by_id[piece_id]
     #              # 保存的位置是屏幕坐标，加载时直接设置
     #              piece.set_position(tuple(pos_list))
 
     #     for piece_id_str, locked_status in loaded_locked_status.items():
-    #          piece_id = int(piece_id_str) if piece_id_str.isdigit() else piece_id_str
+    #          piece_id = piece_id_str # Assuming ID is string
     #          if piece_id in pieces_by_id:
     #              pieces_by_id[piece_id].set_locked(locked_status)
 
     #     self._is_completed = all(piece.is_locked() for piece in self.pieces) if self.pieces else True # 重新计算完成状态
-    #     # TODO: 如果 _dragging_piece 需要保存，也需要加载
+    #     # TODO: 如果 _dragging_piece 需要保存，也需要加载并重新设置引用
+    #     # dragging_piece_id = state_data.get("_dragging_piece_id")
+    #     # if dragging_piece_id is not None and dragging_piece_id in pieces_by_id:
+    #     #      self._dragging_piece = pieces_by_id[dragging_piece_id]
+    #     #      self._drag_offset = state_data.get("_drag_offset", (0,0))
+
+    #     # TODO: 加载状态后，可能需要重新计算所有碎片的屏幕位置，以防 image_display_rect 改变
+    #     # 或者保存的是相对位置，加载时再转屏幕位置
+    #     # 重新计算所有碎片的屏幕位置 (包括锁定和未锁定的)
+    #     # self.resize(image_display_rect.width, image_display_rect.height, image_display_rect) # 可以调用resize方法
