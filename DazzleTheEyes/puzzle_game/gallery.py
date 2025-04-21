@@ -306,26 +306,29 @@ class Gallery:
 
     def handle_event_view_lit(self, event):
         """处理图库大图查看界面的事件。返回 True 表示事件被消耗，False 表示未处理。"""
-        # 处理左右导航按钮的事件
-        # Button 类需要有 handle_event 方法并返回 True 如果事件被处理
-        handled = False
-        # for button in self.view_lit_buttons:  # 遍历组中的所有按钮
-        #     if button.handle_event(event):  # 调用每个按钮的handle_event方法
-        #         handled = True
-        #         break
-        
-        # if handled:
-        #     return True
-        # handled = self.view_lit_buttons.handle_event(event)
+        handled_by_button = False # 标志是否有按钮处理了事件
 
-        if handled:
+        # 处理左右导航按钮的事件
+        # 遍历 Group 中的所有按钮，并将事件传递给每个按钮处理
+        # Button 类需要有 handle_event 方法并返回 True 如果事件被处理
+        for button in self.view_lit_buttons:  # 遍历组中的所有按钮 (Button 实例)
+            # 将事件传递给当前按钮处理
+            # Button.handle_event 方法会根据 event.pos 和 event.button 判断是否点击
+            if button.handle_event(event):  # 调用每个按钮的handle_event方法
+                handled_by_button = True # 标记事件已被处理
+                # print(f"按钮 {button} 处理了事件。") # Debug <-- 调试信息
+                # 如果希望一个事件只被一个按钮处理，可以在这里 break
+                # break # 假设事件只会被一个按钮处理
+
+        if handled_by_button:
              return True # 事件被按钮处理了
 
         # 如果事件未被按钮处理，检查是否点击了正在显示的大图本身 (用于退出查看)
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # 鼠标左键按下事件
              # 获取当前正在查看的图片ID
              if self.viewing_lit_image_index != -1 and self._lit_images_list:
                  current_image_id = self._lit_images_list[self.viewing_lit_image_index]
+                 # 从 ImageManager 获取完整处理后的图片 surface (ImageManager 会处理缓存)
                  full_image_surface = self.image_manager.get_full_processed_image(current_image_id)
 
                  if full_image_surface:
@@ -333,14 +336,25 @@ class Gallery:
                      img_w, img_h = full_image_surface.get_size()
                      screen_w, screen_h = settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT
 
-                     # 计算缩放因子，以适应屏幕尺寸，保持比例，且不超出屏幕 (留边距)
+                     # 计算缩放因子，使其完整适应屏幕，并留有边距
                      margin = 40
+                     # 计算能适应屏幕并留有边距的最大缩放因子
                      max_scale_factor = min((screen_w - margin) / img_w, (screen_h - margin) / img_h)
-                     # 确保不放大超过原始处理尺寸 (这里假设原始处理尺寸就是 full_image_surface 的尺寸), 且留白
+                     # 最终缩放因子取 1.0 和最大适应因子的最小值，确保不放大超过原始处理尺寸 (600x1080)，并遵守边距
                      scale_factor = min(1.0, max_scale_factor)
 
+                     # 计算缩放后的图片尺寸
                      scaled_w = int(img_w * scale_factor)
                      scaled_h = int(img_h * scale_factor)
+
+                     # 确保缩放后的尺寸有效
+                     if scaled_w <= 0 or scaled_h <= 0:
+                         print(f"警告: 大图图片 {current_image_id} 缩放后尺寸无效 ({scaled_w}x{scaled_h})。") # Debug
+                         # 绘制一个占位符矩形 (如果需要，可以在 draw 方法中处理)
+                         # placeholder_rect = pygame.Rect(0, 0, 200, 150)
+                         # placeholder_rect.center = (screen_w // 2, screen_h // 2)
+                         # pygame.draw.rect(surface, settings.GRAY, placeholder_rect)
+                         return False # 缩放尺寸无效，事件未处理
 
                      # 计算绘制位置 (居中)
                      img_rect = pygame.Rect(0, 0, scaled_w, scaled_h)
@@ -353,7 +367,11 @@ class Gallery:
                           return True # 事件已被处理
                  else:
                       print(f"警告: 尝试获取图片ID {current_image_id} 的大图 surface 失败，但状态是 VIEW_LIT。") # Debug
+                      # 如果大图 surface 不可用，点击也无法退出，事件未处理
+                      return False
 
+
+        # 如果事件类型不是 MouseButtonDown 或未被以上逻辑处理，则未被Gallery的view_lit状态处理
         return False # 事件未被处理
 
 
