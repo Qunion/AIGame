@@ -61,77 +61,6 @@ class Board:
         # 动画完成后的回调队列 (当下落动画完成后，需要触发填充等后续流程)
         self._animation_completion_callbacks = []
 
-
-    # 添加一个内部方法来从存档数据加载网格
-    def _load_grid_from_data(self, saved_grid_data):
-        """
-        从提供的存档数据构建拼盘网格和Sprite Group。
-
-        Args:
-            saved_grid_data (list): 从存档读取的拼盘布局二维列表。
-        """
-        # 确保存档数据尺寸匹配
-        if not isinstance(saved_grid_data, list) or len(saved_grid_data) != settings.BOARD_ROWS:
-             print(f"错误: 存档数据行数不匹配。预期 {settings.BOARD_ROWS}，实际 {len(saved_grid_data) if isinstance(saved_grid_data, list) else '非列表'}。清空拼盘。")
-             self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
-             self.all_pieces_group.empty()
-             return # 尺寸不匹配，加载失败
-
-        # 清空当前的网格和 Sprite Group
-        self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
-        self.all_pieces_group.empty()
-
-        pieces_added_count = 0
-        for r in range(settings.BOARD_ROWS):
-            if not isinstance(saved_grid_data[r], list) or len(saved_grid_data[r]) != settings.BOARD_COLS:
-                 print(f"错误: 存档数据第 {r} 行列数不匹配。预期 {settings.BOARD_COLS}，实际 {len(saved_grid_data[r]) if isinstance(saved_grid_data[r], list) else '非列表'}。该行加载失败。")
-                 # 清空该行，避免使用无效数据
-                 self.grid[r] = [None for _ in range(settings.BOARD_COLS)]
-                 continue # 处理下一行
-
-            for c in range(settings.BOARD_COLS):
-                piece_info = saved_grid_data[r][c]
-                if piece_info is not None:
-                    # 如果槽位不是空的，创建 Piece 对象
-                    try:
-                        img_id = piece_info['id']
-                        orig_r = piece_info['orig_r']
-                        orig_c = piece_info['orig_c']
-
-                        # 从 ImageManager 获取碎片 surface
-                        # 这里需要确保 ImageManager 已经加载了该图片的碎片 surface
-                        # ImageManager._load_and_process_single_image(img_id) # 可以在这里强制加载，但可能阻塞
-                        # 更好的做法是依赖 ImageManager 在初始化时加载，并在 Board 初始化前完成
-                        # 如果碎片surface确实没有加载，pieces_surfaces[img_id] 可能不存在或不完整
-                        if img_id not in self.image_manager.pieces_surfaces or \
-                           self.image_manager.pieces_surfaces.get(img_id) is None or \
-                           (orig_r, orig_c) not in self.image_manager.pieces_surfaces[img_id]:
-                             print(f"警告: 存档碎片图片ID {img_id}, 原始 ({orig_r},{orig_c}) 的 surface 未加载。槽位 ({r},{c}) 将为空。") # Debug
-                             self.grid[r][c] = None # 碎片 surface 未加载，该槽位留空
-                             continue # 跳过创建 Piece 对象
-
-                        piece_surface = self.image_manager.pieces_surfaces[img_id][(orig_r, orig_c)]
-
-                        # 创建 Piece 对象，设置其原始信息和当前网格位置
-                        piece = Piece(piece_surface, img_id, orig_r, orig_c, r, c)
-                        self.grid[r][c] = piece
-                        self.all_pieces_group.add(piece) # 添加到 Sprite Group
-                        pieces_added_count += 1
-
-                    except (KeyError, TypeError, ValueError) as e:
-                        print(f"错误: 加载存档碎片信息 ({piece_info}) 异常: {e}. 槽位 ({r},{c}) 将为空。") # Debug
-                        self.grid[r][c] = None # 存档数据格式错误，该槽位留空
-                    except Exception as e:
-                        print(f"错误: 创建存档碎片对象异常: {e}. 槽位 ({r},{c}) 将为空。") # Debug
-                        self.grid[r][c] = None # 其他未知错误，该槽位留空
-                else:
-                    # 槽位是空的 (None)，grid[r][c] 已经是 None 了，无需操作
-                    pass
-
-        print(f"从存档加载了 {pieces_added_count} 个碎片到拼盘。") # Debug
-        # Note: 如果 pieces_added_count < total_required_pieces，拼盘将会有空位，这是正常的。
-
-
     def fill_initial_pieces(self):
         """根据settings填充初始碎片并随机打乱"""
         initial_pieces = self.image_manager.get_initial_pieces_for_board()
@@ -139,14 +68,16 @@ class Board:
         # 确保获取到的碎片数量符合预期
         total_required_pieces = settings.BOARD_COLS * settings.BOARD_ROWS
         if len(initial_pieces) != total_required_pieces:
-             print(f"错误: 获取的初始碎片数量 {len(initial_pieces)} 与预期 {total_required_pieces} 不符。无法填充拼盘。")
-             # 如果数量不匹配，清空grid，避免后续错误
+             print(f"错误: Board: 获取的初始碎片数量 {len(initial_pieces)} 与预期 {total_required_pieces} 不符。无法填充拼盘。")
              self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
-             self.all_pieces_group.empty() # 清空Sprite Group
-             # TODO: 填充一些空白或错误提示碎片
+             if isinstance(self.all_pieces_group, pygame.sprite.Group):
+                 self.all_pieces_group.empty()
+             else:
+                 print("警告: Board: self.all_pieces_group 不是 Sprite Group，无法清空。")
+                 self.all_pieces_group = pygame.sprite.Group()
              return # 碎片数量不匹配，停止填充
 
-        print(f"获取了 {len(initial_pieces)} 个初始碎片，开始填充拼盘。") # 调试信息
+        print(f"Board: 获取了 {len(initial_pieces)} 个初始碎片，开始填充拼盘。")
 
         # 生成所有网格位置的列表
         all_grid_positions = [(r, c) for r in range(settings.BOARD_ROWS) for c in range(settings.BOARD_COLS)]
@@ -155,16 +86,175 @@ class Board:
 
         # 将每个碎片放置到一个随机的网格位置上
         for i, piece in enumerate(initial_pieces):
-            # 获取一个随机的网格位置
             r, c = all_grid_positions[i]
 
-            # 将碎片放到网格中
+            # Assign piece to grid position
             self.grid[r][c] = piece
-            # 更新碎片自身的当前网格位置和屏幕位置 (非动画)
+            # Update piece's current grid position and screen position (no animation)
             piece.set_grid_position(r, c, animate=False)
 
-            # self.all_pieces_group.add(piece) # 在__init__末尾统一添加
+            # --- **最精确定位调试和安全检查：在添加到 Group 之前** ---
+            # print(f"Board Debug: Piece {i+1}/{len(initial_pieces)} 准备添加到 Group.") # Debug
+            # print(f"  Object Type: {type(piece)}, Is Sprite: {isinstance(piece, pygame.sprite.Sprite)}") # Debug
+            # if isinstance(piece, pygame.sprite.Sprite):
+            #      print(f"  Piece Info: ID {piece.original_image_id}, 原始 ({piece.original_row},{piece.original_col}), 当前 ({piece.current_grid_row},{piece.current_grid_col})") # Debug
+            #      image_type = type(piece.image) if hasattr(piece, 'image') else '没有 image 属性'
+            #      image_size = piece.image.get_size() if hasattr(piece, 'image') and isinstance(piece.image, pygame.Surface) else 'N/A'
+            #      print(f"  Piece Image Type: {image_type}, Size: {image_size}") # Debug
+            #      rect_type = type(piece.rect) if hasattr(piece, 'rect') else '没有 rect 属性'
+            #      rect_pos_size = piece.rect if hasattr(piece, 'rect') else 'N/A'
+            #      print(f"  Piece Rect Type: {rect_type}, Pos/Size: {rect_pos_size}") # Debug
+            # else:
+            #      print("致命错误: Board: 尝试添加的对象不是 Sprite，跳过添加。") # Debug
+            #      continue # Skip adding invalid object
 
+
+            # --- **关键修改：直接修改 Group 的内部集合 (非标准)** ---
+            # Check if self.all_pieces_group is indeed a Sprite Group before adding
+            if isinstance(self.all_pieces_group, pygame.sprite.Group):
+                 try:
+                     # Access the internal set of sprites and add the piece
+                     # This bypasses the .add() method
+                     # Note: This relies on Pygame's internal implementation and is not guaranteed to work in future versions.
+                     self.all_pieces_group.sprites().add(piece) # <-- 尝试直接添加到内部集合
+                     # print(f"Board: 成功添加碎片到 Group. Group大小: {len(self.all_pieces_group)}") # Debug
+                 except Exception as e:
+                     print(f"致命错误: Board: 直接添加碎片到 Group 内部集合时发生异常: {e}. 碎片信息: {piece.get_original_info() if hasattr(piece, 'get_original_info') else 'N/A'}.")
+                     # If this happens, the Group or Piece might be fundamentally broken.
+                     # Can add an exit here if needed.
+                     # import sys; pygame.quit(); sys.exit()
+            else:
+                 print("致命错误: Board: self.all_pieces_group 不是 Sprite Group！无法添加碎片。")
+                 # If this happens, the game is likely broken. Can add an exit here.
+                 # import sys; pygame.quit(); sys.exit()
+
+
+        print(f"Board: {len(self.all_pieces_group) if isinstance(self.all_pieces_group, pygame.sprite.Group) else 'N/A'} 个初始碎片已添加到 Group (使用直接修改内部集合)。") # Debug <-- 修改打印内容
+
+
+    # 替换 _load_grid_from_data 方法 (直接修改 Group 的内部集合)
+    def _load_grid_from_data(self, saved_grid_data):
+        """
+        从提供的存档数据构建拼盘网格和Sprite Group。
+
+        Args:
+            saved_grid_data (list): 从存档读取的拼盘布局二维列表。
+        """
+        print("Board: 正在从存档数据加载网格布局...") # Debug
+
+        # 确保存档数据尺寸匹配
+        if not isinstance(saved_grid_data, list) or len(saved_grid_data) != settings.BOARD_ROWS:
+             print(f"错误: Board: 存档数据行数不匹配。预期 {settings.BOARD_ROWS}，实际 {len(saved_grid_data) if isinstance(saved_grid_data, list) else '非列表'}。清空拼盘。")
+             self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
+             if isinstance(self.all_pieces_group, pygame.sprite.Group):
+                 self.all_pieces_group.empty()
+             else:
+                 print("警告: Board: self.all_pieces_group 不是 Sprite Group，无法清空。")
+                 self.all_pieces_group = pygame.sprite.Group()
+             return # 尺寸不匹配, 加载失败
+
+        # 清空当前的网格和 Sprite Group
+        self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
+        if isinstance(self.all_pieces_group, pygame.sprite.Group):
+             self.all_pieces_group.empty()
+        else:
+            print("警告: Board: self.all_pieces_group 不是 Sprite Group，无法清空。正在重新初始化。")
+            self.all_pieces_group = pygame.sprite.Group()
+
+
+        pieces_added_count = 0 # Counter for pieces successfully added to grid and group
+
+
+        for r in range(settings.BOARD_ROWS):
+            if not isinstance(saved_grid_data[r], list) or len(saved_grid_data[r]) != settings.BOARD_COLS:
+                 print(f"错误: Board: 存档数据第 {r} 行列数不匹配。预期 {settings.BOARD_COLS}，实际 {len(saved_grid_data[r]) if isinstance(saved_grid_data[r], list) else '非列表'}。该行加载失败。")
+                 self.grid[r] = [None for _ in range(settings.BOARD_COLS)]
+                 continue # 处理下一行
+
+            for c in range(settings.BOARD_COLS):
+                piece_info = saved_grid_data[r][c]
+                if piece_info is not None:
+                    # 如果槽位不是空的，尝试创建 Piece 对象
+                    try:
+                        img_id = piece_info.get('id')
+                        orig_r = piece_info.get('orig_r')
+                        orig_c = piece_info.get('orig_c')
+
+                        # 验证 piece_info 数据
+                        if img_id is None or orig_r is None or orig_c is None:
+                             print(f"警告: Board: 存档碎片信息 ({piece_info}) 格式错误或缺失关键字段。槽位 ({r},{c}) 将为空。")
+                             self.grid[r][c] = None
+                             continue # Skip creating piece
+
+                        # 从 ImageManager 获取碎片 surface
+                        piece_surface = None
+                        if img_id in self.image_manager.pieces_surfaces and \
+                           self.image_manager.pieces_surfaces.get(img_id) is not None and \
+                           (orig_r, orig_c) in self.image_manager.pieces_surfaces[img_id]:
+                             piece_surface = self.image_manager.pieces_surfaces[img_id][(orig_r, orig_c)]
+                             # --- **关键调试：检查获取到的 Piece Surface** ---
+                             if not isinstance(piece_surface, pygame.Surface):
+                                print(f"致命错误: Board: ImageManager 返回的对象不是 Surface! 图片ID {img_id}, 原始 ({orig_r},{orig_c}). 类型: {type(piece_surface)}")
+                                piece_surface = None # Treat as not available
+
+                        if piece_surface is None:
+                             print(f"警告: Board: 存档碎片图片ID {img_id}, 原始 ({orig_r},{orig_c}) 的 surface 未加载在 ImageManager 中或获取失败。槽位 ({r},{c}) 将为空。")
+                             self.grid[r][c] = None
+                             continue # Skip creating piece
+
+
+                        # 创建 Piece 对象，设置其原始信息和当前网格位置
+                        piece = Piece(piece_surface, img_id, orig_r, orig_c, r, c)
+                        self.grid[r][c] = piece # Assign piece to grid position
+
+
+                        # 将 Piece 逐个添加到 Sprite Group
+                        # --- **最精确定位调试和安全检查：在添加到 Group 之前** ---
+                        # print(f"Board Debug: Piece ({r},{c}) from archive prepared to add to Group.") # Debug
+                        # print(f"  Object Type: {type(piece)}, Is Sprite: {isinstance(piece, pygame.sprite.Sprite)}") # Debug
+                        # if isinstance(piece, pygame.sprite.Sprite):
+                        #     print(f"  Piece Info: ID {piece.original_image_id}, 原始 ({piece.original_row},{piece.original_col}), 当前 ({piece.current_grid_row},{piece.current_grid_col})") # Debug
+                        #     image_type = type(piece.image) if hasattr(piece, 'image') else '没有 image 属性'
+                        #     image_size = piece.image.get_size() if hasattr(piece, 'image') and isinstance(piece.image, pygame.Surface) else 'N/A'
+                        #     print(f"  Piece Image Type: {image_type}, Size: {image_size}") # Debug
+                        #     rect_type = type(piece.rect) if hasattr(piece, 'rect') else '没有 rect 属性'
+                        #     rect_pos_size = piece.rect if hasattr(piece, 'rect') else 'N/A'
+                        #     print(f"  Piece Rect Type: {rect_type}, Pos/Size: {rect_pos_size}") # Debug
+                        # else:
+                        #     print(f"致命错误: Board: 尝试从存档添加的对象不是 Sprite，跳过添加。类型为 {type(piece)}.") # Debug
+                        #     continue # Skip adding invalid object
+
+
+                        # --- **关键修改：改为使用 piece.add(self.all_pieces_group)** ---
+                        # Check if self.all_pieces_group is indeed a Sprite Group before adding
+                        if isinstance(self.all_pieces_group, pygame.sprite.Group):
+                             try:
+                                 # Use the Sprite's add method to add itself to the group
+                                 piece.add(self.all_pieces_group) # <-- Error might occur here!
+                                 pieces_added_count += 1
+                                 # print(f"Board: 成功添加存档碎片到 Group. Group大小: {len(self.all_pieces_group)}") # Debug
+                             except Exception as e:
+                                 print(f"致命错误: Board: 使用 piece.add(Group) 将存档碎片添加到 Group 时发生异常: {e}. 碎片信息: {piece_info}.")
+                                 # If this happens repeatedly, the Group or Piece might be fundamentally broken.
+                                 # Can add an exit here if needed.
+                                 # import sys; pygame.quit(); sys.exit()
+                        else:
+                             print("致命错误: Board: self.all_pieces_group 不是 Sprite Group！无法添加碎片。")
+                             # If this happens, the game is likely broken. Can add an exit here.
+                             # import sys; pygame.quit(); sys.exit()
+
+
+                    except Exception as e:
+                        # This catches exceptions during piece info extraction, Piece creation, or Group.add
+                        print(f"错误: Board: 加载存档碎片信息 ({piece_info}) 或创建 Piece/添加到 Group 异常: {e}. 槽位 ({r},{c}) 将为空。")
+                        self.grid[r][c] = None # 该槽位留空
+
+
+                else:
+                    # 槽位是空的 (None)，grid[r][c] 已经是 None 了，无需操作
+                    pass
+
+        print(f"Board: 从存档加载了 {pieces_added_count} 个碎片到拼盘 (成功创建Piece数量)。")
 
     def swap_pieces(self, pos1_grid, pos2_grid):
         """
@@ -522,7 +612,7 @@ class Board:
     def draw(self, surface):
         """在指定的surface上绘制拼盘中的所有碎片、选中效果和 debug 信息。"""
         # 绘制所有非拖拽中的碎片
-        # Temporarily remove the dragging piece from the group to draw it on top later
+        # 暂时将正在拖拽的碎片从组中移除，以便稍后将其绘制在最上层
         if self.dragging_piece and self.dragging_piece in self.all_pieces_group:
              self.all_pieces_group.remove(self.dragging_piece)
 
@@ -531,44 +621,42 @@ class Board:
 
         # 绘制选中碎片的特殊效果 (例如绘制边框)
         if self.selection_rect:
-             # Ensure the highlight position is synced with the selected piece's rect
+             # 确保高亮位置与选中碎片的矩形框同步
              if self.selected_piece:
                  border_thickness = 5
-                 # Update selection_rect position based on selected piece's current position
+                 # 根据选中碎片的当前位置更新 selection_rect 的位置
                  self.selection_rect.topleft = (self.selected_piece.rect.left - border_thickness, self.selected_piece.rect.top - border_thickness)
-             # Draw the selection border
-             pygame.draw.rect(surface, settings.HIGHLIGHT_COLOR, self.selection_rect, 5) # Draw border with thickness=5
+             # 绘制选中边框
+             pygame.draw.rect(surface, settings.HIGHLIGHT_COLOR, self.selection_rect, 5) # 绘制厚度为 5 的边框
 
-
-        # 在最后绘制正在拖拽的碎片，使其显示在最上层
+        # 最后绘制正在拖拽的碎片，使其显示在最上层
         if self.dragging_piece:
-             # InputHandler updates the dragging_piece.rect.center in MOUSEMOTION
+             # 输入处理器在鼠标移动事件中更新 dragging_piece.rect 的中心位置
              self.dragging_piece.draw(surface)
 
-        # Draw debug piece info if the debug flag is set in Game
-        # Access Game instance and debug font via ImageManager
+        # 如果游戏中的调试标志已设置，则绘制碎片调试信息
+        # 通过 ImageManager 访问游戏实例和调试字体
         if hasattr(self.image_manager.game, 'display_piece_info') and self.image_manager.game.display_piece_info:
              if hasattr(self.image_manager.game, 'font_debug') and self.image_manager.game.font_debug:
                  debug_font = self.image_manager.game.font_debug
-                 # Iterate through the grid (or all pieces group) to draw text on each piece
-                 for piece in self.all_pieces_group: # Iterate through the group (more efficient if pieces are removed)
-                     # Format the debug text (Image ID, Original Row, Original Column)
+                 # 遍历网格（或所有碎片组），在每个碎片上绘制文本
+                 for piece in self.all_pieces_group: # 遍历组（如果有碎片被移除，这种方式更高效）
+                     # 格式化调试文本（图片 ID、原始行、原始列）
                      debug_text = f"ID:{piece.original_image_id} R:{piece.original_row} C:{piece.original_col}"
-                     # Render the text
+                     # 渲染文本
                      text_surface = debug_font.render(debug_text, True, settings.DEBUG_TEXT_COLOR)
-                     # Position the text, e.g., centered on the piece's rect
+                     # 设置文本位置，例如，居中于碎片的矩形框
                      text_rect = text_surface.get_rect(center=piece.rect.center)
-                     # Draw the text
+                     # 绘制文本
                      surface.blit(text_surface, text_rect)
-                 # Also draw info for the dragging piece if it's active and not in the group
+                 # 如果正在拖拽的碎片处于活动状态且不在组中，也绘制其信息
                  if self.dragging_piece and self.dragging_piece not in self.all_pieces_group:
                      debug_text = f"ID:{self.dragging_piece.original_image_id} R:{self.dragging_piece.original_row} C:{self.dragging_piece.original_col}"
                      text_surface = debug_font.render(debug_text, True, settings.DEBUG_TEXT_COLOR)
                      text_rect = text_surface.get_rect(center=self.dragging_piece.rect.center)
                      surface.blit(text_surface, text_rect)
 
-
-        # Add the dragging piece back to the group after drawing
+        # 绘制完成后，将正在拖拽的碎片重新添加到组中
         if self.dragging_piece and self.dragging_piece not in self.all_pieces_group:
              self.all_pieces_group.add(self.dragging_piece)
 
