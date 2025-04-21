@@ -1004,8 +1004,9 @@ class ImageManager:
             # 检查图片ID: 2
             # 检查图片ID: 3
             # 检查图片ID: 4            
-            # status = self.image_status.get(img_id, 'unentered')
-            status = self.image_status.get(img_id, 'lit')
+            print(f"图片ID {img_id} 的状态: {self.image_status}") # Debug
+            status = self.image_status.get(img_id, 'unentered')
+            # status = self.image_status.get(img_id, 'lit')
             # 图库应仅显示状态为 'unlit' 或 'lit' 的图片
             # print(f"图片ID {img_id} 的状态: {status2}") # Debug
             print(f"图片ID {img_id} 的状态: {status}") # Debug
@@ -1080,38 +1081,72 @@ class ImageManager:
 
         print("ImageManager 从存档加载状态...") # Debug
 
-        # 临时存储加载的状态，以便后续填充高优先级队列
+        # 临时存储从存档加载到的状态，以便后续使用
         print(f"state_data 的值为: {state_data}")
-        loaded_image_status = state_data.get('image_status', {111})
+        loaded_image_status = state_data.get('image_status', {})
         print(f"从存档数据中获取的 loaded_image_status 的值为: {loaded_image_status}")
         loaded_completed_times = state_data.get('completed_times', {})
         loaded_next_image_to_consume_id = state_data.get('next_image_to_consume_id', None)
         loaded_pieces_consumed = state_data.get('pieces_consumed_from_current_image', 0)
 
+        # --- **关键调试：打印从存档中加载到的 image_status 字典** ---
+        print(f"ImageManager: 存档中的 image_status 数据 (原始): {loaded_image_status}") # Debug <-- 修改打印信息
 
-        # 从存档数据更新ImageManager的状态属性
-        # 确保只加载扫描到的图片的状态
-        self.image_status = {
-            img_id: status
-            for img_id, status in loaded_image_status.items()
-            # if img_id in self.all_image_files # 只加载扫描到的图片的状态
-        }
-        print(f"ImageManager 从存档加载了 {len(self.image_status)} 张图片的状态。具体状态如下: {self.image_status}")  # 新增打印语句
-        # print(f"ImageManager 从存档加载了 {len(self.image_status)} 张图片的状态。") # Debug
+
+        # --- **关键修改：从存档加载 image_status 并转换为整数键** ---
+        # 遍历 ImageManager 扫描到的所有现有图片的整数ID
+        self.image_status = {} # Start with an empty dictionary for current status
+        loaded_status_count = 0 # Debug counter
+
+        # 遍历扫描到的所有图片的整数 ID
+        for img_id in self.all_image_files.keys():
+            # 检查存档数据中是否有对应的状态（使用字符串键查找）
+            img_id_str = str(img_id) # 获取对应的字符串键
+            if img_id_str in loaded_image_status:
+                status = loaded_image_status[img_id_str]
+                # 检查加载的状态是否是有效的状态
+                if status in ['unentered', 'unlit', 'lit']:
+                    self.image_status[img_id] = status # <-- **使用整数 ID 存储到 self.image_status**
+                    loaded_status_count += 1
+                # else: print(f"警告: Image ID {img_id} 在存档中的状态 '{status}' 无效。") # Debug invalid status
+            # else: print(f"Debug: Image ID {img_id} 未在存档状态中找到。状态保持为初始化时的 'unentered'。") # Debug missing in save
+
+        # 如果存档数据中包含的图片ID超出了当前扫描到的范围，这些状态将被忽略，这是期望的行为。
+        # 反过来，如果当前扫描到的图片ID没有在存档中，它们的状态保持为初始化时的 'unentered'。
+
+
+        # --- **关键调试：打印加载并过滤后的 image_status 字典** ---
+        print(f"ImageManager 从存档加载并过滤后，当前 image_status 包含 {loaded_status_count} 张图片的状态。具体状态如下: {self.image_status}")  # Debug <-- 修改打印信息
 
         # 确保只加载状态为 lit 的图片的完成时间，且图片ID存在于已加载状态中
-        self.completed_times = {
-            img_id: comp_time
-            for img_id, comp_time in loaded_completed_times.items()
-            if img_id in self.image_status and self.image_status.get(img_id) == 'lit'
-        }
-        print(f"ImageManager 从存档加载了 {len(self.completed_times)} 张已点亮图片的完成时间。") # Debug
+        self.completed_times = {} # Start with an empty dictionary for current completed times
+        loaded_completed_count = 0 # Debug counter
+        # 遍历存档中的 completed_times 字典 (键是字符串)
+        for img_id_str, comp_time in loaded_completed_times.items():
+            try:
+                img_id = int(img_id_str) # 尝试将字符串键转换为整数
+                # 检查转换后的整数ID是否存在于当前加载的状态中，并且状态是 'lit'
+                if img_id in self.image_status and self.image_status.get(img_id) == 'lit':
+                    self.completed_times[img_id] = comp_time # <-- **使用整数 ID 存储完成时间**
+                    loaded_completed_count += 1
+                # else: print(f"Debug: Completed time for image ID {img_id} in save but not in loaded image_status or status not 'lit'.") # Debug
+            except ValueError:
+                 print(f"警告: 存档中的 completed_times 键 '{img_id_str}' 不是有效的整数ID。") # Debug invalid key
+
+        print(f"ImageManager 从存档加载了 {loaded_completed_count} 张已点亮图片的完成时间。") # Debug
 
 
         # 加载碎片消耗进度
-        # Ensure loaded next_image_to_consume_id is a known image ID or None
-        if loaded_next_image_to_consume_id is None or loaded_next_image_to_consume_id in self.all_image_files:
-            self.next_image_to_consume_id = loaded_next_image_to_consume_id
+        # Handle potential string or integer ID in save
+        loaded_next_id_int = None
+        if loaded_next_image_to_consume_id is not None:
+             try:
+                 loaded_next_id_int = int(loaded_next_image_to_consume_id)
+             except ValueError:
+                 print(f"警告: 存档中的 next_image_to_consume_id ({loaded_next_image_to_consume_id}) 无法转换为整数。") # Debug
+
+        if loaded_next_id_int is None or loaded_next_id_int in self.all_image_files:
+            self.next_image_to_consume_id = loaded_next_id_int # Store as integer
             print(f"ImageManager 从存档加载 next_image_to_consume_id: {self.next_image_to_consume_id}") # Debug
         else:
             print(f"警告: 存档中的 next_image_to_consume_id ({loaded_next_image_to_consume_id}) 不是已知图片ID。重新初始化消耗状态。") # Debug
@@ -1131,16 +1166,17 @@ class ImageManager:
 
 
         # === 填充高优先级加载队列 ===
-        # Add all 'unlit' or 'lit' images from the loaded status to the high-priority queue
-        # These images need their resources (pieces and thumbnails) loaded quickly for the game and gallery
+        # 将所有在加载并过滤后状态是 'unlit' 或 'lit' 的图片ID添加到高优先级队列
+        # 这些图片需要在游戏启动后优先加载资源，以便尽快在拼盘或图库中显示
         print("填充高优先级加载队列...") # Debug
-        all_image_ids_ordered = sorted(self.all_image_files.keys())
+        self._high_priority_load_queue.clear() # Clear any previous high-priority items
 
-        for img_id in all_image_ids_ordered:
-             # Check if this image was 'unlit' or 'lit' in the loaded status
-             loaded_status = loaded_image_status.get(img_id)
-             if loaded_status in ['unlit', 'lit']:
+        # Iterate through the populated self.image_status dictionary (which now contains filtered states from the save, keys are integers)
+        high_priority_count = 0 # Debug counter
+        for img_id, status in self.image_status.items(): # Use the populated self.image_status (keys are integers)
+             if status in ['unlit', 'lit']:
                  # Check if this image is NOT already fully processed in the current session's memory
+                 # (Unlikely at this stage for these images from save, but safety check)
                  pieces_loaded = (img_id in self.pieces_surfaces and self.pieces_surfaces.get(img_id) is not None and len(self.pieces_surfaces.get(img_id, {})) == settings.PIECES_PER_IMAGE)
                  thumbnails_cached = (img_id in self.cached_thumbnails and self.cached_thumbnails.get(img_id) is not None and
                                       img_id in self.cached_unlit_thumbnails and self.cached_unlit_thumbnails.get(img_id) is not None)
@@ -1148,17 +1184,15 @@ class ImageManager:
                  if not pieces_loaded or not thumbnails_cached:
                      # If not fully processed, add to the high-priority queue
                      # Add to the right (end) of the deque
-                     self._high_priority_load_queue.append(img_id)
+                     self._high_priority_load_queue.append(img_id) # Add integer ID to deque
+                     high_priority_count += 1
                      # Ensure it's removed from the normal queue if it was there
-                     if img_id in self._normal_load_queue: # deque doesn't have remove, need to rebuild or remove explicitly
+                     # Removing integer from normal queue which contains integers
+                     if img_id in self._normal_load_queue:
                          try:
                              self._normal_load_queue.remove(img_id)
                          except ValueError:
                              pass # Not in normal queue
 
 
-        print(f"高优先级加载队列包含 {len(self._high_priority_load_queue)} 张图片。") # Debug
-
-        # Note: The actual loading of pieces and thumbnails from cache/source happens
-        # during the initial load batch processing (_process_initial_load_batch)
-        # and background loading (load_next_batch_background).
+        print(f"高优先级加载队列包含 {high_priority_count} 张图片 (需要加载资源)。") # Debug
