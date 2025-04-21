@@ -1116,7 +1116,7 @@ class ImageManager:
 
 
         # --- **关键调试：打印加载并过滤后的 image_status 字典** ---
-        print(f"ImageManager 从存档加载并过滤后，当前 image_status 包含 {loaded_status_count} 张图片的状态。具体状态如下: {self.image_status}")  # Debug <-- 修改打印信息
+        # print(f"ImageManager 从存档加载并过滤后，当前 image_status 包含 {loaded_status_count} 张图片的状态。具体状态如下: {self.image_status}")  # Debug <-- 修改打印信息
 
         # 确保只加载状态为 lit 的图片的完成时间，且图片ID存在于已加载状态中
         self.completed_times = {} # Start with an empty dictionary for current completed times
