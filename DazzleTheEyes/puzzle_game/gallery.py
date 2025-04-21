@@ -5,6 +5,7 @@ import pygame
 import settings
 import time # 用于计时
 import utils # 导入工具函数
+import image_manager # 导入图像管理器
 from ui_elements import Button # 导入 Button 类
 
 
@@ -85,16 +86,18 @@ class Gallery:
         """从image_manager获取并更新图库中的图片列表及状态，并进行排序。"""
         # 获取所有已入场(未点亮+已点亮)且碎片已加载的图片列表，包含状态和完成时间
         # ImageManager 提供的列表已包含必要信息，并且已经过滤掉了碎片未加载完整的图片
+        print("Gallery: 正在从 ImageManager 获取图片状态列表...") # Debug <-- 新增
         all_entered_and_loaded_pictures = self.image_manager.get_all_entered_pictures_status() # ImageManager 提供的列表已包含必要信息
+        print(f"Gallery: 从 ImageManager 获取到 {len(all_entered_and_loaded_pictures)} 张已入场且可用于图库的图片。") # Debug <-- 新增
 
         # 分离已点亮和未点亮图片
         # 已点亮的按完成时间倒序排列
         lit_pictures = sorted([p for p in all_entered_and_loaded_pictures if p['state'] == 'lit'],
-                              key=lambda x: x['completion_time'], reverse=True)
+                              key=lambda x: x['completion_time'], reverse=True) # 按完成时间倒序
 
         # 未点亮的按图片ID顺序排列
         unlit_pictures = sorted([p for p in all_entered_and_loaded_pictures if p['state'] == 'unlit'],
-                                key=lambda x: x['id'])
+                                key=lambda x: x['id']) # 按ID顺序 (即文件命名顺序)
 
         # 合并列表，已点亮图片在前
         self.pictures_in_gallery = lit_pictures + unlit_pictures
@@ -119,6 +122,9 @@ class Gallery:
         # 计算最大可滚动距离
         # 如果内容总高度小于窗口高度，最大滚动距离为0
         self._max_scroll_y = max(0, self._list_content_height - settings.GALLERY_HEIGHT)
+
+        print(f"Gallery: 图库列表更新完成: 共 {num_pictures} 张图 (已点亮 {len(lit_pictures)}, 未点亮 {len(unlit_pictures)})") # Debug <-- 新增
+        # print(f"Gallery: 列表内容总高度: {self._list_content_height}, 最大可滚动: {self._max_scroll_y}") # Debug
 
         # print(f"图库列表更新: 共 {num_pictures} 张图 (已点亮 {len(lit_pictures)}, 未点亮 {len(unlit_pictures)})") # Debug
         # print(f"列表内容总高度: {self._list_content_height}, 最大可滚动: {self._max_scroll_y}") # Debug
@@ -366,6 +372,10 @@ class Gallery:
              self.draw_list(surface)
 
 
+# gallery.py
+
+# ... 其他代码 ...
+
     def draw_list(self, surface):
         """绘制图库列表界面。"""
         # 将图库窗口背景 Surface 绘制到主屏幕 Surface 上
@@ -387,33 +397,110 @@ class Gallery:
             draw_y = settings.GALLERY_Y + settings.GALLERY_PADDING + row_in_list * (settings.GALLERY_THUMBNAIL_HEIGHT + settings.GALLERY_THUMBNAIL_GAP_Y) - self.scroll_y # 应用滚动偏移
 
 
-            # 获取缩略图 surface (ImageManager 会处理缓存和生成)
-            thumbnail_surface = self.image_manager.get_thumbnail(pic_info['id'])
+            # 获取缩略图 surface (ImageManager 会处理缓存)
+            # 使用 is_ready_for_gallery 标志决定是否尝试获取并绘制缩略图
+            if pic_info.get('is_ready_for_gallery', False): # Check if 'is_ready_for_gallery' key exists and is True
+                 if pic_info['state'] == 'lit':
+                     thumbnail_surface = self.image_manager.get_thumbnail(pic_info['id']) # 获取普通缩略图
+                 else: # 'unlit' state
+                     thumbnail_surface = self.image_manager.get_unlit_thumbnail(pic_info['id']) # 获取灰度缩略图
 
-            if thumbnail_surface:
-                # 如果是未点亮状态，将缩略图灰度化处理
-                if pic_info['state'] == 'unlit':
-                     # 使用 utils.grayscale_surface 工具函数
-                     thumbnail_surface = utils.grayscale_surface(thumbnail_surface)
+                 if thumbnail_surface:
+                     # 绘制缩略图到屏幕 Surface 上
+                     surface.blit(thumbnail_surface, (draw_x, draw_y))
 
-                # 绘制缩略图到屏幕 Surface 上
-                surface.blit(thumbnail_surface, (draw_x, draw_y))
+                     # TODO: 可以绘制图片ID或状态文字 (可选)
+                     # if hasattr(self.game, 'font_thumbnail') and self.game.font_thumbnail:
+                     #     text_surface = self.game.font_thumbnail.render(f"ID:{pic_info['id']}", True, settings.WHITE)
+                     #     surface.blit(text_surface, (draw_x, draw_y + settings.GALLERY_THUMBNAIL_HEIGHT + 5)) # 绘制在缩略图下方
 
-                # TODO: 可以绘制图片ID或状态文字 (可选)
-                # if hasattr(self.game, 'font_thumbnail') and self.game.font_thumbnail:
-                #     text_surface = self.game.font_thumbnail.render(f"ID:{pic_info['id']}", True, settings.WHITE)
-                #     surface.blit(text_surface, (draw_x, draw_y + settings.GALLERY_THUMBNAIL_HEIGHT + 5)) # 绘制在缩略图下方
+                 else:
+                      # 如果 is_ready_for_gallery 是 True 但获取缩略图失败 (不应该发生)，绘制错误占位符
+                      placeholder_rect = pygame.Rect(draw_x, draw_y, settings.GALLERY_THUMBNAIL_WIDTH, settings.GALLERY_THUMBNAIL_HEIGHT)
+                      pygame.draw.rect(surface, (255,0,0), placeholder_rect) # 红色框表示错误
+                      # Optional text: "Error"
 
             else:
-                 # 如果无法获取缩略图 surface，绘制一个占位符矩形
+                 # 如果 is_ready_for_gallery 是 False (碎片或缩略图未加载完成)，绘制加载中占位符
                  placeholder_rect = pygame.Rect(draw_x, draw_y, settings.GALLERY_THUMBNAIL_WIDTH, settings.GALLERY_THUMBNAIL_HEIGHT)
-                 pygame.draw.rect(surface, settings.GRAY, placeholder_rect) # 绘制灰色矩形
-                 # 可选：在占位符上绘制文字，例如 "加载中..." 或 "无法加载"
+                 pygame.draw.rect(surface, settings.GRAY, placeholder_rect) # 绘制灰色矩形作为加载中指示
+                 # 可选：在占位符上绘制文字 "加载中..."
+                 # if hasattr(self.game, 'font_loading') and self.game.font_loading:
+                 #     font = self.game.font_loading # Use loading font or a smaller one
+                 #     text_surface = font.render("加载中...", True, settings.BLACK)
+                 #     text_rect = text_surface.get_rect(center=placeholder_rect.center)
+                 #     surface.blit(text_surface, text_rect)
 
 
         # 恢复旧的裁剪区域，以便后续绘制其他UI元素或主游戏界面
         surface.set_clip(old_clip)
 
+    # Note: handle_event_list should also check the 'is_ready_for_gallery' flag
+    # before allowing the picture to be clicked for big view or hint.
+    # Modified _get_thumbnail_index_at_pos to return picture_info.
+    # No, modify the click handling *after* getting the index.
+
+    # Modify handle_event_list to check the flag before starting view or showing hint
+    # Replace the existing handle_event_list with the previous one, but modify the click logic:
+
+    # Replace the existing handle_event_list method with this:
+    def handle_event_list(self, event):
+        """处理图库列表界面的事件。返回 True 表示事件被消耗，False 表示未处理。"""
+        # Check if the event occurred within the gallery window area
+        gallery_window_rect = self.gallery_window_rect
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+             if not gallery_window_rect.collidepoint(event.pos):
+                 # Click occurred outside the gallery window
+                 if hasattr(self.game, 'close_gallery'):
+                     self.game.close_gallery()
+                 return True # Event handled
+
+        # Handle internal interactions if the event is within the window (handled by the check above)
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # Left click
+             # Check which thumbnail was clicked
+             clicked_thumbnail_index = self._get_thumbnail_index_at_pos(event.pos)
+             if clicked_thumbnail_index is not None:
+                 # Get info of the clicked picture
+                 if 0 <= clicked_thumbnail_index < len(self.pictures_in_gallery):
+                     clicked_picture_info = self.pictures_in_gallery[clicked_thumbnail_index]
+
+                     # --- **关键修改：检查 is_ready_for_gallery 标志** ---
+                     if clicked_picture_info.get('is_ready_for_gallery', False):
+                         # Picture is ready for interaction (pieces and thumbnails loaded)
+                         if clicked_picture_info['state'] == 'lit':
+                             # If clicking a lit picture, switch to big view mode
+                             print(f"Clicked ready & lit image: ID {clicked_picture_info['id']}, switching to big view.") # Debug
+                             self.start_viewing_lit_image(clicked_thumbnail_index)
+                             return True # Event handled
+                         elif clicked_picture_info['state'] == 'unlit':
+                             # If clicking an unlit picture, show a hint
+                             print(f"Clicked ready & unlit image: ID {clicked_picture_info['id']}, showing hint.") # Debug
+                             if hasattr(self.game, 'show_popup_tip'):
+                                  self.game.show_popup_tip("美图尚未点亮")
+                             return True # Event handled
+                         # else: # Should not happen if state is lit or unlit
+                     else:
+                          # Picture is not ready for interaction (loading in background)
+                          print(f"Clicked image ID {clicked_picture_info['id']}, but not ready for gallery interaction. Showing loading hint.") # Debug
+                          if hasattr(self.game, 'show_popup_tip'):
+                                  self.game.show_popup_tip("图片加载中...") # Show a different hint
+                          return True # Event handled (by showing a hint)
+
+                 # If clicked inside the gallery window, but not on a recognized thumbnail (get_thumbnail_index_at_pos returned None)
+                 return False # Event not handled by a specific picture
+
+        elif event.type == pygame.MOUSEWHEEL: # Mouse wheel event
+            # Ensure mouse is within the gallery window area for wheel events to be effective
+            if gallery_window_rect.collidepoint(pygame.mouse.get_pos()):
+                self.scroll_y -= event.y * settings.GALLERY_SCROLL_SPEED
+                self.scroll_y = max(0, self.scroll_y)
+                self.scroll_y = min(self._max_scroll_y, self.scroll_y)
+                # print(f"Scrolled gallery list, new scroll_y: {self.scroll_y}") # Debug
+                return True # Event handled
+
+        # If the event type is not handled by this method, return False
+        return False
 
     def draw_view_lit(self, surface):
         """绘制图库大图查看界面。"""

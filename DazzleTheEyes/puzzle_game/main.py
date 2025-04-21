@@ -40,35 +40,37 @@ class Game:
             self.font_loading = pygame.font.SysFont(settings.FONT_NAME, 60) # 加载界面字体
             self.font_tip = pygame.font.SysFont(settings.FONT_NAME, settings.TIP_FONT_SIZE) # 提示信息字体
             self.font_thumbnail = pygame.font.SysFont(settings.FONT_NAME, 24) # 图库缩略图字体 (可选)
-            self.font_debug = pygame.font.SysFont(settings.FONT_NAME, settings.DEBUG_FONT_SIZE) # Debug 文字字体 <-- **新增**
+            self.font_debug = pygame.font.SysFont(settings.FONT_NAME, settings.DEBUG_FONT_SIZE) # Debug 文字字体
             # 检查 SysFont 是否成功返回了字体对象
-            if self.font_loading is None or self.font_tip is None or self.font_thumbnail is None or self.font_debug is None: # <-- **新增检查**
-                 raise ValueError("SysFont returned None for one or more fonts") # Go to except block
-            # print(f"系统字体 '{settings.FONT_NAME}' 加载成功或找到相似字体。") # Debug success
+            if self.font_loading is None or self.font_tip is None or self.font_thumbnail is None or self.font_debug is None:
+                 # 如果 SysFont 返回 None，抛出异常进入 except 块
+                 raise ValueError("SysFont returned None for one or more fonts")
+            print(f"系统字体 '{settings.FONT_NAME}' 加载成功或找到相似字体。") # Debug success
 
-        except Exception as e: # Catch any exception during system font loading
+        except Exception as e: # 捕获加载系统字体时可能发生的任何异常
             print(f"警告: 加载系统字体 '{settings.FONT_NAME}' 时发生错误: {e}。使用 Pygame 默认字体。")
             # Fallback to Pygame's default font
             self.font_loading = pygame.font.Font(None, 60)
             self.font_tip = pygame.font.Font(None, settings.TIP_FONT_SIZE)
             self.font_thumbnail = pygame.font.Font(None, 24)
-            self.font_debug = pygame.font.Font(None, settings.DEBUG_FONT_SIZE) # <-- **新增回退**
+            self.font_debug = pygame.font.Font(None, settings.DEBUG_FONT_SIZE)
             print("使用 Pygame 默认字体。") # Debug fallback
 
 
         # --- Debug 相关属性 ---
-        self.display_piece_info = False # 是否显示碎片 debug 信息 <-- **新增**
+        self.display_piece_info = False # 是否显示碎片 debug 信息
+
 
         # --- 加载界面相关 ---
-        self.loading_start_time = time.time() # Record when loading started
+        self.loading_start_time = time.time() # 记录进入加载阶段的时间
 
         # 加载加载画面图片 (必须在显示加载画面之前加载)
         self.loading_image = self._load_random_loading_image()
 
         # === 在这里调用 draw_loading_screen 来显示初始加载画面 ===
         # 这个调用确保在ImageManager初始化（耗时操作）之前，玩家能看到加载界面
-        self.draw_loading_screen("初始化...") # Display initial text
-        pygame.display.flip() # Immediately update screen to show loading screen
+        self.draw_loading_screen("初始化...") # 显示初始文本
+        pygame.display.flip() # 立即更新屏幕，显示加载画面
         # =========================================================
 
         # --- 尝试加载存档数据 ---
@@ -93,7 +95,7 @@ class Game:
         except Exception as e:
             print(f"致命错误: Board 初始化失败: {e}")
             self._display_fatal_error(f"Board 初始化失败: {e}")
-            time.sleep(5) # Show error message for 5 seconds
+            time.sleep(5) # 显示错误信息5秒
             pygame.quit()
             sys.exit()
 
@@ -124,9 +126,13 @@ class Game:
 
 
         # 自动存档相关的变量
-        self.last_autosave_time = time.time() # Record time of last autosave
+        self.last_autosave_time = time.time() # 记录上次自动存档的时间
 
-        # __init__ finishes. Game state is LOADING.
+        # 后台加载定时器 <-- **新增注释**
+        self._last_background_load_time = time.time() # <-- **新增：初始化后台加载定时器**
+
+
+        # __init__ completes. Game state is LOADING.
         # Transition to PLAYING happens in the update loop, based on loading progress and min duration.
 
 
@@ -513,26 +519,44 @@ class Game:
         # TODO: Add cleanup/initialization logic for other state transitions
 
 
+# main.py
+
+# ... 其他代码 ...
+
+    # main.py
+
+# ... 其他代码 ...
+
     def _check_and_continue_background_loading(self):
          """
-         Checks and continues background loading of unprocessed images.
-         Called in GAME_STATE_PLAYING update.
+         检查并继续未处理图片的后台加载。
+         这个方法在 GAME_STATE_PLAYING update 中被调用。
          """
          # Only attempt if ImageManager is initialized and there are unprocessed images
          if self.image_manager is None or self.image_manager.is_loading_finished():
+              # print("后台加载：所有图片已加载完成或 ImageManager 未初始化。") # Debug, avoid spamming
               return # All images loaded or ImageManager not ready
 
          # Check if it's time to execute the next batch of background loading tasks
          current_time = time.time()
-         # Use a separate timer for background loading frequency control if needed,
-         # or reuse the autosave timer interval as a rough guide.
-         # Using a small fraction of autosave interval for more frequent checks during loading.
-         if current_time - self.last_autosave_time >= settings.BACKGROUND_LOAD_DELAY: # Use BACKGROUND_LOAD_DELAY for frequency
-             # Execute a batch of background loading tasks via ImageManager
-             self.image_manager.load_next_batch_background(settings.BACKGROUND_LOAD_BATCH_SIZE)
-             # Note: last_autosave_time is only updated when autosave happens, not for every background load check
-             # You might want a separate timer for background load frequency if BACKGROUND_LOAD_DELAY is small
+         # Use a separate timer for background loading frequency
+         # We use _last_background_load_time initialized in __init__ and updated here.
 
+         if current_time - self._last_background_load_time >= settings.BACKGROUND_LOAD_DELAY:
+             # Execute a batch of background loading tasks via ImageManager
+             # ImageManager.load_next_batch_background will process images from its queues
+             processed_count_this_batch = self.image_manager.load_next_batch_background(settings.BACKGROUND_LOAD_BATCH_SIZE)
+             
+             if processed_count_this_batch > 0:
+                 # If at least one image was processed in this batch, update the timer
+                 self._last_background_load_time = current_time
+                 # print(f"后台加载完成 {processed_count_this_batch} 张图片/批次。") # Debug
+             # else: print("后台加载检查，但队列中没有可处理的图片或处理失败。") # Debug # Update timer
+                    # print(f"后台加载完成 {loaded_count} 张图片/批次。") # Debug
+                 # else: print("后台加载检查，但没有可处理的图片或处理失败。") # Debug
+
+
+    # ... (后续方法保持不变) ...
 
 if __name__ == "__main__":
     game = Game()
