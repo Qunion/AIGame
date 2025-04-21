@@ -269,6 +269,7 @@ class Game:
             with open(save_file_path, 'r', encoding='utf-8') as f:
                 # Use json.load to read the dictionary from the file
                 game_state_data = json.load(f)
+                # print(f"完整输出加载的数据，看是否加载成功:game_state_data: {game_state_data}")#结果是成功的
             print(f"游戏状态已从 {save_file_path} 加载成功。") # Debug success
 
             # TODO: 可以添加对加载到的数据结构的验证 (可选)
@@ -296,6 +297,7 @@ class Game:
         """
         print("接收到退出信号，正在保存并退出...") # Debug
         self.save_game_data() # 保存游戏状态
+        print("游戏已保存，退出中...") # Debug
         pygame.quit()
         sys.exit()
 

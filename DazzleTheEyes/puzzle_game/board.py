@@ -254,7 +254,7 @@ class Board:
         if self.dragging_piece in self.all_pieces_group:
              self.all_pieces_group.remove(self.dragging_piece)
 
-        # print(f"开始拖拽碎片: 图片ID {piece.original_image_id}, 当前位置 ({piece.current_grid_row},{piece.current_grid_col})") # 调试信息
+        print(f"开始拖拽碎片: 图片ID {piece.original_image_id}, 当前位置 ({piece.current_grid_row},{piece.current_grid_col})") # 调试信息
 
 
     def stop_dragging(self):

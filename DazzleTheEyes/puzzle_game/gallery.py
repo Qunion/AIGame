@@ -7,6 +7,7 @@ import time # 用于计时
 import utils # 导入工具函数
 import image_manager # 导入图像管理器
 from ui_elements import Button # 导入 Button 类
+import input_handler # 导入输入处理器
 
 
 class Gallery:
@@ -18,6 +19,10 @@ class Gallery:
             image_manager (ImageManager): 图像管理器实例。
             game_instance (Game): Game实例，用于状态切换、显示提示等。
         """
+        # 添加类型检查
+        if not hasattr(image_manager, 'get_all_entered_pictures_status'):
+            raise TypeError("传入的image_manager参数缺少get_all_entered_pictures_status方法")
+        else: print("image_manager 检查通过。") # Debug
         self.image_manager = image_manager
         self.game = game_instance # 持有Game实例的引用
 
@@ -46,6 +51,7 @@ class Gallery:
 
         # Sprite Group 用于管理大图查看界面的按钮，方便绘制和事件处理
         self.view_lit_buttons = pygame.sprite.Group(self.left_button, self.right_button)
+        # self.view_lit_buttons = input_handler.InputHandler.handle_event(self.left_button, self.right_button)
 
         # 字体 (使用Game实例中的字体) - Optional, if you draw text on thumbnails
         # self.font_thumbnail = self.game.font_thumbnail # Assumption, using it for optional drawing
@@ -302,7 +308,15 @@ class Gallery:
         """处理图库大图查看界面的事件。返回 True 表示事件被消耗，False 表示未处理。"""
         # 处理左右导航按钮的事件
         # Button 类需要有 handle_event 方法并返回 True 如果事件被处理
-        handled = self.view_lit_buttons.handle_event(event)
+        handled = False
+        # for button in self.view_lit_buttons:  # 遍历组中的所有按钮
+        #     if button.handle_event(event):  # 调用每个按钮的handle_event方法
+        #         handled = True
+        #         break
+        
+        # if handled:
+        #     return True
+        # handled = self.view_lit_buttons.handle_event(event)
 
         if handled:
              return True # 事件被按钮处理了
@@ -434,72 +448,70 @@ class Gallery:
 
         # 恢复旧的裁剪区域，以便后续绘制其他UI元素或主游戏界面
         surface.set_clip(old_clip)
+    # 注意：在允许点击图片查看大图或显示提示之前，handle_event_list 方法也应该检查 'is_ready_for_gallery' 标志。
+    # 修改 _get_thumbnail_index_at_pos 方法以返回图片信息。
+    # 不，应该在获取索引之后修改点击处理逻辑。
 
-    # Note: handle_event_list should also check the 'is_ready_for_gallery' flag
-    # before allowing the picture to be clicked for big view or hint.
-    # Modified _get_thumbnail_index_at_pos to return picture_info.
-    # No, modify the click handling *after* getting the index.
+    # 修改 handle_event_list 方法，在开始查看大图或显示提示之前检查该标志
+    # 用以下方法替换现有的 handle_event_list 方法：
 
-    # Modify handle_event_list to check the flag before starting view or showing hint
-    # Replace the existing handle_event_list with the previous one, but modify the click logic:
-
-    # Replace the existing handle_event_list method with this:
+    # 用这个方法替换现有的 handle_event_list 方法：
     def handle_event_list(self, event):
         """处理图库列表界面的事件。返回 True 表示事件被消耗，False 表示未处理。"""
-        # Check if the event occurred within the gallery window area
+        # 检查事件是否发生在图库窗口区域内
         gallery_window_rect = self.gallery_window_rect
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
              if not gallery_window_rect.collidepoint(event.pos):
-                 # Click occurred outside the gallery window
+                 # 点击发生在图库窗口外部
                  if hasattr(self.game, 'close_gallery'):
                      self.game.close_gallery()
-                 return True # Event handled
+                 return True # 事件已处理
 
-        # Handle internal interactions if the event is within the window (handled by the check above)
+        # 如果事件发生在窗口内，则处理内部交互（由上述检查处理）
 
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # Left click
-             # Check which thumbnail was clicked
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # 左键点击
+             # 检查点击了哪个缩略图
              clicked_thumbnail_index = self._get_thumbnail_index_at_pos(event.pos)
              if clicked_thumbnail_index is not None:
-                 # Get info of the clicked picture
+                 # 获取点击的图片信息
                  if 0 <= clicked_thumbnail_index < len(self.pictures_in_gallery):
                      clicked_picture_info = self.pictures_in_gallery[clicked_thumbnail_index]
 
                      # --- **关键修改：检查 is_ready_for_gallery 标志** ---
                      if clicked_picture_info.get('is_ready_for_gallery', False):
-                         # Picture is ready for interaction (pieces and thumbnails loaded)
+                         # 图片已准备好进行交互（碎片和缩略图已加载）
                          if clicked_picture_info['state'] == 'lit':
-                             # If clicking a lit picture, switch to big view mode
-                             print(f"Clicked ready & lit image: ID {clicked_picture_info['id']}, switching to big view.") # Debug
+                             # 如果点击已点亮的图片，切换到大图查看模式
+                             print(f"点击已准备好且已点亮的图片: ID {clicked_picture_info['id']}，切换到大图查看。") # 调试信息
                              self.start_viewing_lit_image(clicked_thumbnail_index)
-                             return True # Event handled
+                             return True # 事件已处理
                          elif clicked_picture_info['state'] == 'unlit':
-                             # If clicking an unlit picture, show a hint
-                             print(f"Clicked ready & unlit image: ID {clicked_picture_info['id']}, showing hint.") # Debug
+                             # 如果点击未点亮的图片，显示提示
+                             print(f"点击已准备好且未点亮的图片: ID {clicked_picture_info['id']}，显示提示。") # 调试信息
                              if hasattr(self.game, 'show_popup_tip'):
                                   self.game.show_popup_tip("美图尚未点亮")
-                             return True # Event handled
-                         # else: # Should not happen if state is lit or unlit
+                             return True # 事件已处理
+                         # else: # 如果状态是已点亮或未点亮，不应该发生这种情况
                      else:
-                          # Picture is not ready for interaction (loading in background)
-                          print(f"Clicked image ID {clicked_picture_info['id']}, but not ready for gallery interaction. Showing loading hint.") # Debug
+                          # 图片尚未准备好进行交互（正在后台加载）
+                          print(f"点击图片 ID {clicked_picture_info['id']}，但尚未准备好进行图库交互。显示加载提示。") # 调试信息
                           if hasattr(self.game, 'show_popup_tip'):
-                                  self.game.show_popup_tip("图片加载中...") # Show a different hint
-                          return True # Event handled (by showing a hint)
+                                  self.game.show_popup_tip("图片加载中...") # 显示不同的提示
+                          return True # 事件已处理（通过显示提示）
 
-                 # If clicked inside the gallery window, but not on a recognized thumbnail (get_thumbnail_index_at_pos returned None)
-                 return False # Event not handled by a specific picture
+                 # 如果点击在图库窗口内部，但不是在识别的缩略图上（get_thumbnail_index_at_pos 返回 None）
+                 return False # 特定图片未处理该事件
 
-        elif event.type == pygame.MOUSEWHEEL: # Mouse wheel event
-            # Ensure mouse is within the gallery window area for wheel events to be effective
+        elif event.type == pygame.MOUSEWHEEL: # 鼠标滚轮事件
+            # 确保鼠标在图库窗口区域内时，滚轮事件才有效
             if gallery_window_rect.collidepoint(pygame.mouse.get_pos()):
                 self.scroll_y -= event.y * settings.GALLERY_SCROLL_SPEED
                 self.scroll_y = max(0, self.scroll_y)
                 self.scroll_y = min(self._max_scroll_y, self.scroll_y)
-                # print(f"Scrolled gallery list, new scroll_y: {self.scroll_y}") # Debug
-                return True # Event handled
+                # print(f"滚动图库列表，新的 scroll_y: {self.scroll_y}") # 调试信息
+                return True # 事件已处理
 
-        # If the event type is not handled by this method, return False
+        # 如果此方法未处理该事件类型，则返回 False
         return False
 
     def draw_view_lit(self, surface):

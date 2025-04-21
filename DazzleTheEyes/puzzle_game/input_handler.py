@@ -8,6 +8,7 @@ import settings
 import utils  # 替代 from utils import screen_to_grid
 from utils import screen_to_grid # 导入工具函数
 # from board import Board # 需要导入Board类来操作拼盘
+import board # 需要导入Board类来操作拼盘
 # from main import Game # 可能需要Game实例来改变状态 (如打开图库)
 import math # 用于计算鼠标按下和释放位置的距离
 
@@ -50,8 +51,10 @@ class InputHandler:
             # 当接收到退出事件时，调用 Game 类的退出方法，该方法会负责存档和退出
             if hasattr(self.game, 'quit_game'):
                 self.game.quit_game()
+                print("退出游戏")
             else:
                  # If quit_game method is not available (e.g., fatal error during init), exit directly
+                 print("退出游戏 (错误)")
                  pygame.quit()
                  sys.exit()
 
@@ -239,7 +242,10 @@ class InputHandler:
         self.mouse_down_grid_pos = (-1, -1)
 
 
-    def _handle_mouse_motion(self, event):
+    def _handle_mouse_motion(self, event):#这段代码是一个名为 _handle_mouse_motion 的方法，
+        # 它用于处理鼠标移动事件。这个方法的目的是在鼠标移动时检测是否应该开始或继续一个拖拽操作，
+        # 以及在拖拽过程中如何处理碎片的位置更新。
+        # 这个方法的主要逻辑如下：
         """
         处理鼠标移动事件。
 

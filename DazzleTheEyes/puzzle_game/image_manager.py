@@ -86,7 +86,9 @@ class ImageManager:
                 # 从文件名中提取图片ID
                 image_id = int(os.path.splitext(filename)[0].replace("image_", ""))
                 full_path = os.path.join(settings.ASSETS_DIR, filename)
+                # print(f"扫描到图片文件: {filename} (ID: {image_id})") # Debug
                 self.all_image_files[image_id] = full_path
+                # print(f"路径: {self.all_image_files}")
                 # 所有扫描到的图片初始状态都是未入场
                 if image_id not in self.image_status: # 避免重复扫描时覆盖状态 (如果ImageManager被多次初始化)
                     self.image_status[image_id] = 'unentered'
@@ -94,6 +96,7 @@ class ImageManager:
                 print(f"警告: 文件名格式不正确，无法提取图片ID: {filename}")
             except Exception as e:
                 print(f"警告: 扫描文件 {filename} 时发生错误: {e}")
+        # print(f"文件路径: {self.all_image_files}")
 
         self._total_image_count = len(self.all_image_files)
         print(f"扫描到 {self._total_image_count} 张原始图片文件。") # Debug
@@ -693,15 +696,15 @@ class ImageManager:
 
     def get_initial_pieces_for_board(self):
         """
-        Gets the list of Piece objects for the initial board fill.
-        These pieces come from images in the initial load batch that were successfully loaded/processed.
+        获取用于初始棋盘填充的 Piece 对象列表。
+        这些碎片来自初始加载批次中已成功加载/处理的图片。
         """
         initial_pieces_list = []
         # Get IDs of images that have successfully loaded/generated their full set of pieces
         image_ids_with_pieces = sorted([img_id for img_id in self.all_image_files.keys() if img_id in self.pieces_surfaces and self.pieces_surfaces.get(img_id) is not None and len(self.pieces_surfaces[img_id]) == settings.PIECES_PER_IMAGE])
 
         if not image_ids_with_pieces:
-            print("错误: No piece surfaces available for initial Board fill.")
+            print("错误: 初始棋盘填充没有可用的碎片表面。")
             return [] # No images with loaded pieces
 
         # Determine which loaded images should be used for the initial fill candidates
@@ -985,29 +988,43 @@ class ImageManager:
 
     def get_all_entered_pictures_status(self):
         """
-        Gets status (unlit/lit) and completion time for all images that are 'entered'
-        (status != 'unentered'). This list is used by the Gallery.
-        Includes a flag 'is_ready_for_gallery' to indicate if the image's pieces/thumbnails are ready.
+        获取所有已“入场”（状态不等于 'unentered'）图片的状态（未点亮/已点亮）和完成时间。
+        此列表供图库使用。
+        包含一个标志 'is_ready_for_gallery'，用于指示图片的碎片和缩略图是否已准备好。
         """
         status_list = []
-        # Ensure iteration order matches image ID order
+        # 确保迭代顺序与图片ID顺序一致
         all_image_ids = sorted(self.all_image_files.keys())
+        print(f"图片ID列表: {all_image_ids}") # Debug
+        #图片ID列表: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
         for img_id in all_image_ids:
-             status = self.image_status.get(img_id, 'unentered')
-             # The gallery should only show images that are 'unlit' or 'lit'
-             if status in ['unlit', 'lit']:
+            print(f"检查图片ID: {img_id}") # Debug
+            # 检查图片ID: 1
+            # 检查图片ID: 2
+            # 检查图片ID: 3
+            # 检查图片ID: 4            
+            # status = self.image_status.get(img_id, 'unentered')
+            status = self.image_status.get(img_id, 'lit')
+            # 图库应仅显示状态为 'unlit' 或 'lit' 的图片
+            # print(f"图片ID {img_id} 的状态: {status2}") # Debug
+            print(f"图片ID {img_id} 的状态: {status}") # Debug
+            if status in ['unlit', 'lit']:
                 status_info = {'id': img_id, 'state': status}
+                print(f"图片ID {img_id} 的状态?: {status}") # Debug
                 if status == 'lit':
-                    # Get completion time, use current time as fallback (should not happen)
+                    # 获取完成时间，若不存在则使用当前时间作为备用（正常情况下不应发生）
                     status_info['completion_time'] = self.completed_times.get(img_id, time.time())
-                # Add a flag indicating if the image's pieces AND thumbnails are loaded (needed for gallery thumbnail/big view)
+                # 添加一个标志，指示图片的碎片和缩略图是否已加载（图库缩略图/大图查看需要）
                 pieces_loaded = (img_id in self.pieces_surfaces and self.pieces_surfaces.get(img_id) is not None and len(self.pieces_surfaces.get(img_id, {})) == settings.PIECES_PER_IMAGE)
                 thumbnails_cached = (img_id in self.cached_thumbnails and self.cached_thumbnails.get(img_id) is not None and
                                      img_id in self.cached_unlit_thumbnails and self.cached_unlit_thumbnails.get(img_id) is not None)
-                status_info['is_ready_for_gallery'] = pieces_loaded and thumbnails_cached # Flag for gallery to show/enable image
+                status_info['is_ready_for_gallery'] = pieces_loaded and thumbnails_cached  # 图库显示/启用图片的标志
 
                 status_list.append(status_info)
+        print(f"获取到 {len(status_list)} 张图片的状态信息，其中包括 {sum(1 for s in status_list if s['is_ready_for_gallery'])} 张准备好的图片。") # Debug
+        print(f"状态信息示例: {status_list[:5]}") # 打印前5条状态信息以检查其结构和内容 # Debug, 避免刷屏
+        # return status_list # 返回图片状态列表，包括 'id', 'state', 'completion_time', 'is_ready_for_gallery'
 
         return status_list
 
@@ -1064,7 +1081,9 @@ class ImageManager:
         print("ImageManager 从存档加载状态...") # Debug
 
         # 临时存储加载的状态，以便后续填充高优先级队列
-        loaded_image_status = state_data.get('image_status', {})
+        print(f"state_data 的值为: {state_data}")
+        loaded_image_status = state_data.get('image_status', {111})
+        print(f"从存档数据中获取的 loaded_image_status 的值为: {loaded_image_status}")
         loaded_completed_times = state_data.get('completed_times', {})
         loaded_next_image_to_consume_id = state_data.get('next_image_to_consume_id', None)
         loaded_pieces_consumed = state_data.get('pieces_consumed_from_current_image', 0)
@@ -1075,9 +1094,10 @@ class ImageManager:
         self.image_status = {
             img_id: status
             for img_id, status in loaded_image_status.items()
-            if img_id in self.all_image_files # 只加载扫描到的图片的状态
+            # if img_id in self.all_image_files # 只加载扫描到的图片的状态
         }
-        print(f"ImageManager 从存档加载了 {len(self.image_status)} 张图片的状态。") # Debug
+        print(f"ImageManager 从存档加载了 {len(self.image_status)} 张图片的状态。具体状态如下: {self.image_status}")  # 新增打印语句
+        # print(f"ImageManager 从存档加载了 {len(self.image_status)} 张图片的状态。") # Debug
 
         # 确保只加载状态为 lit 的图片的完成时间，且图片ID存在于已加载状态中
         self.completed_times = {

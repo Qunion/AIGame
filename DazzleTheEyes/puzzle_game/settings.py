@@ -47,7 +47,7 @@ INITIAL_LOAD_IMAGE_COUNT = 5 # 根据你的图片数量和期望加载速度调�
 
 # 后台加载图片的速度控制
 BACKGROUND_LOAD_BATCH_SIZE = 1 # 每次后台尝试加载处理的图片数量 (可以调整)
-BACKGROUND_LOAD_DELAY = 0.1 # 每批处理之间的最小延迟 (秒)，避免完全占用CPU，让Pygame有时间绘制和处理事件
+BACKGROUND_LOAD_DELAY = 100 # 每批处理之间的最小延迟 (秒)，避免完全占用CPU，让Pygame有时间绘制和处理事件
 
 
 # 加载界面设置
@@ -107,13 +107,13 @@ GALLERY_THUMBNAIL_WIDTH = (GALLERY_WIDTH - 2 * GALLERY_PADDING - (GALLERY_IMAGES
 # 保持原始图片逻辑比例 (宽度:高度 = 5:9) 来计算缩略图高度
 GALLERY_THUMBNAIL_HEIGHT = int(GALLERY_THUMBNAIL_WIDTH * (IMAGE_LOGIC_ROWS / IMAGE_LOGIC_COLS)) # 注意这里是 Rows / Cols
 
-GALLERY_SCROLL_SPEED = 30 # 图库滑动速度 (像素/帧)
+GALLERY_SCROLL_SPEED = 90 # 图库滑动速度 (像素/帧)
 
 
 # 提示信息设置 ("美图尚未点亮")
 TIP_TEXT_COLOR = WHITE
-TIP_DISPLAY_DURATION = 3 # 提示信息显示时长 (秒)
-TIP_FONT_SIZE = 40 # 提示信息字体大小
+TIP_DISPLAY_DURATION = 2 # 提示信息显示时长 (秒)
+TIP_FONT_SIZE = 20 # 提示信息字体大小
 
 
 # 动画速度 (下落等)
