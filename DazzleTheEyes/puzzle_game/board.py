@@ -84,7 +84,7 @@ class Board:
         # 随机打乱位置列表
         random.shuffle(all_grid_positions)
 
-        # 将每个碎片放置到一个随机的网格位置上
+        # 将每个碎片放置到一个随机的网格位置上，并逐个添加到 Group
         for i, piece in enumerate(initial_pieces):
             r, c = all_grid_positions[i]
 
@@ -93,7 +93,7 @@ class Board:
             # Update piece's current grid position and screen position (no animation)
             piece.set_grid_position(r, c, animate=False)
 
-            # --- **最精确定位调试和安全检查：在添加到 Group 之前** ---
+            # --- **最精确定位调试、安全检查和断言：在添加到 Group 之前** ---
             # print(f"Board Debug: Piece {i+1}/{len(initial_pieces)} 准备添加到 Group.") # Debug
             # print(f"  Object Type: {type(piece)}, Is Sprite: {isinstance(piece, pygame.sprite.Sprite)}") # Debug
             # if isinstance(piece, pygame.sprite.Sprite):
@@ -104,23 +104,25 @@ class Board:
             #      rect_type = type(piece.rect) if hasattr(piece, 'rect') else '没有 rect 属性'
             #      rect_pos_size = piece.rect if hasattr(piece, 'rect') else 'N/A'
             #      print(f"  Piece Rect Type: {rect_type}, Pos/Size: {rect_pos_size}") # Debug
-            # else:
-            #      print("致命错误: Board: 尝试添加的对象不是 Sprite，跳过添加。") # Debug
-            #      continue # Skip adding invalid object
+
+            # --- **关键断言：强制检查 Piece 对象是否是有效的 Sprite 并有 image/rect** ---
+            assert isinstance(piece, pygame.sprite.Sprite), f"致命错误: 尝试添加到 Group 的对象不是 Sprite! 类型为 {type(piece)}. Piece Info: {piece.get_original_info() if hasattr(piece, 'get_original_info') else 'N/A'}"
+            assert hasattr(piece, 'image') and isinstance(piece.image, pygame.Surface), f"致命错误: 尝试添加的 Sprite 没有有效的 image 属性或不是 Surface! 类型为 {type(piece.image) if hasattr(piece, 'image') else '没有此属性'}. Piece Info: {piece.get_original_info() if hasattr(piece, 'get_original_info') else 'N/A'}"
+            assert hasattr(piece, 'rect') and isinstance(piece.rect, pygame.Rect), f"致命错误: 尝试添加的 Sprite 没有有效的 rect 属性或不是 Rect! 类型为 {type(piece.rect) if hasattr(piece, 'rect') else '没有此属性'}. Piece Info: {piece.get_original_info() if hasattr(piece, 'get_original_info') else 'N/A'}"
 
 
-            # --- **关键修改：直接修改 Group 的内部集合 (非标准)** ---
+            # --- **关键修改：回到使用 group.add(piece) 方法，并捕获异常** ---
             # Check if self.all_pieces_group is indeed a Sprite Group before adding
             if isinstance(self.all_pieces_group, pygame.sprite.Group):
+                 # print(f"  Group Type: {type(self.all_pieces_group)}. Current size: {len(self.all_pieces_group)}") # Debug
                  try:
-                     # Access the internal set of sprites and add the piece
-                     # This bypasses the .add() method
-                     # Note: This relies on Pygame's internal implementation and is not guaranteed to work in future versions.
-                     self.all_pieces_group.sprites().add(piece) # <-- 尝试直接添加到内部集合
+                     # Use the standard Group.add method
+                     self.all_pieces_group.add(piece) # <-- Error is reported here!
                      # print(f"Board: 成功添加碎片到 Group. Group大小: {len(self.all_pieces_group)}") # Debug
                  except Exception as e:
-                     print(f"致命错误: Board: 直接添加碎片到 Group 内部集合时发生异常: {e}. 碎片信息: {piece.get_original_info() if hasattr(piece, 'get_original_info') else 'N/A'}.")
-                     # If this happens, the Group or Piece might be fundamentally broken.
+                     # This exception handler is here just in case, but the assert should catch type issues earlier.
+                     print(f"致命错误: Board: 将碎片添加到 Group 时发生异常 (在断言之后): {e}. 碎片信息: {piece.get_original_info()}.")
+                     # If this happens repeatedly, the Group or the Piece creation might be fundamentally broken.
                      # Can add an exit here if needed.
                      # import sys; pygame.quit(); sys.exit()
             else:
@@ -129,10 +131,10 @@ class Board:
                  # import sys; pygame.quit(); sys.exit()
 
 
-        print(f"Board: {len(self.all_pieces_group) if isinstance(self.all_pieces_group, pygame.sprite.Group) else 'N/A'} 个初始碎片已添加到 Group (使用直接修改内部集合)。") # Debug <-- 修改打印内容
+        print(f"Board: {len(self.all_pieces_group) if isinstance(self.all_pieces_group, pygame.sprite.Group) else 'N/A'} 个初始碎片已添加到 Group。") # Debug
 
 
-    # 替换 _load_grid_from_data 方法 (直接修改 Group 的内部集合)
+    # 替换 _load_grid_from_data 方法 (回到 group.add(piece), 添加更多调试和检查)
     def _load_grid_from_data(self, saved_grid_data):
         """
         从提供的存档数据构建拼盘网格和Sprite Group。
@@ -209,33 +211,36 @@ class Board:
 
 
                         # 将 Piece 逐个添加到 Sprite Group
-                        # --- **最精确定位调试和安全检查：在添加到 Group 之前** ---
-                        # print(f"Board Debug: Piece ({r},{c}) from archive prepared to add to Group.") # Debug
-                        # print(f"  Object Type: {type(piece)}, Is Sprite: {isinstance(piece, pygame.sprite.Sprite)}") # Debug
-                        # if isinstance(piece, pygame.sprite.Sprite):
-                        #     print(f"  Piece Info: ID {piece.original_image_id}, 原始 ({piece.original_row},{piece.original_col}), 当前 ({piece.current_grid_row},{piece.current_grid_col})") # Debug
-                        #     image_type = type(piece.image) if hasattr(piece, 'image') else '没有 image 属性'
-                        #     image_size = piece.image.get_size() if hasattr(piece, 'image') and isinstance(piece.image, pygame.Surface) else 'N/A'
-                        #     print(f"  Piece Image Type: {image_type}, Size: {image_size}") # Debug
-                        #     rect_type = type(piece.rect) if hasattr(piece, 'rect') else '没有 rect 属性'
-                        #     rect_pos_size = piece.rect if hasattr(piece, 'rect') else 'N/A'
-                        #     print(f"  Piece Rect Type: {rect_type}, Pos/Size: {rect_pos_size}") # Debug
-                        # else:
-                        #     print(f"致命错误: Board: 尝试从存档添加的对象不是 Sprite，跳过添加。类型为 {type(piece)}.") # Debug
-                        #     continue # Skip adding invalid object
+                        # --- **最精确定位调试、安全检查和断言：在添加到 Group 之前** ---
+                        print(f"Board Debug: Piece ({r},{c}) from archive prepared to add to Group.") # Debug
+                        print(f"  Object Type: {type(piece)}, Is Sprite: {isinstance(piece, pygame.sprite.Sprite)}") # Debug
+                        if isinstance(piece, pygame.sprite.Sprite):
+                            print(f"  Piece Info: ID {piece.original_image_id}, 原始 ({piece.original_row},{piece.original_col}), 当前 ({piece.current_grid_row},{piece.current_grid_col})") # Debug
+                            image_type = type(piece.image) if hasattr(piece, 'image') else '没有 image 属性'
+                            image_size = piece.image.get_size() if hasattr(piece, 'image') and isinstance(piece.image, pygame.Surface) else 'N/A'
+                            print(f"  Piece Image Type: {image_type}, Size: {image_size}") # Debug
+
+                            rect_type = type(piece.rect) if hasattr(piece, 'rect') else '没有 rect 属性'
+                            rect_pos_size = piece.rect if hasattr(piece, 'rect') else 'N/A'
+                            print(f"  Piece Rect Type: {rect_type}, Pos/Size: {rect_pos_size}") # Debug
+                        else:
+                            print(f"致命错误: Board: 尝试从存档添加的对象不是 Sprite，跳过添加。类型为 {type(piece)}.") # Debug
+                            continue # Skip adding invalid object
 
 
-                        # --- **关键修改：改为使用 piece.add(self.all_pieces_group)** ---
                         # Check if self.all_pieces_group is indeed a Sprite Group before adding
                         if isinstance(self.all_pieces_group, pygame.sprite.Group):
+                             print(f"  Group Type: {type(self.all_pieces_group)}. Current size: {len(self.all_pieces_group)}") # Debug
                              try:
-                                 # Use the Sprite's add method to add itself to the group
-                                 piece.add(self.all_pieces_group) # <-- Error might occur here!
+                                 # --- **关键修改：回到使用 group.add(piece) 方法，并捕获异常** ---
+                                 # Use the standard Group.add method
+                                 self.all_pieces_group.add(piece) # <-- Error is reported here!
                                  pieces_added_count += 1
                                  # print(f"Board: 成功添加存档碎片到 Group. Group大小: {len(self.all_pieces_group)}") # Debug
                              except Exception as e:
-                                 print(f"致命错误: Board: 使用 piece.add(Group) 将存档碎片添加到 Group 时发生异常: {e}. 碎片信息: {piece_info}.")
-                                 # If this happens repeatedly, the Group or Piece might be fundamentally broken.
+                                 # This exception handler is here just in case, but the assert should catch type issues earlier.
+                                 print(f"致命错误: Board: 将存档碎片添加到 Group 时发生异常 (在断言之后): {e}. 碎片信息: {piece_info}.")
+                                 # If this happens repeatedly, the Group or the Piece creation might be fundamentally broken.
                                  # Can add an exit here if needed.
                                  # import sys; pygame.quit(); sys.exit()
                         else:
