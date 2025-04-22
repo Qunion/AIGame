@@ -35,7 +35,7 @@ BOARD_OFFSET_Y = 0
 IMAGE_LOGIC_DIMS = {
     # 根据图片宽高和期望的碎片数量及比例配置，逻辑尺寸 * 碎片尺寸应接近原始图片尺寸
     # (逻辑列数 * PIECE_WIDTH, 逻辑行数 * PIECE_HEIGHT) 决定了原图被处理（缩放裁剪）到的目标尺寸
-    1: (2, 3),  # image_1 裁剪为 5列 x 9行
+    1: (3, 2),  # image_1 裁剪为 5列 x 9行
     2: (3, 2),  # image_2 裁剪为 9列 x 5行
     3: (3, 3),  # image_3 裁剪为 5列 x 5行
     4: (5, 3),  # image_4 裁剪为 7列 x 7行
@@ -56,7 +56,7 @@ IMAGE_LOGIC_DIMS = {
 # 'cols' 和 'rows' 是可放置区域在物理网格中的尺寸， 'bg' 是对应的背景图文件名
 # 升级阈值必须按升序排列
 PLAYABLE_AREA_CONFIG = {
-    0: {'cols': 3, 'rows': 3, 'bg': 'background_1.png'},     # 初始区域 5x5
+    0: {'cols': 3, 'rows': 2, 'bg': 'background_1.png'},     # 初始区域 5x5
     1: {'cols': 4, 'rows': 4, 'bg': 'background_2.png'},     # 点亮 1 张图后升级到 7x7
     3: {'cols': 5, 'rows': 5, 'bg': 'background_3.png'},     # 点亮 3 张图后升级到 9x9
     5: {'cols': 8, 'rows': 8, 'bg': 'background_4.png'},    # 点亮 6 张图后升级到 12x9
@@ -187,7 +187,7 @@ BOARD_STATE_UPGRADING_AREA = 5 # 正在升级可放置区域 (移动碎片、加
 # 存档设置
 SAVE_FILE_NAME = "savegame.json" # 存档文件名
 # 完整的存档文件路径将是 os.path.join(BASE_DIR, SAVE_FILE_NAME)
-AUTOSAVE_INTERVAL = 100 # 自动存档间隔 (秒)
+AUTOSAVE_INTERVAL = 10 # 自动存档间隔 (秒)
 
 # Debug 设置
 DEBUG_TEXT_COLOR = (255, 255, 255) # Debug 文字颜色 (白色)

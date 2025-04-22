@@ -1177,9 +1177,11 @@ class Board:
         return False
 
 
-    # 替换 fill_new_pieces 方法 (根据可放置区域填充)
     def fill_new_pieces(self):
-        """根据填充规则，从 image_manager 获取新碎片填充当前可放置区域内的空位。"""
+        """
+        根据填充规则，从 image_manager 获取新碎片填充当前可放置区域内的空位。
+        同时更新新进入拼盘的图片状态为 'unlit'。
+        """
         print("Board: 触发填充新碎片...") # Debug
         # 统计当前可放置区域内有多少个空槽位 (即网格中为 None 的位置)
         empty_slots_positions = [] # 记录空槽位的位置 (从上往下，从左往右遍历可放置区域获取)
@@ -1221,49 +1223,41 @@ class Board:
              if i < len(empty_slots_positions):
                  r, c = empty_slots_positions[i] # Get an empty slot's physical grid position
 
+                 # === 关键修改：检查新填充碎片所属图片的当前状态，如果是 'unentered' 则更新为 'unlit' ===
+                 img_id = piece.original_image_id
+                 current_status = self.image_manager.image_status.get(img_id, 'unentered')
+                 if current_status == 'unentered':
+                      print(f"Board: 碎片来自图片ID {img_id}，首次入场，更新状态为 'unlit'。") # Debug
+                      self.image_manager.set_image_state(img_id, 'unlit') # 更新图片状态
+
                  # Set the piece's initial temporary position *above* the board
                  # This is so they can fall into their target slot
                  # Calculate the target final screen position
                  target_screen_x = settings.BOARD_OFFSET_X + c * settings.PIECE_WIDTH
                  target_screen_y = settings.BOARD_OFFSET_Y + r * settings.PIECE_HEIGHT
 
-                 # Set initial Y position above the board. Use the target X.
-                 initial_screen_x = target_screen_x
-                 # Initial Y can be above the playable area top, or even above the whole board.
-                 # Let's place them slightly above their final grid row, but aligned horizontally.
-                 # The Piece.set_grid_position method handles setting the *final* position and initiating fall.
-                 # We just need to set their *initial* screen position before calling set_grid_position with animate=True.
-                 # Set initial position to the target grid column, but a row above the top playable row, or row 0 if already at top.
-                 initial_r = max(0, playable_row_start - 1) # Start one row above playable area, or row 0
-                 initial_c = c # Same column
-
-                 # Temporarily set grid position and screen position to the starting point for fall
-                 # This is a bit tricky because we are about to put the piece into the grid at (r,c).
-                 # Let's set the grid[r][c] first, then set the Piece's grid position to (r,c),
-                 # and *then* adjust its initial screen position for the animation.
-
-                 self.grid[r][c] = piece # Assign piece to grid position (its final logical place)
-                 piece.current_grid_row = r # Update piece's internal grid pos immediately
-                 piece.current_grid_col = c
-
-                 # Calculate the screen position corresponding to the *final* grid position (r, c)
-                 final_piece_screen_y = settings.BOARD_OFFSET_Y + r * settings.PIECE_HEIGHT
-
-                 # Calculate the screen position corresponding to the *starting* grid position (initial_r, initial_c)
+                 # Calculate the screen position corresponding to the *starting* grid position for fall animation
+                 # Start one row above playable area's top, or row 0 if playable area starts at row 0
+                 initial_r = max(0, playable_row_start - 1)
+                 initial_c = c # Same column as target
                  initial_piece_screen_x = settings.BOARD_OFFSET_X + initial_c * settings.PIECE_WIDTH
                  initial_piece_screen_y = settings.BOARD_OFFSET_Y + initial_r * settings.PIECE_HEIGHT
 
+
+                 # Assign piece to grid position (its final logical place)
+                 self.grid[r][c] = piece
+                 # Update piece's internal grid pos immediately
+                 piece.current_grid_row = r
+                 piece.current_grid_col = c
 
                  # Set the piece's rect to the *initial* screen position for animation
                  piece.rect.topleft = (initial_piece_screen_x, initial_piece_screen_y) # Start position for fall animation
 
                  # Tell the piece its *target* final position and start the animation
-                 # Piece.set_grid_position sets the internal current_grid_pos and calculates the target Y.
-                 # We already set current_grid_pos above. Let's just set the target_y and start animation.
-                 piece.fall_target_y = final_piece_screen_y
+                 piece.fall_target_y = target_screen_y
                  piece.is_falling = True # Start falling animation
 
-                 # === 关键修改：将新创建的 Piece 对象添加到 Sprite Group 并启动下落动画 ===
+                 # === 将新创建的 Piece 对象添加到 Sprite Group 并启动下落动画 ===
                  # 将新碎片添加到 Sprite Group
                  if isinstance(self.all_pieces_group, pygame.sprite.Group) and piece not in self.all_pieces_group:
                      try:
