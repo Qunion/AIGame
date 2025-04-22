@@ -17,3 +17,4 @@ Don'tStarveMaze/__pycache__/camera.cpython-311.pyc
 /DazzleTheEyes/puzzle_game - 2.2——很难说，确实是有进步的，图库可以打开，但没内容，图片完成后没有直接报错，算是进步了吧
 /DazzleTheEyes/puzzle_game - 3.0非常的nice几乎完美！！！-目前新版消除功能已经实现，只是偶现bug
 /DazzleTheEyes/puzzle_game -2.0.1-完成第一阶段——重构裁剪功能和拼盘
+/DazzleTheEyes/puzzle_game - 3.1再复制一份，现在只有升级ID不连续时，才有问题，以及图库图片没有完全加载

@@ -36,8 +36,8 @@ IMAGE_LOGIC_DIMS = {
     # 根据图片宽高和期望的碎片数量及比例配置，逻辑尺寸 * 碎片尺寸应接近原始图片尺寸
     # (逻辑列数 * PIECE_WIDTH, 逻辑行数 * PIECE_HEIGHT) 决定了原图被处理（缩放裁剪）到的目标尺寸
     1: (2, 3),  # image_1 裁剪为 5列 x 9行
-    2: (3, 3),  # image_2 裁剪为 9列 x 5行
-    3: (2, 4),  # image_3 裁剪为 5列 x 5行
+    2: (3, 2),  # image_2 裁剪为 9列 x 5行
+    3: (3, 3),  # image_3 裁剪为 5列 x 5行
     4: (5, 3),  # image_4 裁剪为 7列 x 7行
     5: (4, 5),  # image_5 裁剪为 9列 x 9行
     6: (5, 4), # 示例：image_6 裁剪为 10列 x 8行
@@ -58,8 +58,8 @@ IMAGE_LOGIC_DIMS = {
 PLAYABLE_AREA_CONFIG = {
     0: {'cols': 3, 'rows': 3, 'bg': 'background_1.png'},     # 初始区域 5x5
     1: {'cols': 4, 'rows': 4, 'bg': 'background_2.png'},     # 点亮 1 张图后升级到 7x7
-    2: {'cols': 5, 'rows': 5, 'bg': 'background_3.png'},     # 点亮 3 张图后升级到 9x9
-    3: {'cols': 8, 'rows': 8, 'bg': 'background_4.png'},    # 点亮 6 张图后升级到 12x9
+    3: {'cols': 5, 'rows': 5, 'bg': 'background_3.png'},     # 点亮 3 张图后升级到 9x9
+    5: {'cols': 8, 'rows': 8, 'bg': 'background_4.png'},    # 点亮 6 张图后升级到 12x9
     10: {'cols': 15, 'rows': 8, 'bg': 'background_5.png'},   # 点亮 10 张图后升级到 15x8 (最大可放置区域等于物理拼盘尺寸)
     # ... 添加更多阈值和配置
     # 注意：确保可放置区域的尺寸 (cols * PIECE_WIDTH, rows * PIECE_HEIGHT) 不超过屏幕尺寸

@@ -755,14 +755,14 @@ class Board:
 
         return None # 遍历所有可能位置后没有找到完整的图片
 
-
     def _process_completed_picture(self):
         """
         处理已完成图片的流程状态机。
         根据 current_board_state 执行相应的步骤。
         这个方法在 Board 的 update 中被调用。
         """
-        print(f"Board: 进入图片完成处理流程，当前状态: {self.current_board_state}") # 调试信息
+        # print(f"Board: _process_completed_picture: 当前状态: {self.current_board_state}") # Debug - remove if too spammy
+
         if self.current_board_state == settings.BOARD_STATE_PICTURE_COMPLETED:
             # 状态：图片已检测完成，刚进入处理流程
             print(f"Board State: PICTURE_COMPLETED -> REMOVING_PIECES for image {self._completed_image_id_pending_process}") # 调试信息
@@ -776,137 +776,81 @@ class Board:
 
         elif self.current_board_state == settings.BOARD_STATE_REMOVING_PIECES:
             # 状态：碎片正在移除动画中 (如果实现了的话)
-            # 目前移除是瞬间的，所以这个状态通常很快切换到 PIECES_FALLING
-            # 如果未来有移除动画，需要在这里等待动画完成
             # print("Board State: REMOVING_PIECES - waiting for animation (if any)...") # Debug
-            # TODO: Add logic to wait for removal animation if implemented
-            # For now, removal is instant, state machine moves immediately in previous state block
-            pass
+            pass # Wait for potential removal animation
 
 
         elif self.current_board_state == settings.BOARD_STATE_PIECES_FALLING:
              # 状态：碎片正在下落动画中
              # 碎片下落动画的更新由 Piece 的 update 方法处理，并在 Board 的 update 中调用 group.update
-             # 在 Board 的 update 方法中会检查是否所有碎片都已停止下落，并切换到 PENDING_FILL 状态
-             return # 等待下落动画完成
+             # 状态切换到 PENDING_FILL 在 Board.update 中检查 is_any_piece_falling() 实现
+             pass # Wait for falling animation to complete
 
 
         elif self.current_board_state == settings.BOARD_STATE_PENDING_FILL:
-            # 状态：碎片下落完成，等待填充
+            # 状态：碎片下落完成，等待填充或升级
             print("Board State: PENDING_FILL -> Checking for Upgrade...") # 调试信息
 
             # === 关键修改：检查是否需要升级可放置区域 ===
+            # Add print before calling _get_next_playable_area_config
+            print(f"Board: PENDING_FILL: 调用 _get_next_playable_area_config (unlocked={self.unlocked_pictures_count}, current area={self.playable_rows}x{self.playable_cols})...") # Debug
             next_upgrade_config = self._get_next_playable_area_config()
+            # Add print after calling _get_next_playable_area_config
+            print(f"Board: PENDING_FILL: _get_next_playable_area_config 返回: {next_upgrade_config}") # Debug
+
             if next_upgrade_config:
-                # 需要升级，切换到升级状态
+                # 需要升级
                 print(f"Board State: PENDING_FILL -> UPGRADING_AREA (Next config: {next_upgrade_config})") # Debug
-                self.current_board_state = settings.BOARD_STATE_UPGRADING_AREA
+                self.current_board_state = settings.BOARD_STATE_UPGRADING_AREA # 切换到升级状态
                 self._upgrade_target_config = next_upgrade_config # Store target config
-                # 立即执行区域升级逻辑 (目前是瞬间完成)
+                # 执行区域升级逻辑 (目前是瞬间完成)
+                print("Board: PENDING_FILL: 进行区域升级...") # Debug
                 self._upgrade_playable_area(next_upgrade_config)
-                # 升级完成后，立即切换到 PLAYING 状态
-                # Note: Fill will happen automatically after upgrading because upgrade creates empty slots.
-                # The fill_new_pieces call is part of the PENDING_FILL -> PLAYING transition if NO upgrade happens.
-                # After UPGRADING_AREA, we also need to transition to PLAYING which *should* then trigger a fill
-                # based on the new empty slots. Let's refine the state flow:
-                # PENDING_FILL -> (IF UPGRADE) -> UPGRADING_AREA -> (AFTER UPGRADE) -> PLAYING -> (AUTO-FILL)
-                # PENDING_FILL -> (IF NO UPGRADE) -> PLAYING -> (AUTO-FILL)
+                self._upgrade_target_config = None # Clear target config after use
+                # 区域升级和碎片移动完成后，切换到 PLAYING 状态
+                # fill_new_pieces 会在 BOARD_STATE_PLAYING 的 update 循环中被 check_and_process_completion 触发吗？
+                # No, fill_new_pieces is called explicitly after the state transition completes the process.
+                # Let's trigger fill *after* upgrade, and then transition to PLAYING.
+                print("Board: PENDING_FILL: 区域升级完成，进行填充新区域...") # Debug
+                self.fill_new_pieces() # Fill the new larger area
+                print("Board: PENDING_FILL: 填充完成。切换回 PLAYING。") # Debug
+                self.current_board_state = settings.BOARD_STATE_PLAYING # Final transition to PLAYING
 
-                # Let's make UPGRADING_AREA do the move/background/config change, and then transition to PENDING_FILL
-                # PENDING_FILL -> (IF UPGRADE) -> UPGRADING_AREA -> PENDING_FILL -> (AUTO-FILL based on NEW area) -> PLAYING
-                # This seems more logical: Fall done -> Ready for fill -> (Maybe upgrade first) -> Then fill -> Then playing.
-                # Let's re-design the flow slightly based on this:
-                # PICTURE_COMPLETED -> REMOVING_PIECES -> PIECES_FALLING -> PENDING_FILL (fall complete, check upgrade)
-                # IF UPGRADE: PENDING_FILL -> UPGRADING_AREA (do upgrade) -> PENDING_FILL (upgrade done, ready to fill new area)
-                # THEN: PENDING_FILL (either after fall or after upgrade) -> PLAYING (fill new pieces, then ready for input)
+            else:
+                # 不需要升级，直接填充新碎片
+                print("Board State: PENDING_FILL -> No upgrade needed. Proceeding with fill.") # Debug
+                # Add print before calling fill_new_pieces
+                print("Board: PENDING_FILL: 无需升级区域。进行填充。") # Debug
+                self.fill_new_pieces() # Fill the empty slots in the current area
+                # Add print after calling fill_new_pieces
+                print("Board: PENDING_FILL: 填充完成。切换回 PLAYING。") # Debug
+                # 填充完成后，切换回 PLAYING 状态
+                self.current_board_state = settings.BOARD_STATE_PLAYING
 
-                # Let's stick to the simpler flow for now:
-                # PICTURE_COMPLETED -> REMOVING_PIECES -> PIECES_FALLING -> PENDING_FILL (fall complete, check upgrade)
-                # IF UPGRADE: PENDING_FILL -> UPGRADING_AREA (do upgrade) -> PLAYING (fill happens implicitly as part of PLAYING)
-                # IF NO UPGRADE: PENDING_FILL -> PLAYING (fill happens implicitly as part of PLAYING)
-                # This requires fill_new_pieces to be called at the start of the PLAYING state, or implicitly handled.
-                # fill_new_pieces is currently called *within* the PENDING_FILL block.
-                # Let's adjust the state machine to trigger fill AFTER upgrade in the same process cycle.
-
-                # Revised flow:
-                # PICTURE_COMPLETED -> REMOVING_PIECES -> PIECES_FALLING
-                # (In update, when falling stops) -> PIECES_FALLING -> PENDING_FILL
-                # (In _process_completed_picture, handle PENDING_FILL)
-                # PENDING_FILL:
-                #   Check for upgrade.
-                #   IF UPGRADE:
-                #     Switch to UPGRADING_AREA.
-                #     Do upgrade logic (_upgrade_playable_area).
-                #     Switch to PLAYING. (Fill happens next as part of PLAYING)
-                #   IF NO UPGRADE:
-                #     Switch to PLAYING.
-                #     Do fill logic (fill_new_pieces). (Fill happens now)
-
-                # Okay, let's implement the flow as described in the revised summary:
-                # PENDING_FILL -> check upgrade -> IF upgrade DO UPGRADE, THEN DO FILL -> THEN PLAYING
-                # If no upgrade DO FILL -> THEN PLAYING
-
-                if next_upgrade_config:
-                    print(f"Board: 检测到需要升级可放置区域。进行升级。")
-                    self.current_board_state = settings.BOARD_STATE_UPGRADING_AREA # Change state before upgrade
-                    self._upgrade_playable_area(next_upgrade_config)
-                    self._upgrade_target_config = None # Clear target config after use
-                    # After upgrade, proceed to fill the *new* empty slots.
-                    print(f"Board State: UPGRADING_AREA -> PENDING_FILL (after upgrade, ready to fill new area)") # Debug
-                    # Transition to PENDING_FILL *again* or directly handle fill here?
-                    # Let's handle fill directly here for simplicity, it's part of completing the process.
-                    self.fill_new_pieces() # Fill the new larger area
-                    # After fill, transition to PLAYING
-                    print("Board: 区域升级和填充完成。切换回 PLAYING。") # Debug
-                    self.current_board_state = settings.BOARD_STATE_PLAYING
-
-                else:
-                    # 不需要升级，直接填充新碎片
-                    print("Board: 无需升级区域。进行填充。") # Debug
-                    self.fill_new_pieces() # Fill the empty slots in the current area
-                    # 填充完成后，切换回 PLAYING 状态
-                    print("Board: 填充完成。切换回 PLAYING。") # Debug
-                    self.current_board_state = settings.BOARD_STATE_PLAYING
-
-            # 清理完成图片的记录 (在整个完成流程结束，切换到 PLAYING 或 UPGRADING 之后)
-            # Let's move this to the end of the process in the PLAYING transition logic
-            # Or clear it *after* fill happens and state is set to PLAYING
+            # 清理完成图片的记录 (在整个完成流程结束，状态切换到 PLAYING 之后)
+            # This block should now be reached in both the upgrade and no-upgrade paths within PENDING_FILL
             if self.current_board_state == settings.BOARD_STATE_PLAYING:
                  self._completed_image_id_pending_process = None
                  self._completed_area_start_pos = None
-                 # TODO: 通知 Game 或 Gallery 图库需要刷新 (Board不能直接访问Gallery，通过Game间接通知)
-                 # This notification should happen after state is PLAYING and resources are available
+                 # 通知 Gallery 图库需要刷新
                  if hasattr(self.image_manager.game, 'gallery'): # 检查Game实例是否有gallery属性
-                     # print("通知 Gallery 更新列表...") # Debug
-                     # The gallery updates its list *when it is opened*.
-                     # We don't need to force an update here, but can if necessary.
-                     # self.image_manager.game.gallery._update_picture_list() # Direct call
-
-                     # A better approach is to let Gallery know data *might* be stale
-                     # For now, calling update_picture_list is fine.
-                     # Need to ensure ImageManager has updated its state BEFORE gallery updates.
-                     # ImageManager.set_image_state happened earlier.
-                     # Let's call the gallery update here.
                      try:
+                         # print("Board: 通知 Gallery 更新列表...") # Debug
                          self.image_manager.game.gallery._update_picture_list() # Update gallery list data
                      except Exception as e:
                          print(f"警告: Board: 无法通知 Gallery 更新列表: {e}") # Debug
 
-            # Note: UPGRADING_AREA state logic is handled below in the next elif block
 
         elif self.current_board_state == settings.BOARD_STATE_UPGRADING_AREA:
              # 状态：正在执行区域升级逻辑 (目前是瞬间完成)
-             # print("Board State: UPGRADING_AREA - performing upgrade...") # Debug
-             # The upgrade logic (_upgrade_playable_area) is called directly from PENDING_FILL state
-             # after checking for upgrade. So, we shouldn't reach this block in the update loop itself for now.
-             # If upgrade involved animation, this state would manage it.
-             # Let's keep this block for future animation implementation.
-             # For now, the state transition happens within the PENDING_FILL block above.
-             pass # Waiting for potential upgrade animation
+             # This state handles the upgrade animation if implemented.
+             # Currently, _upgrade_playable_area is called directly from PENDING_FILL,
+             # so this state might not be active for long, or at all if upgrade is instant.
+             # If upgrade had animation, the logic to check for animation completion
+             # and transition to the next state (PENDING_FILL for fill) would be here.
+             # For now, keep it simple, the transition out happens in the PENDING_FILL block after _upgrade_playable_area is called.
+             pass # Wait for potential upgrade animation
 
-
-        # Note: The check for is_any_piece_falling() and state transition from PIECES_FALLING -> PENDING_FILL
-        # needs to happen in the main update loop, not within _process_completed_picture.
 
 
     def remove_completed_pieces(self):
@@ -961,7 +905,6 @@ class Board:
         # TODO: 可以添加一个效果，让移除的碎片消失或爆炸等 (可选)
 
 
-
     # 新增方法：检查是否满足可放置区域升级条件
     def _get_next_playable_area_config(self):
         """
@@ -970,6 +913,8 @@ class Board:
         Returns:
             dict or None: 如果需要升级，返回下一个区域配置字典；否则返回 None。
         """
+        print(f"Board: _get_next_playable_area_config: unlocked={self.unlocked_pictures_count}, current area={self.playable_rows}x{self.playable_cols}") # Debug
+
         # 获取当前的可放置区域尺寸
         current_cols = self.playable_cols
         current_rows = self.playable_rows
@@ -978,50 +923,57 @@ class Board:
         # Ensure keys (thresholds) are sorted
         sorted_thresholds = sorted(settings.PLAYABLE_AREA_CONFIG.keys())
 
-        for threshold in sorted_thresholds:
-            config = settings.PLAYABLE_AREA_CONFIG[threshold]
-            # Skip thresholds less than or equal to the current unlocked count
-            if threshold <= self.unlocked_pictures_count:
-                 # Check if the current area matches this threshold's config
-                 # This handles the case where we load from save and the area might already match
-                 if config['cols'] == current_cols and config['rows'] == current_rows:
-                      # We are currently at this threshold's area, look for the *next* one
-                      pass # Continue to the next threshold
-                 else:
-                     # This threshold's config is not the current area, and we have met or exceeded the threshold.
-                     # This indicates the current area is from a *lower* threshold, and an upgrade *to this threshold's config* might be pending.
-                     # However, the core logic is to upgrade to the *smallest* config whose threshold is met/exceeded AND is larger than the current area.
-                     # Let's refine: Find the smallest threshold *greater than* the current unlocked count
-                     # AND whose config is *larger* than the current area.
-
-                     pass # Re-evaluate approach below
-
-
-        # Revised Approach: Iterate through configs and find the first one whose threshold is >= current unlocked count,
-        # AND whose area is larger than the current area.
-        next_config_candidate = None # Store the potential next config
-
-        # Find the current config based on current area size
-        current_config_threshold = -1 # Placeholder, assuming 0 threshold is smallest
+        # Find the threshold of the current area config
+        current_config_threshold = -1 # Use -1 as a placeholder for a state below the first defined threshold (0)
+        found_current_config = False
         for threshold, config in settings.PLAYABLE_AREA_CONFIG.items():
+             # Check if the current area's size matches this config's size
              if config['cols'] == current_cols and config['rows'] == current_rows:
-                  current_config_threshold = threshold # Found the threshold that corresponds to the current area
-                  break
+                  current_config_threshold = threshold # Found the threshold corresponding to the current area size
+                  found_current_config = True
+                  # print(f"Board: _get_next_playable_area_config: 找到当前区域 ({current_rows}x{current_cols}) 对应的阈值: {current_config_threshold}") # Debug
+                  break # Found the current config, no need to check other thresholds
+
+
+        # If current area size doesn't match any config size (shouldn't happen if initialized correctly)
+        if not found_current_config:
+             print(f"错误: Board: _get_next_playable_area_config: 当前区域尺寸 {self.playable_rows}x{self.playable_cols} 不匹配任何 PLAYABLE_AREA_CONFIG 配置。无法检查升级。") # Debug
+             return None # Cannot determine upgrade path
 
         # Now, iterate through sorted thresholds again, looking for an upgrade
+        print(f"Board: _get_next_playable_area_config: 遍历阈值寻找升级 (当前阈值={current_config_threshold}, 已点亮={self.unlocked_pictures_count})...") # Debug
         for threshold in sorted_thresholds:
-             # Only consider thresholds that are GREATER than the threshold of our current area
-             # AND whose unlocked picture threshold is MET or EXCEEDED
-             if threshold > current_config_threshold and threshold <= self.unlocked_pictures_count:
-                  config = settings.PLAYABLE_AREA_CONFIG[threshold]
-                  # Check if this new config is actually larger than the current one (area size)
-                  # Larger area: more columns OR more rows OR (more columns AND more rows)
-                  if config['cols'] > current_cols or config['rows'] > current_rows:
-                       # Found the *next* relevant upgrade config
-                       # This loop finds the *first* (smallest threshold) config that is larger and whose threshold is met.
-                       return config # Return this config as the target for upgrade
+             print(f"  检查阈值: {threshold}") # Debug
+             # Only consider thresholds that are STRICTLY GREATER than the threshold of our current area
+             if threshold > current_config_threshold:
+                  print(f"    阈值 {threshold} 大于当前阈值 {current_config_threshold}.") # Debug
+                  # Check if this threshold's unlocked picture requirement is MET or EXCEEDED
+                  if threshold <= self.unlocked_pictures_count:
+                       config = settings.PLAYABLE_AREA_CONFIG[threshold]
+                       print(f"    阈值 {threshold} <= 已点亮数量 {self.unlocked_pictures_count}. 满足升级条件.") # Debug
+                       # Check if this new config is actually larger than the current one (area size)
+                       # This check is implicitly covered by "threshold > current_config_threshold" if config sizes are strictly increasing with threshold.
+                       # However, configs might have the same size but different thresholds, or sizes might not be strictly monotonic.
+                       # Let's explicitly check if the size is different and larger to be safe.
+                       # A config is "larger" if it has more slots (cols * rows).
+                       current_slots = current_cols * current_rows
+                       new_slots = config['cols'] * config['rows']
+                       if new_slots > current_slots:
+                            # Found the *next* relevant upgrade config: smallest threshold > current, whose threshold is met, and whose area is larger.
+                            print(f"    找到下一个升级目标配置: 阈值 {threshold}, 尺寸 {config['rows']}x{config['cols']}") # Debug
+                            return config # Return this config as the target for upgrade
+                       else:
+                            print(f"    阈值 {threshold} 的配置尺寸 {config['rows']}x{config['cols']} ({new_slots} 槽位) 不大于当前尺寸 {current_rows}x{current_cols} ({current_slots} 槽位)。跳过。") # Debug
+                  else:
+                       print(f"    阈值 {threshold} > 已点亮数量 {self.unlocked_pictures_count}. 未满足升级条件。") # Debug
+                       # Since thresholds are sorted, if this threshold is not met, no subsequent thresholds will be met either (assuming thresholds are non-decreasing)
+                       # However, the user's config shows thresholds 0, 1, 3, 6, 10 which are non-decreasing.
+                       # Let's keep iterating just in case there's a valid config with a higher threshold but we missed something.
+                       pass # Continue checking higher thresholds if needed, though unlikely to find a met threshold
+
 
         # If the loop finishes without finding a larger config whose threshold is met
+        print("Board: _get_next_playable_area_config: 未找到满足条件的下一个升级配置。") # Debug
         return None # No upgrade needed
 
 
