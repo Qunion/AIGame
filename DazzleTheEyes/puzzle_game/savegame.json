@@ -90,39 +90,6 @@
                     "orig_c": 0
                 },
                 {
-                    "id": 2,
-                    "orig_r": 2,
-                    "orig_c": 1
-                },
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-            ],
-            [
-                null,
-                null,
-                null,
-                null,
-                null,
-                {
-                    "id": 2,
-                    "orig_r": 2,
-                    "orig_c": 2
-                },
-                {
-                    "id": 3,
-                    "orig_r": 0,
-                    "orig_c": 0
-                },
-                {
-                    "id": 3,
-                    "orig_r": 0,
-                    "orig_c": 1
-                },
-                {
                     "id": 3,
                     "orig_r": 0,
                     "orig_c": 2
@@ -141,6 +108,39 @@
                 null,
                 null,
                 {
+                    "id": 2,
+                    "orig_r": 2,
+                    "orig_c": 2
+                },
+                {
+                    "id": 3,
+                    "orig_r": 0,
+                    "orig_c": 0
+                },
+                {
+                    "id": 3,
+                    "orig_r": 2,
+                    "orig_c": 0
+                },
+                {
+                    "id": 2,
+                    "orig_r": 2,
+                    "orig_c": 1
+                },
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            ],
+            [
+                null,
+                null,
+                null,
+                null,
+                null,
+                {
                     "id": 3,
                     "orig_r": 1,
                     "orig_c": 0
@@ -152,13 +152,13 @@
                 },
                 {
                     "id": 3,
-                    "orig_r": 1,
-                    "orig_c": 2
+                    "orig_r": 0,
+                    "orig_c": 1
                 },
                 {
                     "id": 3,
-                    "orig_r": 2,
-                    "orig_c": 0
+                    "orig_r": 1,
+                    "orig_c": 2
                 },
                 null,
                 null,
@@ -210,21 +210,21 @@
     "image_manager_state": {
         "image_status": {
             "1": "lit",
-            "2": "lit",
-            "3": "lit",
-            "4": "lit",
-            "5": "lit",
-            "6": "lit",
-            "7": "lit",
-            "8": "unlit",
-            "9": "unlit",
-            "10": "unlit"
+            "2": "unlit",
+            "3": "unlit",
+            "4": "unentered",
+            "5": "unentered",
+            "6": "unentered",
+            "7": "unentered",
+            "8": "unentered",
+            "9": "unentered",
+            "10": "unentered"
         },
         "completed_times": {
-            "1": 1745336844.7001116
+            "1": 1745337217.9218478
         },
         "next_image_to_consume_id": 3,
         "pieces_consumed_from_current_image": 7
     },
-    "save_time": 1745336986.1927822
+    "save_time": 1745337289.6449435
 }

@@ -1324,12 +1324,12 @@ class Board:
              playable_rect_grid = pygame.Rect(self.playable_offset_col, self.playable_offset_row, self.playable_cols, self.playable_rows)
              if playable_rect_grid.collidepoint(piece_grid_pos[1], piece_grid_pos[0]): # collidepoint expects (x, y) -> (col, row)
 
-                 border_thickness = 5
+                 border_thickness = 2
                  # Recalculate selection_rect position based on the selected piece's current screen position
                  self.selection_rect.topleft = (self.selected_piece.rect.left - border_thickness, self.selected_piece.rect.top - border_thickness)
                  self.selection_rect.size = (self.selected_piece.rect.width + border_thickness * 2, self.selected_piece.rect.height + border_thickness * 2)
                  # Draw the selection border
-                 pygame.draw.rect(surface, settings.HIGHLIGHT_COLOR, self.selection_rect, 5) # Draw border with thickness=5
+                 pygame.draw.rect(surface, settings.HIGHLIGHT_COLOR, self.selection_rect, border_thickness) # Draw border with thickness=5
 
 
         # 最后绘制正在拖拽的碎片，使其显示在最上层
