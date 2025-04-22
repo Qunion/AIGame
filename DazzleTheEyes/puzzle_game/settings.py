@@ -3,24 +3,77 @@
 
 import os
 
-# 屏幕设置
+# TODO: PIECES_PER_IMAGE 是一个遗留常量，不代表每张图片的实际碎片总数，应根据 IMAGE_LOGIC_DIMS 动态计算。
+# 保留此处仅作记录，实际代码中应避免使用此固定值判断图片碎片总数。
+PIECES_PER_IMAGE = 20
+# TODO: GALLERY_THUMBNAIL_HEIGHT 这个固定高度的设置可能需要根据实际设计调整，
+# 目前 ImageManager 根据缩略图宽度和图片逻辑比例计算高度。
+GALLERY_THUMBNAIL_HEIGHT = 600
+
+
+# 屏幕设置 (固定)
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 
-# 拼盘设置
-BOARD_COLS = 16         # 拼盘的列数
-BOARD_ROWS = 9          # 拼盘的行数
-PIECE_SIZE = 120        # 每个碎片的边长 (像素)
+# 碎片尺寸 (可配置)
+# 所有图片的碎片都将是这个尺寸
+PIECE_WIDTH = 128 # 碎片宽度 (像素)
+PIECE_HEIGHT = 135 # 碎片高度 (像素)
+# 注意：PIECE_SIZE 已不再使用，请使用 PIECE_WIDTH 和 PIECE_HEIGHT
 
-# 计算拼盘在屏幕上的起始位置 (目前是全屏覆盖，所以是0,0)
+
+# 拼盘尺寸 (物理网格，根据屏幕和碎片尺寸计算，固定)
+BOARD_COLS = SCREEN_WIDTH // PIECE_WIDTH # 物理拼盘列数
+BOARD_ROWS = SCREEN_HEIGHT // PIECE_HEIGHT # 物理拼盘行数
+# 注意：这里计算的是总的物理网格大小，不等于可放置区域大小
+
 BOARD_OFFSET_X = 0
 BOARD_OFFSET_Y = 0
 
-# 图片逻辑尺寸 (一张完整图片被分割成的网格尺寸)
-# 注意：这里是 5列 x 9行
-IMAGE_LOGIC_COLS = 5    # 完整图片的逻辑列数 (宽度方向的碎片数量)
-IMAGE_LOGIC_ROWS = 9    # 完整图片的逻辑行数 (高度方向的碎片数量)
-PIECES_PER_IMAGE = IMAGE_LOGIC_COLS * IMAGE_LOGIC_ROWS # 每张完整图片的碎片数量 (5*9=45)
+# 图片逻辑尺寸 (每张图独立配置)
+# 这是一个字典，键是图片ID，值是 (逻辑列数, 逻辑行数) 的元组
+IMAGE_LOGIC_DIMS = {
+    # 根据图片宽高和期望的碎片数量及比例配置，逻辑尺寸 * 碎片尺寸应接近原始图片尺寸
+    # (逻辑列数 * PIECE_WIDTH, 逻辑行数 * PIECE_HEIGHT) 决定了原图被处理（缩放裁剪）到的目标尺寸
+    1: (2, 3),  # image_1 裁剪为 5列 x 9行
+    2: (3, 3),  # image_2 裁剪为 9列 x 5行
+    3: (2, 4),  # image_3 裁剪为 5列 x 5行
+    4: (5, 3),  # image_4 裁剪为 7列 x 7行
+    5: (4, 5),  # image_5 裁剪为 9列 x 9行
+    6: (5, 4), # 示例：image_6 裁剪为 10列 x 8行
+    7: (3, 7), # 示例：image_7 裁剪为 8列 x 10行
+    8: (4, 7),  # 示例
+    9: (7, 4), # 示例：image_9 裁剪为 12列 x 9行
+    10: (7, 7), # 示例：image_10 裁剪为 9列 x 12行
+
+    # ... 根据你的图片数量和期望的裁剪方式添加更多条目
+    # 注意：这里的行列数定义了图片的逻辑结构和碎片数量，不是拼盘的物理尺寸。
+    # 确保 IMAGE_LOGIC_DIMS 中的所有图片ID在 assets 目录中都有对应的 image_ID.png 文件。
+}
+
+# 可放置区域配置 (根据点亮图片数量动态变化)
+# 这是一个字典，键是点亮图片数量阈值，值是包含 'cols', 'rows', 'bg' 的字典
+# 'cols' 和 'rows' 是可放置区域在物理网格中的尺寸， 'bg' 是对应的背景图文件名
+# 升级阈值必须按升序排列
+PLAYABLE_AREA_CONFIG = {
+    0: {'cols': 3, 'rows': 3, 'bg': 'background_1.png'},     # 初始区域 5x5
+    1: {'cols': 4, 'rows': 4, 'bg': 'background_2.png'},     # 点亮 1 张图后升级到 7x7
+    2: {'cols': 5, 'rows': 5, 'bg': 'background_3.png'},     # 点亮 3 张图后升级到 9x9
+    3: {'cols': 8, 'rows': 8, 'bg': 'background_4.png'},    # 点亮 6 张图后升级到 12x9
+    10: {'cols': 15, 'rows': 8, 'bg': 'background_5.png'},   # 点亮 10 张图后升级到 15x8 (最大可放置区域等于物理拼盘尺寸)
+    # ... 添加更多阈值和配置
+    # 注意：确保可放置区域的尺寸 (cols * PIECE_WIDTH, rows * PIECE_HEIGHT) 不超过屏幕尺寸
+    # (即 cols <= BOARD_COLS 且 rows <= BOARD_ROWS)
+}
+
+# 派生计算
+# 物理拼盘总槽位数
+BOARD_TOTAL_SLOTS = BOARD_COLS * BOARD_ROWS
+
+
+# 可放置区域指示图层颜色 (黑色 50% 透明)
+PLAYABLE_AREA_OVERLAY_COLOR = (0, 0, 0, 128)
+
 
 # 字体设置
 FONT_NAME = "Microsoft YaHei" # 主要游戏字体名称 (使用系统字体名称)
@@ -29,25 +82,32 @@ FONT_NAME = "Microsoft YaHei" # 主要游戏字体名称 (使用系统字体名�
 # 资源路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # 获取当前文件所在目录的绝对路径
 ASSETS_DIR = os.path.join(BASE_DIR, "assets") + os.sep # assets文件夹路径
+BACKGROUND_DIR = os.path.join(ASSETS_DIR, "backgrounds") + os.sep # 背景图文件夹
+os.makedirs(BACKGROUND_DIR, exist_ok=True) # 确保背景图目录存在
+
 
 # 碎片生成与缓存设置
 REGENERATE_PIECES = 1 # 是否重新生成碎片：1-是，0-否。设置为0时优先从文件加载。
 # 生成的碎片存放目录
 GENERATED_PIECE_DIR = os.path.join(ASSETS_DIR, "pieces") + os.sep
 # 确保碎片目录存在
-os.makedirs(GENERATED_PIECE_DIR, exist_ok=True) # 修正了这里的 typo
+os.makedirs(GENERATED_PIECE_DIR, exist_ok=True)
 # 碎片文件命名格式，用于保存和加载
-PIECE_FILENAME_FORMAT = "image_{}_r{}_c{}.png" # 例如 image_1_r0_c0.png
+# image_ID_r行索引_c列索引.png (行和列是碎片在原图的逻辑位置)
+PIECE_FILENAME_FORMAT = "image_{}_r{}_c{}.png"
 
 
 # 图片加载与后台处理设置
-# 第一次进入游戏时加载的图片数量 (用于初始拼盘和前期的图库)
-# 必须至少包含 INITIAL_FULL_IMAGES_COUNT + (1 if INITIAL_PARTIAL_IMAGE_PIECES_COUNT > 0 else 0) 张图片
-INITIAL_LOAD_IMAGE_COUNT = 5 # 根据你的图片数量和期望加载速度调整
+# 游戏启动时，ImageManager 会尝试加载所有在 IMAGE_LOGIC_DIMS 中配置的图片文件，
+# 并优先处理那些在存档中状态不为 'unentered' (已入场/已点亮) 的图片资源（碎片和缩略图），
+# 然后按顺序处理剩余的图片。
+# INITIAL_LOAD_IMAGE_COUNT 可以在 ImageManager 初始化时控制初始同步加载的图片数量。
+# 推荐这个数量至少覆盖初始可放置区域所需的碎片所对应的图片，或设置一个合理的值以便快速进入游戏并显示一些图库项。
+INITIAL_LOAD_IMAGE_COUNT = 5 # 示例：初始加载前5张图的碎片和缩略图。
 
 # 后台加载图片的速度控制
 BACKGROUND_LOAD_BATCH_SIZE = 1 # 每次后台尝试加载处理的图片数量 (可以调整)
-BACKGROUND_LOAD_DELAY = 100 # 每批处理之间的最小延迟 (秒)，避免完全占用CPU，让Pygame有时间绘制和处理事件
+BACKGROUND_LOAD_DELAY = 0.05 # 每批处理之间的最小延迟 (秒)，避免完全占用CPU，让Pygame有时间绘制和处理事件
 
 
 # 加载界面设置
@@ -64,14 +124,6 @@ LEFT_BUTTON_PATH = os.path.join(ASSETS_DIR, "left_button.png")
 RIGHT_BUTTON_PATH = os.path.join(ASSETS_DIR, "right_button.png")
 # 原始图片文件前缀, 如 image_1.png, image_2.png
 SOURCE_IMAGE_PREFIX = os.path.join(ASSETS_DIR, "image_")
-
-
-# 初始填充设置
-# 游戏开始时，拼盘中包含的完整图片数量和来自下一张图片的碎片数量
-INITIAL_FULL_IMAGES_COUNT = 3
-INITIAL_PARTIAL_IMAGE_PIECES_COUNT = 9 # 确保初始碎片总数是 16*9=144
-# 初始碎片总数应为 BOARD_COLS * BOARD_ROWS
-EXPECTED_INITIAL_PIECE_COUNT = BOARD_COLS * BOARD_ROWS
 
 
 # 颜色定义 (RGB格式)
@@ -102,10 +154,9 @@ GALLERY_IMAGES_PER_ROW = 3 # 图库列表每行显示的图片数量
 GALLERY_PADDING = 20 # 图库窗口内边距
 GALLERY_THUMBNAIL_GAP_X = 20 # 缩略图水平间距
 GALLERY_THUMBNAIL_GAP_Y = 20 # 缩略图垂直间距
-# 计算缩略图宽度，考虑了窗口宽度、内边距和水平间距
+# 缩略图宽度是固定的，高度在 ImageManager 中根据图片逻辑比例动态计算
 GALLERY_THUMBNAIL_WIDTH = (GALLERY_WIDTH - 2 * GALLERY_PADDING - (GALLERY_IMAGES_PER_ROW - 1) * GALLERY_THUMBNAIL_GAP_X) // GALLERY_IMAGES_PER_ROW
-# 保持原始图片逻辑比例 (宽度:高度 = 5:9) 来计算缩略图高度
-GALLERY_THUMBNAIL_HEIGHT = int(GALLERY_THUMBNAIL_WIDTH * (IMAGE_LOGIC_ROWS / IMAGE_LOGIC_COLS)) # 注意这里是 Rows / Cols
+# GALLERY_THUMBNAIL_HEIGHT 在 ImageManager 中根据图片逻辑比例和 GALLERY_THUMBNAIL_WIDTH 计算
 
 GALLERY_SCROLL_SPEED = 90 # 图库滑动速度 (像素/帧)
 
@@ -124,21 +175,20 @@ FALL_SPEED_PIXELS_PER_SECOND = 600 # 碎片下落速度 (像素/秒)
 DRAG_THRESHOLD = 5 # 鼠标移动超过此像素距离判定为拖拽
 
 
-# Board内部状态常量 (用于管理完成 -> 移除 -> 下落 -> 填充流程)
+# Board内部状态常量 (用于管理完成 -> 移除 -> 下落 -> 填充 -> 升级流程)
 BOARD_STATE_PLAYING = 0
 BOARD_STATE_PICTURE_COMPLETED = 1 # 图片完成，等待处理
-BOARD_STATE_REMOVING_PIECES = 2 # 正在移除碎片
-BOARD_STATE_PIECES_FALLING = 3 # 碎片正在下落
+BOARD_STATE_REMOVING_PIECES = 2 # 正在移除碎片动画 (可选，目前瞬移)
+BOARD_STATE_PIECES_FALLING = 3 # 碎片正在下落动画
 BOARD_STATE_PENDING_FILL = 4 # 下落完成，等待填充新碎片
+BOARD_STATE_UPGRADING_AREA = 5 # 正在升级可放置区域 (移动碎片、加载背景等)
 
 
 # 存档设置
 SAVE_FILE_NAME = "savegame.json" # 存档文件名
 # 完整的存档文件路径将是 os.path.join(BASE_DIR, SAVE_FILE_NAME)
-AUTOSAVE_INTERVAL = 30 # 自动存档间隔 (秒)
+AUTOSAVE_INTERVAL = 100 # 自动存档间隔 (秒)
 
 # Debug 设置
 DEBUG_TEXT_COLOR = (255, 255, 255) # Debug 文字颜色 (白色)
 DEBUG_FONT_SIZE = 15 # Debug 文字字体大小
-
-# 其他需要调试的参数...

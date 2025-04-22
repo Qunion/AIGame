@@ -19,9 +19,9 @@ def screen_to_grid(pos):
     board_x = x - settings.BOARD_OFFSET_X
     board_y = y - settings.BOARD_OFFSET_Y
 
-    # 计算网格索引 (使用int向下取整)
-    col = int(board_x // settings.PIECE_SIZE)
-    row = int(board_y // settings.PIECE_SIZE)
+    # 计算网格索引，使用碎片的宽高
+    col = int(board_x // settings.PIECE_WIDTH) # <-- 使用 PIECE_WIDTH
+    row = int(board_y // settings.PIECE_HEIGHT) # <-- 使用 PIECE_HEIGHT
 
     # 添加越界检查
     if not (0 <= row < settings.BOARD_ROWS and 0 <= col < settings.BOARD_COLS):
@@ -40,8 +40,9 @@ def grid_to_screen(row, col):
     Returns:
         tuple: 屏幕像素坐标 (x, y)。如果网格坐标无效，可能返回无效值。
     """
-    x = settings.BOARD_OFFSET_X + col * settings.PIECE_SIZE
-    y = settings.BOARD_OFFSET_Y + row * settings.PIECE_SIZE
+    # 根据网格位置计算屏幕像素位置，使用设定的碎片宽高
+    x = settings.BOARD_OFFSET_X + col * settings.PIECE_WIDTH # <-- 使用 PIECE_WIDTH
+    y = settings.BOARD_OFFSET_Y + row * settings.PIECE_HEIGHT # <-- 使用 PIECE_HEIGHT
     return (x, y)
 
 def grayscale_surface(surface):

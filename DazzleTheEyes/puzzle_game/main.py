@@ -3,6 +3,7 @@
 
 import pygame
 import sys
+from piece import Piece
 import settings
 import time # 用于计时
 import random # 用于随机选择加载图片
@@ -37,17 +38,19 @@ class Game:
         # 字体初始化 (统一管理)
         # 使用 settings.FONT_NAME 尝试加载系统字体
         try:
+            # Attempt to load the preferred system font
             self.font_loading = pygame.font.SysFont(settings.FONT_NAME, 60) # 加载界面字体
             self.font_tip = pygame.font.SysFont(settings.FONT_NAME, settings.TIP_FONT_SIZE) # 提示信息字体
             self.font_thumbnail = pygame.font.SysFont(settings.FONT_NAME, 24) # 图库缩略图字体 (可选)
             self.font_debug = pygame.font.SysFont(settings.FONT_NAME, settings.DEBUG_FONT_SIZE) # Debug 文字字体
-            # 检查 SysFont 是否成功返回了字体对象
-            if self.font_loading is None or self.font_tip is None or self.font_thumbnail is None or self.font_debug is None:
-                 # 如果 SysFont 返回 None，抛出异常进入 except 块
-                 raise ValueError("SysFont returned None for one or more fonts")
-            print(f"系统字体 '{settings.FONT_NAME}' 加载成功或找到相似字体。") # Debug success
 
-        except Exception as e: # 捕获加载系统字体时可能发生的任何异常
+            # Check if SysFont successfully returned font objects (SysFont returns None if font not found)
+            if self.font_loading is None or self.font_tip is None or self.font_thumbnail is None or self.font_debug is None:
+                 # If any font failed to load via SysFont, raise an error to use fallback
+                 raise ValueError("SysFont returned None for one or more fonts")
+            # print(f"系统字体 '{settings.FONT_NAME}' 加载成功或找到相似字体。") # Debug success
+
+        except Exception as e: # Catch any exception during SysFont loading
             print(f"警告: 加载系统字体 '{settings.FONT_NAME}' 时发生错误: {e}。使用 Pygame 默认字体。")
             # Fallback to Pygame's default font
             self.font_loading = pygame.font.Font(None, 60)
@@ -75,26 +78,45 @@ class Game:
 
         # --- 尝试加载存档数据 ---
         print("尝试加载存档数据...") # Debug
-        loaded_game_data = self.load_game_data() # 尝试加载存档，成功返回数据字典，失败返回None
+        self.loaded_game_data = self.load_game_data() # 尝试加载存档，成功返回数据字典，失败返回None
 
         # --- 初始化核心模块的实例 ---
         # ImageManager 总是需要初始化，它负责扫描文件和加载初始批次图片
-        self.image_manager = ImageManager(self) # Pass Game instance to ImageManager
+        try:
+             self.image_manager = ImageManager(self) # Pass Game instance to ImageManager
+        except Exception as e:
+             print(f"致命错误: ImageManager 初始化失败: {e}")
+             self._display_fatal_error(f"ImageManager 初始化失败:\n{e}")
+             time.sleep(5) # Display error message for 5 seconds
+             pygame.quit()
+             sys.exit()
+
 
         # 如果成功加载了存档数据，则使用存档数据加载 ImageManager 的状态
-        if loaded_game_data and 'image_manager_state' in loaded_game_data:
-            print("加载 ImageManager 状态...") # Debug
-            self.image_manager.load_state(loaded_game_data['image_manager_state'])
+        if self.loaded_game_data: # Check if loaded_game_data is not None
+            if 'image_manager_state' in self.loaded_game_data:
+                print("加载 ImageManager 状态...") # Debug
+                try:
+                     self.image_manager.load_state(self.loaded_game_data['image_manager_state'])
+                     # ImageManager.load_state 内部会根据加载的状态填充高优先级加载队列
+                except Exception as e:
+                     print(f"致命错误: ImageManager 状态加载失败: {e}. 存档可能已损坏。开始新游戏。")
+                     self.image_manager = ImageManager(self) # Re-initialize ImageManager
+                     # Continue without loaded board state, will trigger new game init in Board
+                     self.loaded_game_data = None # Discard corrupted loaded data
+            else:
+                 print("警告: 存档数据缺少 'image_manager_state' 字段。ImageManager 状态将为默认初始化状态。开始新游戏。") # Debug
+                 self.loaded_game_data = None # Treat as no valid loaded data
 
 
-        # 初始化 Board，并传递存档的网格数据（如果存在）
+        # 初始化 Board，并传递加载的完整游戏状态数据（如果存在）
+        # Board 的 __init__ 方法会根据传入的 saved_game_data 是否为 None 来决定是加载存档还是初始填充
         try:
-            saved_grid_data = loaded_game_data.get('board_grid') if loaded_game_data else None
-            # Board 的 __init__ 方法会根据 saved_grid_data 是否为 None 来决定是加载存档还是初始填充
-            self.board = Board(self.image_manager, saved_grid_data) # Pass image_manager and saved grid data
+            # === 关键修改：传递完整的 loaded_game_data 给 Board ===
+            self.board = Board(self.image_manager, self.loaded_game_data) # Pass image_manager and the entire loaded_game_data
         except Exception as e:
             print(f"致命错误: Board 初始化失败: {e}")
-            self._display_fatal_error(f"Board 初始化失败: {e}")
+            self._display_fatal_error(f"Board 初始化失败:\n{e}")
             time.sleep(5) # 显示错误信息5秒
             pygame.quit()
             sys.exit()
@@ -106,7 +128,7 @@ class Game:
              self.gallery = Gallery(self.image_manager, self) # Pass ImageManager and Game instances
         except Exception as e:
              print(f"致命错误: InputHandler 或 Gallery 初始化失败: {e}")
-             self._display_fatal_error(f"InputHandler/Gallery 初始化失败: {e}")
+             self._display_fatal_error(f"InputHandler/Gallery 初始化失败:\n{e}")
              time.sleep(5)
              pygame.quit()
              sys.exit()
@@ -115,21 +137,28 @@ class Game:
         # 加载UI元素 (图库入口图标使用Button类管理)
         # Create gallery icon button, callback is self.open_gallery
         try:
-            self.gallery_icon_button = Button(settings.GALLERY_ICON_PATH, (settings.SCREEN_WIDTH - 20, 20), anchor='topright', callback=self.open_gallery)
+            # Position calculated based on screen width and padding
+            gallery_button_x = settings.SCREEN_WIDTH - 20 # 20 pixels from right edge
+            gallery_button_y = 20 # 20 pixels from top edge
+            self.gallery_icon_button = Button(settings.GALLERY_ICON_PATH, (gallery_button_x, gallery_button_y), anchor='topright', callback=self.open_gallery)
         except Exception as e:
             print(f"警告: 无法创建图库图标按钮: {e}. 图库入口可能无法使用。")
             self.gallery_icon_button = None # Button creation failed
 
 
         # 提示信息管理 (例如“美图尚未点亮”)
-        self.popup_text = PopupText(self) # Pass Game instance to PopupText
+        try:
+             self.popup_text = PopupText(self) # Pass Game instance to PopupText
+        except Exception as e:
+             print(f"警告: PopupText 初始化失败: {e}. 提示功能可能无法使用。")
+             self.popup_text = None # PopupText creation failed
 
 
         # 自动存档相关的变量
         self.last_autosave_time = time.time() # 记录上次自动存档的时间
 
-        # 后台加载定时器 <-- **新增注释**
-        self._last_background_load_time = time.time() # <-- **新增：初始化后台加载定时器**
+        # 后台加载定时器
+        self._last_background_load_time = time.time() # 初始化后台加载定时器
 
 
         # __init__ completes. Game state is LOADING.
@@ -152,11 +181,18 @@ class Game:
 
         # 绘制加载文本
         # Get loading text surface using the loading font
-        text_surface = self.font_loading.render(message, True, settings.LOADING_TEXT_COLOR)
-        # Calculate text position, centered below the image or screen center
-        text_y_offset = (self.loading_image.get_height()//2 + 30 if self.loading_image else 50) # Gap below image or offset from screen center
-        text_rect = text_surface.get_rect(center=(settings.SCREEN_WIDTH // 2, settings.SCREEN_HEIGHT // 2 + text_y_offset ))
-        self.screen.blit(text_surface, text_rect)
+        if self.font_loading: # Ensure loading font is available
+             text_surface = self.font_loading.render(message, True, settings.LOADING_TEXT_COLOR)
+             # Calculate text position, centered below the image or screen center
+             text_y_offset = (self.loading_image.get_height()//2 + 30 if self.loading_image else 50) # Gap below image or offset from screen center
+             text_rect = text_surface.get_rect(center=(settings.SCREEN_WIDTH // 2, settings.SCREEN_HEIGHT // 2 + text_y_offset ))
+             self.screen.blit(text_surface, text_rect)
+        else:
+             # Fallback text if font failed
+             font_fallback = pygame.font.Font(None, 60)
+             text_surface = font_fallback.render("加载中...", True, settings.WHITE)
+             text_rect = text_surface.get_rect(center=(settings.SCREEN_WIDTH // 2, settings.SCREEN_HEIGHT // 2))
+             self.screen.blit(text_surface, text_rect)
 
 
     def _load_random_loading_image(self):
@@ -182,7 +218,7 @@ class Game:
             # Calculate scale factor to fit screen while maintaining aspect ratio
             scale_factor = min(screen_w / img_w, screen_h / img_h)
 
-            # Ensure scaled dimensions are valid
+            # Ensure scaled dimensions are valid and non-zero
             new_w = int(img_w * scale_factor)
             new_h = int(img_h * scale_factor)
 
@@ -202,7 +238,12 @@ class Game:
     def _display_fatal_error(self, message):
         """在屏幕上显示致命错误信息"""
         self.screen.fill(settings.BLACK)
-        font = pygame.font.Font(None, 50)
+        # Use a fallback font in case main fonts failed
+        try:
+             font = pygame.font.Font(None, 50)
+        except pygame.error:
+             font = pygame.font.SysFont("Arial", 50) # System font fallback
+
         lines = message.split('\n') # Supports multi-line error messages
         y_offset = settings.SCREEN_HEIGHT // 2 - (len(lines) * 60) // 2 # Center vertically based on number of lines
         for line in lines:
@@ -217,22 +258,35 @@ class Game:
     def save_game_data(self):
         """
         保存当前游戏状态到文件。
-        保存内容包括 Board 布局和 ImageManager 状态。
+        保存内容包括 Board 布局和状态、ImageManager 状态。
         """
         if self.board is None or self.image_manager is None:
              print("警告: Board 或 ImageManager 未初始化，无法保存游戏状态。")
-             return # Cannot save if core components aren't ready
+             return # 无法保存，如果核心组件未准备好
+
+        # Only save if the game is in a savable state (e.g., not loading, not upgrading area transition)
+        if self.current_state not in [settings.GAME_STATE_PLAYING,
+                                     settings.GAME_STATE_GALLERY_LIST,
+                                     settings.GAME_STATE_GALLERY_VIEW_LIT]:
+             # print(f"警告: 当前游戏状态 ({self.current_state}) 不允许保存。") # Debug, avoid spamming
+             return # Do not save during state transitions like loading or upgrading
+
 
         print("保存游戏状态...") # Debug
 
         # 获取 Board 和 ImageManager 的状态数据
-        board_state = self.board.get_state()
-        image_manager_state = self.image_manager.get_state()
+        try:
+            board_state = self.board.get_state() # Board's get_state now includes playable area info etc.
+            image_manager_state = self.image_manager.get_state()
+        except Exception as e:
+            print(f"错误: 获取 Board 或 ImageManager 状态失败，无法保存: {e}") # Debug error
+            return # Cannot get state, skip saving
+
 
         # 构建总的存档数据字典
         game_state_data = {
-            'board_grid': board_state,
-            'image_manager_state': image_manager_state,
+            'board_state': board_state, # <-- 将 Board 状态整体保存
+            'image_manager_state': image_manager_state, # ImageManager state
             'save_time': time.time() # Add current time as save timestamp
         }
 
@@ -252,7 +306,7 @@ class Game:
 
     def load_game_data(self):
         """
-        尝试从文件加载游戏状态。
+        尝试从文件加载完整的游戏状态数据。
 
         Returns:
             dict or None: 加载到的游戏状态字典，如果文件不存在或加载失败则返回 None。
@@ -273,16 +327,22 @@ class Game:
             print(f"游戏状态已从 {save_file_path} 加载成功。") # Debug success
 
             # TODO: 可以添加对加载到的数据结构的验证 (可选)
-            if not isinstance(game_state_data, dict) or 'board_grid' not in game_state_data or 'image_manager_state' not in game_state_data:
-                 print("警告: 存档文件格式不正确。开始新游戏。") # Debug
+            if not isinstance(game_state_data, dict) or 'board_state' not in game_state_data or 'image_manager_state' not in game_state_data:
+                 print("警告: 存档文件格式不正确。缺少 'board_state' 或 'image_manager_state' 字段。开始新游戏。") # Debug
                  return None # Data structure is invalid
+
+            # Optional: Validate key types/values if necessary for safety
 
             return game_state_data # Return loaded data
 
         except json.JSONDecodeError as e:
             print(f"错误: 存档文件 {save_file_path} 格式错误，无法解析 JSON: {e}. 删除损坏的存档。") # Debug error
             # Optional: Delete the corrupted save file
-            # os.remove(save_file_path)
+            # try:
+            #     os.remove(save_file_path)
+            #     print("已删除损坏的存档文件。")
+            # except OSError as os_e:
+            #     print(f"错误: 无法删除损坏的存档文件 {save_file_path}: {os_e}")
             return None
         except Exception as e:
             print(f"错误: 加载存档状态失败从 {save_file_path}: {e}") # Debug error
@@ -296,8 +356,13 @@ class Game:
         由 InputHandler 在接收到 QUIT 事件时调用。
         """
         print("接收到退出信号，正在保存并退出...") # Debug
-        self.save_game_data() # 保存游戏状态
-        print("游戏已保存，退出中...") # Debug
+        # Only attempt save if main components are initialized and not in loading state
+        if self.board and self.image_manager and self.current_state != settings.GAME_STATE_LOADING:
+             self.save_game_data() # 保存游戏状态
+             print("游戏已保存，退出中...") # Debug
+        else:
+             print("游戏未初始化或在加载中，不保存。直接退出。") # Debug
+
         pygame.quit()
         sys.exit()
 
@@ -339,19 +404,35 @@ class Game:
             # InputHandler 将处理退出事件并调用 game.quit_game()
             for event in pygame.event.get():
                  # 将事件传递给 InputHandler
-                 if self.input_handler: # 确保 InputHandler 已初始化
+                 if self.input_handler: # Ensure InputHandler is initialized
                      self.input_handler.handle_event(event)
                  else:
-                     # 如果 InputHandler 未准备好（例如发生致命错误），直接处理退出事件
+                     # If InputHandler is not ready (e.g., fatal error during init), handle QUIT directly
                      if event.type == pygame.QUIT:
-                         running = False # 退出循环
+                         running = False # Exit loop
 
 
             # --- 游戏状态更新 ---
-            self.update(self.delta_time)
+            # Wrap update in try-except to catch errors during gameplay
+            try:
+                 self.update(self.delta_time)
+            except Exception as e:
+                 print(f"致命错误: 游戏主循环更新时发生异常: {e}")
+                 self._display_fatal_error(f"游戏发生错误:\n{e}")
+                 time.sleep(5) # Display error for 5 seconds
+                 running = False # Exit loop
+
 
             # --- 绘制所有内容 ---
-            self.draw()
+            # Wrap draw in try-except as well
+            try:
+                 self.draw()
+            except Exception as e:
+                 print(f"致命错误: 游戏主循环绘制时发生异常: {e}")
+                 self._display_fatal_error(f"游戏绘制错误:\n{e}")
+                 time.sleep(5) # Display error for 5 seconds
+                 running = False # Exit loop
+
 
             # 更新屏幕显示
             pygame.display.flip()
@@ -377,9 +458,10 @@ class Game:
             # In loading phase, also drive background loading to show progress
             if self.image_manager: # Ensure ImageManager is initialized
                  # Control background loading frequency
-                 if time.time() - self.last_autosave_time >= settings.BACKGROUND_LOAD_DELAY / 10.0: # Use last_autosave_time as a general timer
+                 # Use _last_background_load_time for background load timing
+                 if time.time() - self._last_background_load_time >= settings.BACKGROUND_LOAD_DELAY / 10.0: # Process background loading more frequently during loading state
                       self.image_manager.load_next_batch_background(settings.BACKGROUND_LOAD_BATCH_SIZE)
-                      self.last_autosave_time = time.time() # Update timer (using autosave timer for background load timing)
+                      self._last_background_load_time = time.time() # Update timer
 
 
             # Only transition to PLAYING if initial load is done AND min duration is met
@@ -391,7 +473,8 @@ class Game:
         elif self.current_state == settings.GAME_STATE_PLAYING:
             # Update Board (handle falling animation and completion state machine)
             if self.board: # Ensure Board is initialized
-                 self.board.update(dt)
+                 self.board.update(dt) # Board update includes its state machine logic
+
             # Update possible popup text timer
             if self.popup_text: # Ensure popup_text is initialized
                  self.popup_text.update(dt)
@@ -428,6 +511,12 @@ class Game:
             # if hasattr(self.gallery, 'update'): self.gallery.update(dt)
             pass
 
+        elif self.current_state == settings.BOARD_STATE_UPGRADING_AREA:
+            # Update Board for upgrade animation/logic if needed
+            if self.board: # Ensure Board is initialized
+                 self.board.update(dt) # Board update will handle its UPGRADING_AREA logic (currently instant)
+            # Note: No user input should be processed during UPGRADING_AREA state (handled in InputHandler)
+            # No background loading during this transition state
 
     def draw(self):
         """绘制所有游戏元素"""
@@ -467,6 +556,13 @@ class Game:
             if self.popup_text and self.popup_text.is_active: # Ensure popup_text is initialized and active
                  self.popup_text.draw(self.screen)
 
+        # Note: UPGRADING_AREA state doesn't have separate drawing logic,
+        # Board.draw handles drawing pieces and area overlay in its current state.
+        # elif self.current_state == settings.BOARD_STATE_UPGRADING_AREA:
+        #      # Draw Board state during upgrade
+        #      if self.board:
+        #           self.board.draw(self.screen)
+        #      # Any visual feedback for upgrading can be drawn here if not part of Board.draw
 
     # Game state transition method
     def change_state(self, new_state):
@@ -488,74 +584,58 @@ class Game:
               # 从加载状态切换到游戏主状态
              print("进入游戏主状态 PLAYING。")
 
-             # 此时 Board 和 Gallery 实例已准备好
-             # 后台加载将在游戏主状态的更新过程中继续进行
+             # At this point, initial load batch is done, Board and Gallery are initialized.
+             # Background loading continues in PLAYING state update.
              pass # Optional transition effects
 
 
-            # self.save_game_data()
-            # self.load_game_data()
-            # self.board._load_grid_from_data()
-
-             # --- **新增：在进入 PLAYING 状态后强制刷新绘制** ---
-             # 确保 Board 已经初始化并且不是致命错误状态
-            #  if self.board:
-            #      print("强制绘制所有碎片以刷新显示...") # Debug
-            #      self.screen.fill(settings.BLACK) # 清屏
-            #      self.board.draw(self.screen) # 绘制拼盘
-            #      # 绘制 UI 元素，如图库入口按钮
-            #      if hasattr(self, 'gallery_icon_button') and self.gallery_icon_button:
-            #          self.gallery_icon_button.draw(self.screen)
-            #      # 绘制可能的提示信息 (如果有的话)
-            #      if self.popup_text and self.popup_text.is_active:
-            #           self.popup_text.draw(self.screen)
-
-            #      pygame.display.flip() # 立即更新屏幕显示绘制的内容
-            #      print("强制绘制刷新完成。") # Debug
-            #  else:
-            #      print("警告: Board 未初始化，无法强制绘制。") # Debug
-             # --- **新增：打印所有碎片的位置和状态信息 (调试)** ---
+             # --- 新增：在进入 PLAYING 状态后打印所有碎片的位置和状态信息 (调试) ---
              print("\n--- 所有碎片位置和状态信息 (进入PLAYING时) ---") # Debug 头部
-             # 检查 Board 和其 Sprite Group 是否已初始化且有效
+             # Check if Board and its Sprite Group are initialized and valid
              if self.board and isinstance(self.board, Board) and isinstance(self.board.all_pieces_group, pygame.sprite.Group):
-                 # 检查 Group 中是否有碎片
+                 # Check if Group has any pieces
                  if not self.board.all_pieces_group:
-                     print("  Board 的 Sprite Group 是空的，没有碎片对象。") # Debug Group 为空
+                     print("  Board 的 Sprite Group 是空的，没有碎片对象。") # Debug Group is empty
                  else:
-                     # 打印 Group 中的碎片数量
-                     print(f"  Board 的 Sprite Group 包含 {len(self.board.all_pieces_group)} 个碎片对象。") # Debug Group 大小
-                    #  # 遍历 Group 中的每一个 Sprite (预期是 Piece 对象)
-                    # #  for piece in self.board.all_pieces_group:
-                    #      # 再次安全检查，确保是 Piece 对象
-                    #      if isinstance(piece, piece):
-                    #          # 打印碎片的关键信息
-                    #          # 注意：rect.x 和 rect.y 是浮点数，转换为整数打印更清晰
-                    #          print(
-                    #              f"  碎片 ID:{piece.original_image_id}, "
-                    #              f"原始位置 ({piece.original_row},{piece.original_col}), "
-                    #              f"当前网格 ({piece.current_grid_row},{piece.current_grid_col}), "
-                    #              f"当前屏幕 ({int(piece.rect.x)},{int(piece.rect.y)}), "
-                    #              f"正在下落: {piece.is_falling}" # 打印是否正在下落状态
-                    #          ) # Debug 碎片信息
-                    #      else:
-                    #          # 如果 Group 中混入了非 Piece 对象，打印警告
-                    #          print(f"  警告: Board 的 Sprite Group 中包含非 Piece/非 Sprite 对象: {type(piece)}") # Debug 无效对象
+                     # Print the number of sprites in the Group
+                     print(f"  Board 的 Sprite Group 包含 {len(self.board.all_pieces_group)} 个碎片对象。") # Debug Group size
+                     # Iterate through the group to print info for each Piece
+                     for piece in self.board.all_pieces_group:
+                          # Safety check to ensure it's a Piece object
+                          if isinstance(piece, Piece):
+                              # Print key info for the piece
+                              # Convert rect coordinates to integers for clarity
+                              print(
+                                  f"  碎片 ID:{piece.original_image_id}, "
+                                  f"原始位置 ({piece.original_row},{piece.original_col}), "
+                                  f"当前网格 ({piece.current_grid_row},{piece.current_grid_col}), "
+                                  f"当前屏幕 ({int(piece.rect.x)},{int(piece.rect.y)}), "
+                                  f"正在下落: {piece.is_falling}" # Print if falling
+                              ) # Debug piece info
+                          else:
+                              # If non-Piece objects are in the Group, print warning
+                              print(f"  警告: Board 的 Sprite Group 中包含非 Piece/非 Sprite 对象: {type(piece)}") # Debug invalid object
              else:
-                 # 如果 Board 或 Sprite Group 未初始化或无效，打印警告
-                 print("警告: Board 或其 Sprite Group 未初始化或无效，无法打印碎片信息。") # Debug Board 不就绪
-             print("--- 碎片信息打印结束 ---\n") # Debug 底部
-             # --- **新增结束** ---
+                 # If Board or Sprite Group is not initialized or invalid, print warning
+                 print("警告: Board 或其 Sprite Group 未初始化或无效，无法打印碎片信息。") # Debug Board not ready
+             print("--- 碎片信息打印结束 ---\n") # Debug footer
+             # --- 新增结束 ---
+
 
         elif new_state == settings.GAME_STATE_GALLERY_LIST:
             # 进入图库列表界面
             print("进入图库列表状态。")
             if self.gallery: # 确保图库实例存在
+                # Note: open_gallery updates the picture list within the Gallery object
+                # It gets called by InputHandler when the button is clicked, and then Game changes state.
+                # Calling it again here is redundant if triggered by button click, but safe if state is changed otherwise.
+                # Let's keep the call here to ensure consistency regardless of state change trigger.
                 self.gallery.open_gallery() # 通知图库准备列表视图（更新列表内容）
             # 停止主游戏视图中的交互（取消选择，停止拖动）
             if self.board: # 确保棋盘实例存在
                 self.board.unselect_piece()
                 self.board.stop_dragging()
-            # 注意：棋盘的更新方法会检查其内部状态，此处无需显式暂停。
+            # Note: Board update method checks its internal state, no need to explicitly pause it here.
 
         elif old_state == settings.GAME_STATE_GALLERY_LIST and new_state == settings.GAME_STATE_PLAYING:
             # 从图库列表界面返回主游戏
@@ -566,17 +646,29 @@ class Game:
         elif new_state == settings.GAME_STATE_GALLERY_VIEW_LIT:
             # 进入图库大图查看界面（从列表状态进入）
             print("进入图库大图查看状态。")
-            # 由 Gallery.start_viewing_lit_image 触发切换，图库知道要查看哪张图片
+            # This state change is triggered by Gallery.start_viewing_lit_image
 
         elif old_state == settings.GAME_STATE_GALLERY_VIEW_LIT and new_state == settings.GAME_STATE_GALLERY_LIST:
             # 从大图查看界面返回图库列表
             print("从图库大图查看状态返回图库列表状态。")
-            # 由 Gallery.stop_viewing_lit_image 触发切换
+            # This state change is triggered by Gallery.stop_viewing_lit_image
+
+        elif new_state == settings.BOARD_STATE_UPGRADING_AREA:
+            # 进入区域升级状态
+            print("进入 Board 区域升级状态 UPGRADING_AREA。")
+            # Player input is blocked in this state via InputHandler.
+            # Board's update method handles the upgrade logic within this state.
+
+        elif old_state == settings.BOARD_STATE_UPGRADING_AREA and new_state == settings.GAME_STATE_PLAYING:
+             # 从区域升级状态返回主游戏
+             print("从 Board 区域升级状态返回游戏主状态 PLAYING。")
+             # The upgrade logic and subsequent fill should have completed just before this transition.
+
 
         # TODO: 为其他状态转换添加清理/初始化逻辑
 
 
-# ... 其他代码 ...
+    # ... 其他代码 ...
 
     def _check_and_continue_background_loading(self):
          """
@@ -597,7 +689,7 @@ class Game:
              # Execute a batch of background loading tasks via ImageManager
              # ImageManager.load_next_batch_background will process images from its queues
              processed_count_this_batch = self.image_manager.load_next_batch_background(settings.BACKGROUND_LOAD_BATCH_SIZE)
-             
+
              if processed_count_this_batch > 0:
                  # If at least one image was processed in this batch, update the timer
                  self._last_background_load_time = current_time
