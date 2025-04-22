@@ -8,7 +8,7 @@ import os
 PIECES_PER_IMAGE = 20
 # TODO: GALLERY_THUMBNAIL_HEIGHT 这个固定高度的设置可能需要根据实际设计调整，
 # 目前 ImageManager 根据缩略图宽度和图片逻辑比例计算高度。
-GALLERY_THUMBNAIL_HEIGHT = 400
+GALLERY_THUMBNAIL_HEIGHT = 500
 
 # 碎片生成与缓存设置
 REGENERATE_PIECES = 0 # 是否重新生成碎片：1-是，0-否。设置为0时优先从文件加载。
