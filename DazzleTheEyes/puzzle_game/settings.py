@@ -8,8 +8,10 @@ import os
 PIECES_PER_IMAGE = 20
 # TODO: GALLERY_THUMBNAIL_HEIGHT 这个固定高度的设置可能需要根据实际设计调整，
 # 目前 ImageManager 根据缩略图宽度和图片逻辑比例计算高度。
-GALLERY_THUMBNAIL_HEIGHT = 600
+GALLERY_THUMBNAIL_HEIGHT = 400
 
+# 碎片生成与缓存设置
+REGENERATE_PIECES = 0 # 是否重新生成碎片：1-是，0-否。设置为0时优先从文件加载。
 
 # 屏幕设置 (固定)
 SCREEN_WIDTH = 1920
@@ -35,17 +37,16 @@ BOARD_OFFSET_Y = 0
 IMAGE_LOGIC_DIMS = {
     # 根据图片宽高和期望的碎片数量及比例配置，逻辑尺寸 * 碎片尺寸应接近原始图片尺寸
     # (逻辑列数 * PIECE_WIDTH, 逻辑行数 * PIECE_HEIGHT) 决定了原图被处理（缩放裁剪）到的目标尺寸
-    1: (3, 2),  # image_1 裁剪为 5列 x 9行
-    2: (3, 2),  # image_2 裁剪为 9列 x 5行
-    3: (3, 3),  # image_3 裁剪为 5列 x 5行
-    4: (5, 3),  # image_4 裁剪为 7列 x 7行
-    5: (4, 5),  # image_5 裁剪为 9列 x 9行
-    6: (5, 4), # 示例：image_6 裁剪为 10列 x 8行
-    7: (3, 7), # 示例：image_7 裁剪为 8列 x 10行
-    8: (4, 7),  # 示例
-    9: (7, 4), # 示例：image_9 裁剪为 12列 x 9行
-    10: (7, 7), # 示例：image_10 裁剪为 9列 x 12行
-
+    1: (2, 3),  # image_1 裁剪为 2列x3行
+    2: (3, 3), # image_2 裁剪为 3列x3行
+    3: (3, 3),  
+    4: (3, 4),  
+    5: (3, 5),  
+    6: (4, 4), 
+    7: (4, 5), 
+    8: (3, 6),  
+    9: (4, 7), 
+    10: (5, 7), 
     # ... 根据你的图片数量和期望的裁剪方式添加更多条目
     # 注意：这里的行列数定义了图片的逻辑结构和碎片数量，不是拼盘的物理尺寸。
     # 确保 IMAGE_LOGIC_DIMS 中的所有图片ID在 assets 目录中都有对应的 image_ID.png 文件。
@@ -56,7 +57,7 @@ IMAGE_LOGIC_DIMS = {
 # 'cols' 和 'rows' 是可放置区域在物理网格中的尺寸， 'bg' 是对应的背景图文件名
 # 升级阈值必须按升序排列
 PLAYABLE_AREA_CONFIG = {
-    0: {'cols': 3, 'rows': 2, 'bg': 'background_1.png'},     # 初始区域 5x5
+    0: {'cols': 2, 'rows': 3, 'bg': 'background_1.png'},     # 初始区域 5x5
     1: {'cols': 4, 'rows': 4, 'bg': 'background_2.png'},     # 点亮 1 张图后升级到 7x7
     3: {'cols': 5, 'rows': 5, 'bg': 'background_3.png'},     # 点亮 3 张图后升级到 9x9
     5: {'cols': 8, 'rows': 8, 'bg': 'background_4.png'},    # 点亮 6 张图后升级到 12x9
@@ -86,8 +87,7 @@ BACKGROUND_DIR = os.path.join(ASSETS_DIR, "backgrounds") + os.sep # 背景图文
 os.makedirs(BACKGROUND_DIR, exist_ok=True) # 确保背景图目录存在
 
 
-# 碎片生成与缓存设置
-REGENERATE_PIECES = 1 # 是否重新生成碎片：1-是，0-否。设置为0时优先从文件加载。
+
 # 生成的碎片存放目录
 GENERATED_PIECE_DIR = os.path.join(ASSETS_DIR, "pieces") + os.sep
 # 确保碎片目录存在

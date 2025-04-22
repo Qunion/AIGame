@@ -24,31 +24,11 @@
                 null,
                 null,
                 null,
-                {
-                    "id": 4,
-                    "orig_r": 1,
-                    "orig_c": 2
-                },
-                {
-                    "id": 4,
-                    "orig_r": 1,
-                    "orig_c": 3
-                },
-                {
-                    "id": 4,
-                    "orig_r": 1,
-                    "orig_c": 4
-                },
-                {
-                    "id": 4,
-                    "orig_r": 2,
-                    "orig_c": 0
-                },
-                {
-                    "id": 4,
-                    "orig_r": 2,
-                    "orig_c": 1
-                },
+                null,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -62,104 +42,26 @@
                 null,
                 null,
                 {
-                    "id": 4,
+                    "id": 3,
+                    "orig_r": 2,
+                    "orig_c": 1
+                },
+                {
+                    "id": 3,
                     "orig_r": 2,
                     "orig_c": 2
                 },
                 {
                     "id": 4,
-                    "orig_r": 2,
-                    "orig_c": 3
-                },
-                {
-                    "id": 4,
-                    "orig_r": 2,
-                    "orig_c": 4
-                },
-                {
-                    "id": 4,
-                    "orig_r": 1,
-                    "orig_c": 1
-                },
-                {
-                    "id": 5,
                     "orig_r": 0,
                     "orig_c": 0
                 },
-                null,
-                null,
-                null,
-                null,
-                null
-            ],
-            [
-                null,
-                null,
-                null,
-                null,
-                null,
                 {
-                    "id": 5,
-                    "orig_r": 0,
-                    "orig_c": 1
-                },
-                {
-                    "id": 5,
+                    "id": 3,
                     "orig_r": 0,
                     "orig_c": 2
                 },
-                {
-                    "id": 5,
-                    "orig_r": 0,
-                    "orig_c": 3
-                },
-                {
-                    "id": 4,
-                    "orig_r": 0,
-                    "orig_c": 0
-                },
-                {
-                    "id": 5,
-                    "orig_r": 1,
-                    "orig_c": 0
-                },
                 null,
-                null,
-                null,
-                null,
-                null
-            ],
-            [
-                null,
-                null,
-                null,
-                null,
-                null,
-                {
-                    "id": 5,
-                    "orig_r": 1,
-                    "orig_c": 1
-                },
-                {
-                    "id": 5,
-                    "orig_r": 1,
-                    "orig_c": 2
-                },
-                {
-                    "id": 5,
-                    "orig_r": 1,
-                    "orig_c": 3
-                },
-                {
-                    "id": 4,
-                    "orig_r": 0,
-                    "orig_c": 4
-                },
-                {
-                    "id": 5,
-                    "orig_r": 2,
-                    "orig_c": 0
-                },
                 null,
                 null,
                 null,
@@ -184,19 +86,81 @@
                 },
                 {
                     "id": 4,
-                    "orig_r": 0,
-                    "orig_c": 3
-                },
-                {
-                    "id": 4,
                     "orig_r": 1,
                     "orig_c": 0
                 },
                 {
-                    "id": 5,
-                    "orig_r": 2,
+                    "id": 3,
+                    "orig_r": 0,
+                    "orig_c": 0
+                },
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            ],
+            [
+                null,
+                null,
+                null,
+                null,
+                null,
+                {
+                    "id": 4,
+                    "orig_r": 1,
                     "orig_c": 1
                 },
+                {
+                    "id": 4,
+                    "orig_r": 1,
+                    "orig_c": 2
+                },
+                {
+                    "id": 4,
+                    "orig_r": 2,
+                    "orig_c": 0
+                },
+                {
+                    "id": 3,
+                    "orig_r": 2,
+                    "orig_c": 0
+                },
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            ],
+            [
+                null,
+                null,
+                null,
+                null,
+                null,
+                {
+                    "id": 3,
+                    "orig_r": 1,
+                    "orig_c": 0
+                },
+                {
+                    "id": 3,
+                    "orig_r": 0,
+                    "orig_c": 1
+                },
+                {
+                    "id": 3,
+                    "orig_r": 1,
+                    "orig_c": 1
+                },
+                {
+                    "id": 3,
+                    "orig_r": 1,
+                    "orig_c": 2
+                },
+                null,
                 null,
                 null,
                 null,
@@ -238,18 +202,18 @@
                 null
             ]
         ],
-        "playable_cols": 5,
-        "playable_rows": 5,
-        "unlocked_pictures_count": 3,
-        "background_name": "background_3.png"
+        "playable_cols": 4,
+        "playable_rows": 4,
+        "unlocked_pictures_count": 2,
+        "background_name": "background_2.png"
     },
     "image_manager_state": {
         "image_status": {
             "1": "lit",
             "2": "lit",
-            "3": "lit",
+            "3": "unlit",
             "4": "unlit",
-            "5": "unlit",
+            "5": "unentered",
             "6": "unentered",
             "7": "unentered",
             "8": "unentered",
@@ -257,12 +221,11 @@
             "10": "unentered"
         },
         "completed_times": {
-            "1": 1745335311.0576015,
-            "2": 1745335339.7445977,
-            "3": 1745335354.0716352
+            "1": 1745336273.6338077,
+            "2": 1745336296.182807
         },
-        "next_image_to_consume_id": 5,
-        "pieces_consumed_from_current_image": 10
+        "next_image_to_consume_id": 4,
+        "pieces_consumed_from_current_image": 7
     },
-    "save_time": 1745335372.8956308
+    "save_time": 1745336316.5924685
 }

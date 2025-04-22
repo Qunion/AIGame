@@ -8,6 +8,7 @@ import utils # 导入工具函数
 import image_manager # 导入图像管理器
 from ui_elements import Button # 导入 Button 类
 import input_handler # 导入输入处理器
+import math
 
 
 class Gallery:
@@ -501,83 +502,148 @@ class Gallery:
 
         # 如果此方法未处理该事件类型，则返回 False
         return False
+# gallery.py
+# ... (保留文件开头的导入和类定义等不变) ...
 
     def draw_view_lit(self, surface):
         """绘制图库大图查看界面。"""
         # 检查是否正在查看已点亮大图
-        if self.viewing_lit_image_index == -1 or not self._lit_images_list:
-             print("警告: 尝试绘制大图查看界面，但没有图片被选中查看或已点亮图片列表为空。") # Debug
+        # Ensure the index is valid within _lit_images_list
+        if self.viewing_lit_image_index == -1 or not self._lit_images_list or not (0 <= self.viewing_lit_image_index < len(self._lit_images_list)):
+             # print("警告: 尝试绘制大图查看界面，但状态无效。") # Debug
+             self.viewing_lit_image_index = -1 # Reset state
              return
 
         # 获取当前正在查看的图片ID
         current_image_id = self._lit_images_list[self.viewing_lit_image_index]
-        # 从 ImageManager 获取完整处理后的图片 surface
-        # ImageManager 会处理缓存
-        full_image_surface = self.image_manager.get_full_processed_image(current_image_id)
 
-        if full_image_surface:
-            # 缩放图片以适应屏幕显示，保持比例
-            img_w, img_h = full_image_surface.get_size()
+        # === 关键修改：直接从 ImageManager 获取原始图片文件路径并加载 ===
+        # ImageManager stores the file paths of all scanned original images
+        original_image_filepath = self.image_manager.all_image_files.get(current_image_id)
+
+        original_image_surface = None # Surface to be drawn
+        if original_image_filepath:
+             try:
+                 # Load the original image directly from the file path
+                 original_image_surface = pygame.image.load(original_image_filepath).convert_alpha()
+                 # print(f"Gallery: draw_view_lit: 成功加载原始图片文件 {original_image_filepath}") # Debug
+             except pygame.error as e:
+                  print(f"错误: Gallery: draw_view_lit: Pygame无法加载原始图片文件 {original_image_filepath}: {e}") # Debug
+                  original_image_surface = None # Loading failed
+             except Exception as e:
+                  print(f"错误: Gallery: draw_view_lit: 加载原始图片文件 {original_image_filepath} 时发生未知错误: {e}") # Debug
+                  original_image_surface = None # Loading failed
+        else:
+             print(f"警告: Gallery: draw_view_lit: 图片ID {current_image_id} 的原始文件路径未知。") # Debug
+
+
+        if original_image_surface:
+            # Scale the loaded original image to fit the screen, maintaining aspect ratio
+            img_w, img_h = original_image_surface.get_size()
             screen_w, screen_h = settings.SCREEN_WIDTH, settings.SCREEN_HEIGHT
 
-            # 计算缩放因子，使其完整适应屏幕，并留有边距
-            margin = 40
-            # 计算能适应屏幕并留有边距的最大缩放因子
+            # Calculate scale factor to fit within the screen boundaries with margins
+            margin = 80 # Ensure buttons have space
+            # Calculate the maximum scale factor to fit within the screen boundaries with margins
             max_scale_factor = min((screen_w - margin) / img_w, (screen_h - margin) / img_h)
-            # 最终缩放因子取 1.0 和最大适应因子的最小值，确保不放大超过原始处理尺寸 (600x1080)，并遵守边距
-            scale_factor = min(1.0, max_scale_factor)
+            # We allow scaling UP if needed to fill the screen space better, maintaining aspect ratio.
+            scale_factor = max_scale_factor
 
-            # 计算缩放后的图片尺寸
+            # Ensure scale factor is valid
+            if scale_factor <= 0 or not math.isfinite(scale_factor): # Check for non-positive or infinite scale
+                 print(f"警告: 大图图片 {current_image_id} 计算出的缩放因子无效 ({scale_factor})。") # Debug
+                 # Use a default valid scale or fallback
+                 scale_factor = 1.0 # Default to no scaling
+
+            # Calculate scaled image dimensions
             scaled_w = int(img_w * scale_factor)
             scaled_h = int(img_h * scale_factor)
 
-            # 确保缩放后的尺寸有效
+            # Ensure scaled dimensions are valid and non-zero
             if scaled_w <= 0 or scaled_h <= 0:
                 print(f"警告: 大图图片 {current_image_id} 缩放后尺寸无效 ({scaled_w}x{scaled_h})。") # Debug
-                # 绘制一个占位符矩形
-                placeholder_rect = pygame.Rect(0, 0, 200, 150) # 示例占位符大小
+                # Draw a placeholder rectangle
+                placeholder_rect = pygame.Rect(0, 0, 200, 150) # Example placeholder size
                 placeholder_rect.center = (screen_w // 2, screen_h // 2)
-                pygame.draw.rect(surface, settings.GRAY, placeholder_rect)
-                # 可选：在占位符上绘制文字 "加载失败"
+                pygame.draw.rect(surface, settings.GRAY, placeholder_rect) # Draw a gray rectangle
+                # Optional text: "无法显示图片"
+                if hasattr(self.game, 'font_tip') and self.game.font_tip:
+                     font = self.game.font_tip
+                     text_surface = font.render("无法显示图片", True, settings.WHITE)
+                     text_rect = text_surface.get_rect(center=placeholder_rect.center)
+                     surface.blit(text_surface, text_rect)
                 return
 
-            # 进行图片缩放
-            scaled_image = pygame.transform.scale(full_image_surface, (scaled_w, scaled_h))
+            # Perform image scaling
+            try:
+                scaled_image = pygame.transform.scale(original_image_surface, (scaled_w, scaled_h))
+            except pygame.error as e:
+                print(f"错误: 大图图片 {current_image_id} 缩放失败: {e}") # Debug
+                # Fallback to placeholder
+                placeholder_rect = pygame.Rect(0, 0, scaled_w, scaled_h) # Use calculated invalid size
+                placeholder_rect.center = (screen_w // 2, screen_h // 2)
+                pygame.draw.rect(surface, settings.GRAY, placeholder_rect)
+                if hasattr(self.game, 'font_tip') and self.game.font_tip:
+                     font = self.game.font_tip
+                     text_surface = font.render("缩放失败", True, settings.WHITE)
+                     text_rect = text_surface.get_rect(center=placeholder_rect.center)
+                     surface.blit(text_surface, text_rect)
+                return
+            except Exception as e:
+                print(f"错误: 大图图片 {current_image_id} 缩放发生未知错误: {e}") # Debug
+                # Fallback to placeholder
+                placeholder_rect = pygame.Rect(0, 0, scaled_w, scaled_h) # Use calculated invalid size
+                placeholder_rect.center = (screen_w // 2, screen_h // 2)
+                pygame.draw.rect(surface, settings.GRAY, placeholder_rect)
+                if hasattr(self.game, 'font_tip') and self.game.font_tip:
+                     font = self.game.font_tip
+                     text_surface = font.render("缩放错误", True, settings.WHITE)
+                     text_rect = text_surface.get_rect(center=placeholder_rect.center)
+                     surface.blit(text_surface, text_rect)
+                return
 
-            # 计算绘制位置，使其在屏幕上居中
+
+            # Calculate draw position to center it on the screen
             img_rect = scaled_image.get_rect(center=(screen_w // 2, screen_h // 2))
-            # 绘制缩放后的图片到屏幕 Surface 上
+            # Draw the scaled image onto the main surface
             surface.blit(scaled_image, img_rect)
 
-            # 绘制左右导航按钮
-            # 计算按钮位置，相对于绘制的大图 Rect
-            # 按钮与大图垂直居中对齐
-            # 按钮在水平方向上位于大图外部，并留有一定偏移量
-            button_offset_x = max(50, (screen_w - scaled_w) // 4) # 按钮距离图片边缘或屏幕边缘的距离，取较大值确保可见
-            self.left_button.rect.centery = img_rect.centery
-            self.left_button.rect.right = img_rect.left - button_offset_x # 左按钮的右边缘在大图左边缘左侧
+            # Draw left/right navigation buttons
+            # Calculate button positions relative to the drawn large image Rect
+            # Buttons should be vertically centered with the large image
+            # Buttons are horizontally placed outside the large image, with some offset
+            button_offset_x = max(40, (screen_w - scaled_w) // 4) # Offset from image edge, ensuring visibility
 
-            self.right_button.rect.centery = img_rect.centery
-            self.right_button.rect.left = img_rect.right + button_offset_x # 右按钮的左边缘在大图右边缘右侧
+            # Ensure buttons exist and are in the view_lit_buttons group before positioning/drawing
+            if self.left_button in self.view_lit_buttons: # Check if in group
+                self.left_button.rect.centery = img_rect.centery
+                self.left_button.rect.right = img_rect.left - button_offset_x # Right edge of left button is left of image left edge
 
-            # 绘制按钮组 (包含左右导航按钮)
-            self.view_lit_buttons.draw(surface)
+            if self.right_button in self.view_lit_buttons: # Check if in group
+                self.right_button.rect.centery = img_rect.centery
+                self.right_button.rect.left = img_rect.right + button_offset_x # Left edge of right button is right of image right edge
+
+
+            # Draw the button group (containing left/right navigation buttons)
+            # Ensure the sprite group is valid before drawing
+            if isinstance(self.view_lit_buttons, pygame.sprite.Group):
+                 self.view_lit_buttons.draw(surface)
+            # else: print("警告: Gallery.view_lit_buttons 不是 Sprite Group，无法绘制按钮。") # Debug
 
         else:
-             # 如果无法获取完整处理后的图片 surface，绘制一个加载中或占位符文本
-             # 这通常不应该发生，因为进入 VIEW_LIT 状态的前提是图片碎片已加载
-             print(f"警告: 尝试获取图片ID {current_image_id} 的完整处理后图片，但 surface 为 None。") # Debug
-             # 绘制提示文本 "图片加载中..."
-             # 使用 Game 实例中的字体
-             if hasattr(self.game, 'font_loading') and self.game.font_loading: # 检查 Game 实例和字体属性是否存在
+             # If unable to get the original full image surface (file not found or loading failed)
+             print(f"警告: 尝试绘制图片ID {current_image_id} 的原始图片，但 surface 为 None (文件加载失败)。") # Debug
+             # Draw "Image Loading..." or similar text
+             # Use Game instance's font
+             if hasattr(self.game, 'font_loading') and self.game.font_loading: # Check if Game instance and font attribute exist
                 font = self.game.font_loading
-                text_surface = font.render("图片加载中...", True, settings.WHITE)
+                text_surface = font.render("图片加载失败", True, settings.WHITE) # Change text to indicate failure
                 text_rect = text_surface.get_rect(center=(settings.SCREEN_WIDTH//2, settings.SCREEN_HEIGHT//2))
                 surface.blit(text_surface, text_rect)
              else:
-                # 如果 Game 实例或字体不可用，使用 Pygame 默认字体作为回退
+                # If Game instance or font not available, use Pygame default font as fallback
                 font_fallback = pygame.font.Font(None, 40)
-                text_surface = font_fallback.render("图片加载中...", True, settings.WHITE)
+                text_surface = font_fallback.render("图片加载失败", True, settings.WHITE) # Change text
                 text_rect = text_surface.get_rect(center=(settings.SCREEN_WIDTH//2, settings.SCREEN_HEIGHT//2))
                 surface.blit(text_surface, text_rect)
 
