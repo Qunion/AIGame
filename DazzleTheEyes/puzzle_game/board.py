@@ -212,17 +212,17 @@ class Board:
 
                         # 将 Piece 逐个添加到 Sprite Group
                         # --- **最精确定位调试、安全检查和断言：在添加到 Group 之前** ---
-                        # print(f"Board Debug: Piece ({r},{c}) from archive prepared to add to Group.") # Debug
-                        # print(f"  Object Type: {type(piece)}, Is Sprite: {isinstance(piece, pygame.sprite.Sprite)}") # Debug
+                        print(f"Board Debug: Piece ({r},{c}) from archive prepared to add to Group.") # Debug
+                        print(f"  Object Type: {type(piece)}, Is Sprite: {isinstance(piece, pygame.sprite.Sprite)}") # Debug
                         if isinstance(piece, pygame.sprite.Sprite):
-                            # print(f"  Piece Info: ID {piece.original_image_id}, 原始 ({piece.original_row},{piece.original_col}), 当前 ({piece.current_grid_row},{piece.current_grid_col})") # Debug
+                            print(f"  Piece Info: ID {piece.original_image_id}, 原始 ({piece.original_row},{piece.original_col}), 当前 ({piece.current_grid_row},{piece.current_grid_col})") # Debug
                             image_type = type(piece.image) if hasattr(piece, 'image') else '没有 image 属性'
                             image_size = piece.image.get_size() if hasattr(piece, 'image') and isinstance(piece.image, pygame.Surface) else 'N/A'
-                            # print(f"  Piece Image Type: {image_type}, Size: {image_size}") # Debug
+                            print(f"  Piece Image Type: {image_type}, Size: {image_size}") # Debug
 
                             rect_type = type(piece.rect) if hasattr(piece, 'rect') else '没有 rect 属性'
                             rect_pos_size = piece.rect if hasattr(piece, 'rect') else 'N/A'
-                            # print(f"  Piece Rect Type: {rect_type}, Pos/Size: {rect_pos_size}") # Debug
+                            print(f"  Piece Rect Type: {rect_type}, Pos/Size: {rect_pos_size}") # Debug
                         else:
                             print(f"致命错误: Board: 尝试从存档添加的对象不是 Sprite，跳过添加。类型为 {type(piece)}.") # Debug
                             continue # Skip adding invalid object
@@ -230,7 +230,7 @@ class Board:
 
                         # Check if self.all_pieces_group is indeed a Sprite Group before adding
                         if isinstance(self.all_pieces_group, pygame.sprite.Group):
-                            #  print(f"  Group Type: {type(self.all_pieces_group)}. Current size: {len(self.all_pieces_group)}") # Debug
+                             print(f"  Group Type: {type(self.all_pieces_group)}. Current size: {len(self.all_pieces_group)}") # Debug
                              try:
                                  # --- **关键修改：回到使用 group.add(piece) 方法，并捕获异常** ---
                                  # Use the standard Group.add method
@@ -490,10 +490,7 @@ class Board:
 
         elif self.current_board_state == settings.BOARD_STATE_PENDING_FILL:
             # 状态：碎片下落完成，等待填充
-            print("Board State: PENDING_FILL -> Triggering completion view and fill") # 调试信息 <-- 修改打印信息
-
-            completed_image_id = self._completed_image_id_pending_process # 获取刚刚完成的图片ID
-
+            print("Board State: PENDING_FILL -> PLAYING (after fill)") # 调试信息
             # 填充新碎片 (瞬间完成)
             self.fill_new_pieces()
 
@@ -501,28 +498,13 @@ class Board:
             self._completed_image_id_pending_process = None
             self._completed_area_start_pos = None
 
-            # 通知 Gallery 更新列表，并触发进入大图查看界面
+            # 填充完成后，切换回 PLAYING 状态
+            self.current_board_state = settings.BOARD_STATE_PLAYING
+
+            # TODO: 通知 Game 或 Gallery 图库需要刷新 (Board不能直接访问Gallery，通过Game间接通知)
             if hasattr(self.image_manager.game, 'gallery'): # 检查Game实例是否有gallery属性
-                print(f"通知 Gallery 更新列表并查看图片ID {completed_image_id}...") # Debug
-                # Gallery 需要先更新列表才能找到新点亮图片在已点亮列表中的位置
-                self.image_manager.game.gallery._update_picture_list()
-                # 通知 Game 切换到查看刚刚完成的图片
-                if hasattr(self.image_manager.game, 'view_completed_image'):
-                    self.image_manager.game.view_completed_image(completed_image_id)
-                else:
-                     print("警告: Game 实例没有 view_completed_image 方法。无法自动查看完成的图片。") # Debug
-
-            # Note: Board State transition back to PLAYING will be handled by Game
-            # after the image view is closed, not here.
-            # We stay in PENDING_FILL state until Game transitions us out if needed,
-            # or we transition to PLAYING implicitly if view_completed_image doesn't change state.
-            # Let's explicitly transition to PLAYING here if view_completed_image doesn't change state.
-            # Or, view_completed_image MUST change state to GALLERY_VIEW_LIT.
-            # Assuming view_completed_image changes state.
-
-            # This state machine logic might need refinement depending on exact Game state transitions.
-            # For now, let's assume view_completed_image handles the state change.
-            pass # Stay in PENDING_FILL until state is changed externally
+                print("通知 Gallery 更新列表...") # Debug
+                self.image_manager.game.gallery._update_picture_list() # 直接调用更新方法
 
 
 

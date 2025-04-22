@@ -301,33 +301,6 @@ class Game:
         pygame.quit()
         sys.exit()
 
-    def view_completed_image(self, image_id):
-        """
-        接收Board的通知，触发查看刚刚完成的图片的大图。
-
-        Args:
-            image_id (int): 刚刚完成的图片ID。
-        """
-        if self.gallery: # 确保 Gallery 实例存在
-            # 在已点亮图片列表中查找刚刚完成的图片ID的索引
-            # Gallery._lit_images_list 已经更新过，所以可以查找
-            try:
-                 # Gallery 需要一个方法来通过图片ID查找在已点亮列表中的索引
-                 lit_index = self.gallery.find_lit_image_index_by_id(image_id)
-                 if lit_index is not None:
-                     # 如果找到索引，通知 Gallery 开始查看该索引对应的大图
-                     print(f"Game: 触发查看完成的图片ID {image_id} 的大图 (索引: {lit_index})...") # Debug
-                     self.gallery.start_viewing_lit_image(lit_index) # 这个方法会设置 gallery 的 viewing_lit_image_index 并切换 Game 状态到 GALLERY_VIEW_LIT
-                 else:
-                      print(f"警告: Game: 完成的图片ID {image_id} 未在已点亮图片列表中找到。无法自动查看。") # Debug
-                      # 如果找不到，保持当前状态 (PLAYING 或 PENDING_FILL 之后的 PLAYING)
-                      # 或者可以切换到 GALLERY_LIST 状态
-                      # self.change_state(settings.GAME_STATE_GALLERY_LIST)
-
-            except Exception as e:
-                 print(f"错误: Game: 触发查看完成图片大图时发生异常: {e}") # Debug
-                 # 如果发生异常，保持当前状态
-                 # self.change_state(settings.GAME_STATE_GALLERY_LIST) # 异常时也可以切换到列表
 
     # === 图库相关方法 (由 InputHandler 或其他地方调用) ===
     def open_gallery(self):
@@ -498,72 +471,109 @@ class Game:
     # Game state transition method
     def change_state(self, new_state):
         """
-        切换游戏状态。
+        Changes the game state.
 
         Args:
-            new_state (int): 目标游戏状态常量 (settings.GAME_STATE_...).
+            new_state (int): Target game state constant (settings.GAME_STATE_...).
         """
         if self.current_state == new_state:
              return # State not changing
 
-        print(f"正在切换游戏状态从 {self.current_state} 到 {new_state}") # Debug
+        print(f"Changing state from {self.current_state} to {new_state}") # Debug
         old_state = self.current_state # Record old state
         self.current_state = new_state
 
-        # 执行状态切换时的清理/初始化操作
+        # 根据状态变化执行初始化/清理操作
         if old_state == settings.GAME_STATE_LOADING and new_state == settings.GAME_STATE_PLAYING:
-             # 从LOADING切换到PLAYING
-             print("进入游戏主状态PLAYING。")
+              # 从加载状态切换到游戏主状态
+             print("进入游戏主状态 PLAYING。")
+
              # 此时 Board 和 Gallery 实例已准备好
              # 后台加载将在游戏主状态的更新过程中继续进行
              pass # Optional transition effects
 
-             # --- **保留之前的调试打印** ---
-             print("\n--- 所有碎片位置和状态信息 (进入PLAYING时) ---") # Debug 头部
-             if self.board and isinstance(self.board, Board) and isinstance(self.board.all_pieces_group, pygame.sprite.Group):
-                 if not self.board.all_pieces_group: print("  Board 的 Sprite Group 是空的，没有碎片对象。") # Debug
-                 else: print(f"  Board 的 Sprite Group 包含 {len(self.board.all_pieces_group)} 个碎片对象。") # Debug
-             else: print("警告: Board 或其 Sprite Group 未初始化或无效，无法打印碎片信息。") # Debug
-             print("--- 碎片信息打印结束 ---\n") # Debug
-             # --- **调试打印结束** ---
 
+            # self.save_game_data()
+            # self.load_game_data()
+            # self.board._load_grid_from_data()
+
+             # --- **新增：在进入 PLAYING 状态后强制刷新绘制** ---
+             # 确保 Board 已经初始化并且不是致命错误状态
+            #  if self.board:
+            #      print("强制绘制所有碎片以刷新显示...") # Debug
+            #      self.screen.fill(settings.BLACK) # 清屏
+            #      self.board.draw(self.screen) # 绘制拼盘
+            #      # 绘制 UI 元素，如图库入口按钮
+            #      if hasattr(self, 'gallery_icon_button') and self.gallery_icon_button:
+            #          self.gallery_icon_button.draw(self.screen)
+            #      # 绘制可能的提示信息 (如果有的话)
+            #      if self.popup_text and self.popup_text.is_active:
+            #           self.popup_text.draw(self.screen)
+
+            #      pygame.display.flip() # 立即更新屏幕显示绘制的内容
+            #      print("强制绘制刷新完成。") # Debug
+            #  else:
+            #      print("警告: Board 未初始化，无法强制绘制。") # Debug
+             # --- **新增：打印所有碎片的位置和状态信息 (调试)** ---
+             print("\n--- 所有碎片位置和状态信息 (进入PLAYING时) ---") # Debug 头部
+             # 检查 Board 和其 Sprite Group 是否已初始化且有效
+             if self.board and isinstance(self.board, Board) and isinstance(self.board.all_pieces_group, pygame.sprite.Group):
+                 # 检查 Group 中是否有碎片
+                 if not self.board.all_pieces_group:
+                     print("  Board 的 Sprite Group 是空的，没有碎片对象。") # Debug Group 为空
+                 else:
+                     # 打印 Group 中的碎片数量
+                     print(f"  Board 的 Sprite Group 包含 {len(self.board.all_pieces_group)} 个碎片对象。") # Debug Group 大小
+                    #  # 遍历 Group 中的每一个 Sprite (预期是 Piece 对象)
+                    # #  for piece in self.board.all_pieces_group:
+                    #      # 再次安全检查，确保是 Piece 对象
+                    #      if isinstance(piece, piece):
+                    #          # 打印碎片的关键信息
+                    #          # 注意：rect.x 和 rect.y 是浮点数，转换为整数打印更清晰
+                    #          print(
+                    #              f"  碎片 ID:{piece.original_image_id}, "
+                    #              f"原始位置 ({piece.original_row},{piece.original_col}), "
+                    #              f"当前网格 ({piece.current_grid_row},{piece.current_grid_col}), "
+                    #              f"当前屏幕 ({int(piece.rect.x)},{int(piece.rect.y)}), "
+                    #              f"正在下落: {piece.is_falling}" # 打印是否正在下落状态
+                    #          ) # Debug 碎片信息
+                    #      else:
+                    #          # 如果 Group 中混入了非 Piece 对象，打印警告
+                    #          print(f"  警告: Board 的 Sprite Group 中包含非 Piece/非 Sprite 对象: {type(piece)}") # Debug 无效对象
+             else:
+                 # 如果 Board 或 Sprite Group 未初始化或无效，打印警告
+                 print("警告: Board 或其 Sprite Group 未初始化或无效，无法打印碎片信息。") # Debug Board 不就绪
+             print("--- 碎片信息打印结束 ---\n") # Debug 底部
+             # --- **新增结束** ---
 
         elif new_state == settings.GAME_STATE_GALLERY_LIST:
             # 进入图库列表界面
             print("进入图库列表状态。")
             if self.gallery: # 确保图库实例存在
-                # Gallery.open_gallery() 会更新列表，但 Gallery 的 handle_event_list 已经处理了点击外部关闭，
-                # Gallery 的 close_gallery 会调用这里，所以 Gallery 自己管理打开/关闭状态。
-                pass # Gallery 内部逻辑处理打开
-
+                self.gallery.open_gallery() # 通知图库准备列表视图（更新列表内容）
             # 停止主游戏视图中的交互（取消选择，停止拖动）
             if self.board: # 确保棋盘实例存在
                 self.board.unselect_piece()
                 self.board.stop_dragging()
-
+            # 注意：棋盘的更新方法会检查其内部状态，此处无需显式暂停。
 
         elif old_state == settings.GAME_STATE_GALLERY_LIST and new_state == settings.GAME_STATE_PLAYING:
             # 从图库列表界面返回主游戏
-            print("从图库列表状态返回游戏主状态 PLAYING。") # Debug
-            # Gallery.close_gallery() 会调用这里，Gallery 自己管理关闭清理。
-            pass # Gallery 内部逻辑处理关闭
-
+            print("从图库列表状态返回游戏主状态。")
+            if self.gallery: # 确保图库实例存在
+                self.gallery.close_gallery() # 通知图库关闭（重置内部状态）
 
         elif new_state == settings.GAME_STATE_GALLERY_VIEW_LIT:
-             # 进入图库大图查看界面（从列表状态进入）
-             print("进入图库大图查看状态。")
-             # 由 Gallery.start_viewing_lit_image 触发切换，Gallery 内部已记录要查看的图片
+            # 进入图库大图查看界面（从列表状态进入）
+            print("进入图库大图查看状态。")
+            # 由 Gallery.start_viewing_lit_image 触发切换，图库知道要查看哪张图片
 
-        # --- **关键修改：处理从大图查看返回的逻辑** ---
-        # 当从 GALLERY_VIEW_LIT 切换到 PLAYING 状态时
-        elif old_state == settings.GAME_STATE_GALLERY_VIEW_LIT and new_state == settings.GAME_STATE_PLAYING:
-             print("从图库大图查看状态返回游戏主状态 PLAYING。") # Debug
-             # Gallery.close_gallery() 会调用这里，Gallery 自己管理关闭清理。
-             # 此时 Board 已经填充好了新碎片 (在 Board 完成流程中完成)
-             pass # Game 状态已切换，绘制循环会绘制 Board
+        elif old_state == settings.GAME_STATE_GALLERY_VIEW_LIT and new_state == settings.GAME_STATE_GALLERY_LIST:
+            # 从大图查看界面返回图库列表
+            print("从图库大图查看状态返回图库列表状态。")
+            # 由 Gallery.stop_viewing_lit_image 触发切换
 
-
-        # else: # 处理其他可能的非法状态切换或未处理的状态
+        # TODO: 为其他状态转换添加清理/初始化逻辑
 
 
 # ... 其他代码 ...

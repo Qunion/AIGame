@@ -80,32 +80,13 @@ class Gallery:
 
 
     def close_gallery(self):
-        """
-        关闭图库界面，切换回游戏主状态。这个方法由 Game 类调用。
-        这是一个统一的关闭入口，无论从列表还是大图查看返回拼盘，都调用此方法。
-        """
-        print("Gallery: 关闭图库。切换回游戏主状态 PLAYING。") # Debug
-        self.viewing_lit_image_index = -1 # 确保退出大图查看状态
-        # 切换游戏状态回游戏主状态 (由 Game 实例执行状态切换)
-        if hasattr(self.game, 'change_state'):
-             self.game.change_state(settings.GAME_STATE_PLAYING)
+        """关闭图库界面，切换回游戏主状态。这个方法由Game类调用。"""
+        print("关闭图库。") # Debug
+        # 确保退出大图查看状态 (如果在大图查看状态下点击外部区域，也会调用此方法)
+        self.viewing_lit_image_index = -1
+        # Game类调用 change_state 方法来切换状态 (Game类负责调用此方法)
+        # self.game.change_state(settings.GAME_STATE_PLAYING)
 
-    def find_lit_image_index_by_id(self, image_id):
-        """
-        在已点亮图片ID列表 (_lit_images_list) 中查找指定图片ID的索引。
-
-        Args:
-            image_id (int): 要查找的图片ID。
-
-        Returns:
-            int or None: 图片ID在 _lit_images_list 中的索引，如果未找到则返回 None。
-        """
-        try:
-            index = self._lit_images_list.index(image_id)
-            return index
-        except ValueError:
-            # print(f"警告: Gallery: 图片ID {image_id} 未在已点亮图片ID列表 ({self._lit_images_list}) 中找到。") # Debug
-            return None
 
     def _update_picture_list(self):
         """从image_manager获取并更新图库中的图片列表及状态，并进行排序。"""
@@ -262,7 +243,7 @@ class Gallery:
 
     def start_viewing_lit_image(self, thumbnail_index_in_gallery_list):
         """
-        开始查看已点亮的大图。这个方法会被 Game 调用。
+        开始查看已点亮的大图。
 
         Args:
             thumbnail_index_in_gallery_list (int): 在 self.pictures_in_gallery 列表中的索引。
@@ -271,35 +252,33 @@ class Gallery:
         if 0 <= thumbnail_index_in_gallery_list < len(self.pictures_in_gallery):
             picture_info = self.pictures_in_gallery[thumbnail_index_in_gallery_list]
             if picture_info['state'] == 'lit':
-                 # 在已点亮图片ID列表 (_lit_images_list) 中查找该图片ID的索引
+                 # 找到这张图片ID在 _lit_images_list 中的索引，以便后续导航
                  try:
                      lit_list_index = self._lit_images_list.index(picture_info['id'])
                      self.viewing_lit_image_index = lit_list_index # 设置当前查看的图片索引
-                     # 切换游戏状态到大图查看 (由 Game 实例执行状态切换)
+                     # 切换游戏状态到大图查看
                      if hasattr(self.game, 'change_state'):
                          self.game.change_state(settings.GAME_STATE_GALLERY_VIEW_LIT)
-                     print(f"Gallery: 开始查看图片ID {picture_info['id']} 的大图 (在已点亮列表中索引: {lit_list_index})...") # Debug
+                     print(f"开始查看图片ID {picture_info['id']} ({lit_list_index+1}/{len(self._lit_images_list)})") # Debug (索引+1方便人类阅读)
                  except ValueError:
-                     print(f"错误: Gallery: 已点亮图片ID {picture_info['id']} 不在 _lit_images_list 中。无法查看。") # Debug
+                     print(f"错误: 已点亮图片ID {picture_info['id']} 不在 _lit_images_list 中。") # Debug
                      self.viewing_lit_image_index = -1 # 状态异常
 
             else:
-                 print(f"错误: Gallery: 尝试查看未点亮图片ID {picture_info['id']} 的大图。") # Debug
+                 print(f"错误: 尝试查看未点亮图片ID {picture_info['id']} 的大图。") # Debug
                  self.viewing_lit_image_index = -1 # 状态异常
         else:
-            print(f"错误: Gallery: 尝试查看索引 {thumbnail_index_in_gallery_list} 的图片，超出列表范围。") # Debug
+            print(f"错误: 尝试查看索引 {thumbnail_index_in_gallery_list} 的图片，超出列表范围。") # Debug
             self.viewing_lit_image_index = -1
 
 
-
     def stop_viewing_lit_image(self):
-        """停止查看大图，返回图库列表界面。"""
-        print("Gallery: 停止查看大图，返回列表。") # Debug
+        """停止查看大图，返回图库列表界面"""
+        print("停止查看大图，返回列表。") # Debug
         self.viewing_lit_image_index = -1 # 退出大图查看状态
-        # 切换游戏状态回图库列表 (由 Game 实例执行状态切换)
-        # Gallery 返回列表后，如果需要回到拼盘，会再调用 close_gallery
+        # 切换游戏状态回图库列表
         if hasattr(self.game, 'change_state'):
-             self.game.change_state(settings.GAME_STATE_GALLERY_LIST) # <-- 仍然返回列表状态，点击外部再回拼盘
+            self.game.change_state(settings.GAME_STATE_GALLERY_LIST)
 
 
     def navigate_lit_images(self, direction):
@@ -313,19 +292,16 @@ class Gallery:
             current_index = self.viewing_lit_image_index
             num_lit_images = len(self._lit_images_list)
             if num_lit_images <= 1:
-                 # print("Gallery: 只有一张已点亮图片，无法导航。") # Debug, avoid spamming
+                 # print("只有一张已点亮图片，无法导航。") # Debug, avoid spamming
                  return # 不能导航，如果只有一张图片
 
             # 计算下一个索引，支持循环
             new_index = (current_index + direction) % num_lit_images
             self.viewing_lit_image_index = new_index
 
-            # 在导航后，需要重新加载并显示新的大图。
-            # Gallery.draw_view_lit 方法会在下一帧根据 viewing_lit_image_index 绘制正确的大图。
-            print(f"Gallery: 导航到已点亮图片索引 {new_index} (ID: {self._lit_images_list[new_index]})") # Debug
+            # print(f"导航到已点亮图片索引 {new_index} (ID: {self._lit_images_list[new_index]})") # Debug
 
-            # Optional: Pre-load the next/previous image in background if needed for smoother transition
-            # self.image_manager.preload_image(self._lit_images_list[(new_index + direction) % num_lit_images])
+            # 每次导航到新图片时，可以在这里加载或准备下一张大图资源 (ImageManager.get_full_processed_image 会缓存，所以通常不需要额外加载)
 
 
     def handle_event_view_lit(self, event):
@@ -351,14 +327,13 @@ class Gallery:
                  if button.handle_event(event):  # 调用每个按钮的handle_event方法
                      handled_by_button = True # 标记事件已被处理
                      # 如果你希望一个事件只被一个按钮处理（例如点击左按钮不会同时触发右按钮的逻辑），可以在这里 break
-                     break # 假设事件只会被一个按钮处理
+                     # break # 假设事件只会被一个按钮处理
 
              # 如果点击未被任何按钮处理 (即 handled_by_button 在循环后仍为 False)
              if not handled_by_button:
                   # 任何点击在按钮外部的区域都关闭大图查看界面
-                  print("Gallery: 点击在按钮外部，关闭大图查看界面。") # Debug
-                  # --- **关键修改：点击按钮外部时，调用统一的 close_gallery 方法** ---
-                  self.close_gallery() # 调用方法关闭图库（会切换到 PLAYING 状态）
+                  print("点击在按钮外部，关闭大图查看界面。") # Debug
+                  self.stop_viewing_lit_image() # 调用方法关闭大图查看界面
                   return True # 事件已被处理 (因为它导致了界面关闭操作)
 
              # 如果事件被按钮处理了 (handled_by_button 在循环后为 True)
