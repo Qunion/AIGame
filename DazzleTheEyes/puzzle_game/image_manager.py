@@ -37,6 +37,10 @@ class ImageManager:
         self.image_logic_dims = {}
         self._scan_image_files() # 扫描图片文件，获取所有图片ID、路径和逻辑尺寸 (现在 self.image_status 已经存在)
 
+        # === 新增：存储加载和处理后的原始图片表面 {id: pygame.Surface} ===
+        # 用于图库大图查看，这是原始尺寸的图片，不是为碎片处理过的，会按需加载并缓存
+        self.original_full_images = {}
+
         # 存储加载和处理后的原始图片表面 {id: pygame.Surface} (用于图库大图)
         self.processed_full_images = {}
         # 存储生成的碎片表面 {id: { (row, col): pygame.Surface }}
@@ -165,14 +169,17 @@ class ImageManager:
         self._update_loaded_count()
         # print(f"ImageManager: 初始加载批次处理完成。") # Debug
 
+# image_manager.py
+# ... (保留文件顶部导入、类定义、__init__ 以及其他方法不变) ...
 
-    # 替换 _load_and_process_single_image 方法 (使用动态逻辑尺寸)
     def _load_and_process_single_image(self, image_id):
         """
         加载、处理单张原始图片，生成碎片surface，保存到缓存，并生成缩略图缓存。
         如果缓存存在且不重新生成，则从缓存加载。根据图片的逻辑尺寸进行处理。
         这个方法负责确保给定图片ID的碎片和缩略图都已加载到内存缓存。
-        这个方法会更新内部缓存字典。它**不**更新 _loaded_image_count，由调用方在批次处理后统一调用 _update_loaded_count。
+        它**不**更新 _loaded_image_count，由调用方在批次处理后统一调用 _update_loaded_count。
+        同时，它会加载并缓存原始图片 Surface 用于图库大图。
+
         Args:
             image_id (int): 要处理的图片ID。
 
@@ -181,23 +188,41 @@ class ImageManager:
         """
         # 确保图片ID有效且已配置逻辑尺寸
         if image_id not in self.all_image_files or image_id not in self.image_logic_dims:
-             print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 文件或逻辑尺寸配置缺失，无法加载和处理。") # Debug
+             print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 文件或逻辑尺寸配置缺失，无法加载和处理。") # 调试信息
              return False
 
-        img_logic_c, img_logic_r = self.image_logic_dims[image_id] # Get logic dims
-        pieces_per_this_image = img_logic_c * img_logic_r # <-- **关键：动态计算碎片总数**
+        filepath = self.all_image_files[image_id]
 
-        # 检查碎片和缩略图是否都已经成功加载/生成并缓存在内存中
+        # === 检查原始图片是否已缓存，如果已缓存，则无需重新加载文件 ===
+        original_img_pg = self.original_full_images.get(image_id)
+        if original_img_pg is None:
+            # 原始图片未缓存，尝试从文件加载
+            try:
+                original_img_pg = pygame.image.load(filepath).convert_alpha()
+                # === 关键修改：缓存原始图片 ===
+                self.original_full_images[image_id] = original_img_pg # 缓存原始图片 Surface
+                # print(f"  图片ID {image_id}: 原始图片加载并缓存成功。") # 调试信息
+            except pygame.error as e:
+                 print(f"错误: ImageManager: _load_and_process_single_image: Pygame无法加载原始图片 {filepath}: {e}") # Debug
+                 # Continue processing even if original image fails to load, pieces/thumbnails might still work from cache
+                 original_img_pg = None # Ensure it's None if loading failed
+
+
+        # === 获取图片的逻辑尺寸和总碎片数 ===
+        img_logic_c, img_logic_r = self.image_logic_dims[image_id]
+        pieces_per_this_image = img_logic_c * img_logic_r # <-- 动态计算碎片总数
+
+
+        # === 检查碎片和缩略图是否都已经成功加载/生成并缓存在内存中 ===
         pieces_already_loaded = (image_id in self.pieces_surfaces and self.pieces_surfaces.get(image_id) is not None and len(self.pieces_surfaces.get(image_id, {})) == pieces_per_this_image) # <-- 使用动态总数
         thumbnails_already_cached = (image_id in self.cached_thumbnails and self.cached_thumbnails.get(image_id) is not None and
                                      image_id in self.cached_unlit_thumbnails and self.cached_unlit_thumbnails.get(image_id) is not None)
 
         if pieces_already_loaded and thumbnails_already_cached:
-             # print(f"图片ID {image_id} 碎片和缩略图已存在内存，跳过加载处理。") # Debug
+             # print(f"图片ID {image_id} 碎片和缩略图已存在内存，跳过生成处理。") # Debug
              return True # 资源已准备好，返回成功
 
 
-        filepath = self.all_image_files[image_id]
         # print(f"正在处理图片: ID {image_id}, 文件 {os.path.basename(filepath)}") # Debug
 
         fragments_loaded_from_cache = False
@@ -205,151 +230,147 @@ class ImageManager:
             fragments_loaded_from_cache = self._load_pieces_from_cache(image_id) # This populates self.pieces_surfaces if successful
 
 
-        processed_full_image_available = False # 标记是否获取到了处理后的完整图片 Surface (用于缩略图和大图)
-        processed_img_pg = None # 初始化为 None
-
-        # Calculate target size based on dynamic logic dimensions and fixed piece size
+        # Calculate target size based on dynamic logic dimensions and fixed piece size (for processing)
         target_width = img_logic_c * settings.PIECE_WIDTH
         target_height = img_logic_r * settings.PIECE_HEIGHT
         target_size = (target_width, target_height)
 
 
-        # If regenerating or cache failed, process from source image file
+        # If regenerating or cache failed, process from the *loaded original* image surface (if available)
+        # Pieces and thumbnails are generated from the processed version, which is derived from the original.
+        success = False # Assume failure until pieces and thumbnails are successfully generated/loaded
+
         if settings.REGENERATE_PIECES or not fragments_loaded_from_cache:
-            # From source image file, process to get pieces and thumbnails
-            # print(f"  图片ID {image_id}: { '重新生成' if settings.REGENERATE_PIECES else '缓存加载失败'}，开始裁剪和分割...") # Debug
+            if original_img_pg: # Only proceed with processing if original image was loaded successfully
+                # From the loaded original image surface, process to get the processed full image
+                # This processed image is used to generate pieces and thumbnails
+                # print(f"  图片ID {image_id}: { '重新生成' if settings.REGENERATE_PIECES else '缓存加载失败'}，开始裁剪和生成处理后图片...") # Debug
 
-            try:
-                original_img_pg = pygame.image.load(filepath).convert_alpha()
-            except pygame.error as e:
-                 print(f"错误: ImageManager: _load_and_process_single_image: Pygame无法加载原始图片 {filepath}: {e}") # Debug
-                 return False # 加载原始图失败，标记处理失败
+                # Process image size (scale and center crop) to calculated target_size using the loaded original surface
+                processed_img_pg = self._process_image_for_pieces(original_img_pg, target_size)
 
-            # Process image size (scale and center crop) to calculated target_size
-            processed_img_pg = self._process_image_for_pieces(original_img_pg, target_size)
+                # If processed image is valid and matches target size
+                if processed_img_pg and processed_img_pg.get_size() == target_size:
+                     self.processed_full_images[image_id] = processed_img_pg # Store processed full image
 
-            # If processing successful and dimensions match target
-            if processed_img_pg and processed_img_pg.get_size() == target_size:
-                 self.processed_full_images[image_id] = processed_img_pg # Store processed full image
-                 processed_full_image_available = True
+                     # Attempt to split into pieces based on dynamic logic dimensions
+                     pieces_for_this_image = self._split_image_into_pieces(processed_img_pg, img_logic_r, img_logic_c) # Pass logic dims
 
-                 # Attempt to split into pieces based on dynamic logic dimensions
-                 pieces_for_this_image = self._split_image_into_pieces(processed_img_pg, img_logic_r, img_logic_c) # Pass logic dims
+                     # If pieces are successfully generated and correct count
+                     if pieces_for_this_image and len(pieces_for_this_image) == pieces_per_this_image: # <-- 使用动态总数
+                         self.pieces_surfaces[image_id] = pieces_for_this_image # Store piece surfaces
 
-                 # If pieces are successfully generated and correct count
-                 if pieces_for_this_image and len(pieces_for_this_image) == pieces_per_this_image: # <-- 使用动态总数
-                     self.pieces_surfaces[image_id] = pieces_for_this_image # Store piece surfaces
+                         # Generate and cache thumbnails from the processed full image
+                         try:
+                             processed_img_pg_for_thumb = self.processed_full_images[image_id] # Get the available processed image
+                             # === 计算缩略图尺寸，根据其逻辑尺寸比例 ===
+                             thumb_width = settings.GALLERY_THUMBNAIL_WIDTH
+                             # Calculate height based on its own logical ratio and the fixed thumbnail width
+                             # Avoid division by zero if logic_c is 0, though _scan_image_files should prevent this
+                             thumb_height = int(thumb_width * (img_logic_r / img_logic_c)) if img_logic_c > 0 else settings.GALLERY_THUMBNAIL_WIDTH # Fallback height
+                             thumb_size = (thumb_width, thumb_height)
 
-                     # Generate and cache thumbnails from the processed full image
-                     try:
-                         processed_img_pg_for_thumb = self.processed_full_images[image_id] # Get the available processed image
-                         # === 计算缩略图尺寸，根据其逻辑尺寸比例 ===
-                         thumb_width = settings.GALLERY_THUMBNAIL_WIDTH
-                         # Calculate height based on its own logical ratio and the fixed thumbnail width
-                         # Avoid division by zero if logic_c is 0, though _scan_image_files should prevent this
-                         thumb_height = int(thumb_width * (img_logic_r / img_logic_c)) if img_logic_c > 0 else settings.GALLERY_THUMBNAIL_WIDTH # Fallback height
+                             thumbnail = pygame.transform.scale(processed_img_pg_for_thumb, thumb_size)
+                             unlit_thumbnail = utils.grayscale_surface(thumbnail) # Generate grayscale version
+                             self.cached_thumbnails[image_id] = thumbnail
+                             self.cached_unlit_thumbnails[image_id] = unlit_thumbnail
 
-                         thumbnail = pygame.transform.scale(processed_img_pg_for_thumb, (thumb_width, thumb_height))
-                         unlit_thumbnail = utils.grayscale_surface(thumbnail) # Generate grayscale version
-                         self.cached_thumbnails[image_id] = thumbnail
-                         self.cached_unlit_thumbnails[image_id] = unlit_thumbnail
+                             # Attempt to save pieces to cache (only saves pieces, not thumbnails)
+                             self._save_pieces_to_cache(image_id)
 
-                         # Attempt to save pieces to cache (only saves pieces, not thumbnails)
-                         self._save_pieces_to_cache(image_id)
+                             success = True # Pieces AND thumbnails successfully generated
 
-                         success = True # Pieces AND thumbnails successfully generated
+                         except Exception as e: # Catch any exception during thumbnail generation/grayscaling
+                              print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 缩略图生成或灰度化失败: {e}.") # Debug
+                              success = False # Thumbnail generation failed
+                              # Clear potential incomplete thumbnail entries
+                              if image_id in self.cached_thumbnails: del self.cached_thumbnails[image_id]
+                              if image_id in self.cached_unlit_thumbnails: del self.cached_unlit_thumbnails[image_id]
 
-                     except Exception as e: # Catch any exception during thumbnail generation/grayscaling
-                          print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 缩略图生成或灰度化失败: {e}.") # Debug
-                          success = False # Thumbnail generation failed
-                          # Clear potential incomplete thumbnail entries
-                          if image_id in self.cached_thumbnails: del self.cached_thumbnails[image_id]
-                          if image_id in self.cached_unlit_thumbnails: del self.cached_unlit_thumbnails[image_id]
+                     else:
+                          print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 碎片分割数量不完整 ({len(pieces_for_this_image) if pieces_for_this_image else 0}/{pieces_per_this_image})。") # Debug
+                          # Do not store incomplete pieces in self.pieces_surfaces
+                          # self.pieces_surfaces[image_id] = {} # Ensure no incomplete entry
+                          success = False # Pieces incomplete
 
-                 else:
-                      print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 碎片分割数量不完整 ({len(pieces_for_this_image) if pieces_for_this_image else 0}/{pieces_per_this_image})。") # Debug
-                      # Do not store incomplete pieces in self.pieces_surfaces
-                      # self.pieces_surfaces[image_id] = {} # Ensure no incomplete entry
-                      success = False # Pieces incomplete
-
-
-            else:
-                 print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 处理后图片无效或尺寸不符 ({processed_img_pg.get_size() if processed_img_pg else 'None'} vs {target_size})。") # Debug
-                 processed_full_image_available = False # Mark processed full image unavailable
-                 success = False # Processing failed
+                else:
+                     print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 处理后图片无效或尺寸不符 ({processed_img_pg.get_size() if processed_img_pg else 'None'} vs {target_size})。") # Debug
+                     success = False # Processing failed
+            # else: If original_img_pg was None, processing cannot happen, success remains False
 
 
         elif fragments_loaded_from_cache:
              # If cache loading was successful for pieces, pieces are in self.pieces_surfaces[image_id]
-             # Now, generate and cache thumbnails if they are missing
+             # Now, generate and cache thumbnails if they are missing, using the *loaded original* image (if available)
              thumbnails_already_cached = (image_id in self.cached_thumbnails and self.cached_thumbnails.get(image_id) is not None and
                                           image_id in self.cached_unlit_thumbnails and self.cached_unlit_thumbnails.get(image_id) is not None)
 
              if not thumbnails_already_cached:
-                  # Need to load the full image to generate thumbnails
-                  if image_id not in self.processed_full_images or not self.processed_full_images.get(image_id):
-                       # print(f"  图片ID {image_id}: 从缓存加载碎片成功，需要处理原始图 {os.path.basename(filepath)} 用于图库完整图和缩略图。") # Debug
-                       try:
-                          original_img_pg = pygame.image.load(filepath).convert_alpha()
-                          target_width = img_logic_c * settings.PIECE_WIDTH
-                          target_height = img_logic_r * settings.PIECE_HEIGHT
-                          processed_img_pg = self._process_image_for_pieces(original_img_pg, (target_width, target_height)) # Process again to get the full processed image
-                          if processed_img_pg and processed_img_pg.get_size() == (target_width, target_height):
-                              self.processed_full_images[image_id] = processed_img_pg # Store processed full image
-                          else:
-                               print(f"警告: ImageManager: _load_and_process_single_image: 处理图片 {filepath} 用于图库完整图/缩略图时返回无效 Surface 或尺寸不符。") # Debug
-                               processed_img_pg = None # Mark as invalid
-                       except pygame.error as e:
-                           print(f"错误: ImageManager: _load_and_process_single_image: Pygame无法加载原始图片 {filepath} 用于图库完整图/缩略图: {e}.") # Debug
-                           processed_img_pg = None # Mark as invalid
-                       except Exception as e:
-                           print(f"错误: ImageManager: _load_and_process_single_image: 处理图片 {filepath} 用于图库完整图/缩略图时发生未知错误: {e}.") # Debug
-                           processed_img_pg = None # Mark as invalid
+                  if original_img_pg: # Only proceed if original image was loaded successfully
+                       # Need the processed full image surface to generate thumbnails correctly
+                       # This surface might not be cached if only fragments were loaded from cache
+                       # Re-process the original image surface to get the processed one for thumbnails
+                       processed_img_pg = self.processed_full_images.get(image_id)
+                       if processed_img_pg is None:
+                            # If processed full image is not in cache, generate it from the original loaded surface
+                            target_width = img_logic_c * settings.PIECE_WIDTH
+                            target_height = img_logic_r * settings.PIECE_HEIGHT
+                            processed_img_pg = self._process_image_for_pieces(original_img_pg, (target_width, target_height)) # Process again to get the processed full image
+                            if processed_img_pg and processed_img_pg.get_size() == (target_width, target_height):
+                                self.processed_full_images[image_id] = processed_img_pg # Store processed full image
+                            else:
+                                 print(f"警告: ImageManager: _load_and_process_single_image: 处理原始图片ID {image_id} 用于缩略图生成时返回无效 Surface 或尺寸不符。") # Debug
+                                 processed_img_pg = None # Mark as invalid
+
+
+                       # If processed full image is available (either from cache or generated), generate thumbnails
+                       if processed_img_pg:
+                            try:
+                                # Thumbnail size calculation uses GALLERY_THUMBNAIL_WIDTH and this image's logical ratio
+                                thumb_width = settings.GALLERY_THUMBNAIL_WIDTH
+                                thumb_height = int(thumb_width * (img_logic_r / img_logic_c)) if img_logic_c > 0 else settings.GALLERY_THUMBNAIL_WIDTH # Fallback height
+                                thumb_size = (thumb_width, thumb_height)
+
+                                thumbnail = pygame.transform.scale(processed_img_pg, thumb_size)
+                                unlit_thumbnail = utils.grayscale_surface(thumbnail)
+                                self.cached_thumbnails[image_id] = thumbnail
+                                self.cached_unlit_thumbnails[image_id] = unlit_thumbnail
+                                success = True # Pieces were loaded from cache, AND thumbnails were generated
+                                # thumbnails_are_ready =True # Redundant variable, success handles overall state
+                            except Exception as e: # Catch any exception during thumbnail generation/grayscaling
+                               print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 缩略图生成或灰度化失败: {e}.") # Debug
+                               success = False
+                               # thumbnails_are_ready = False # Redundant
+                               if image_id in self.cached_thumbnails: del self.cached_thumbnails[image_id]
+                               if image_id in self.cached_unlit_thumbnails: del self.cached_unlit_thumbnails[image_id]
+
+                       else:
+                            # Processed full image was needed for thumbnails but wasn't available/couldn't be generated
+                            print(f"警告: ImageManager: _load_and_process_single_image: 无法获取处理后图片用于图片ID {image_id} 的缩略图生成。") # Debug
+                            success = False # Pieces loaded from cache, but thumbnails failed
+                            # pieces_are_ready = True # Redundant
+
                   else:
-                       # Full processed image already exists in cache
-                       processed_img_pg = self.processed_full_images[image_id]
-
-                  # If processed full image is available, generate thumbnails
-                  if processed_img_pg:
-                       try:
-                           # Thumbnail size calculation uses GALLERY_THUMBNAIL_WIDTH and this image's logical ratio
-                           thumb_width = settings.GALLERY_THUMBNAIL_WIDTH
-                           # Calculate height based on its own logical ratio and the fixed thumbnail width
-                           thumb_height = int(thumb_width * (img_logic_r / img_logic_c)) if img_logic_c > 0 else settings.GALLERY_THUMBNAIL_WIDTH # Fallback height
-
-                           thumbnail = pygame.transform.scale(processed_img_pg, (thumb_width, thumb_height))
-                           unlit_thumbnail = utils.grayscale_surface(thumbnail)
-                           self.cached_thumbnails[image_id] = thumbnail
-                           self.cached_unlit_thumbnails[image_id] = unlit_thumbnail
-                           success = True # Pieces were loaded from cache, AND thumbnails were generated
-                           thumbnails_are_ready =True # Redundant variable, success handles overall state
-                       except Exception as e: # Catch any exception during thumbnail generation/grayscaling
-                          print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 缩略图生成或灰度化失败: {e}.") # Debug
-                          success = False
-                          thumbnails_are_ready = False
-                          if image_id in self.cached_thumbnails: del self.cached_thumbnails[image_id]
-                          if image_id in self.cached_unlit_thumbnails: del self.cached_unlit_thumbnails[image_id]
-
-                  else:
-                       # Processed full image was needed for thumbnails but wasn't available/couldn't be generated
-                       print(f"警告: ImageManager: _load_and_process_single_image: 无法获取完整处理后图片用于图片ID {image_id} 的缩略图生成。") # Debug
+                       # Original image was needed for thumbnail processing but was None (failed to load)
+                       print(f"警告: ImageManager: _load_and_process_single_image: 图片ID {image_id} 原始图片加载失败，无法生成缩略图。") # Debug
                        success = False # Pieces loaded from cache, but thumbnails failed
-                       pieces_are_ready = True # Redundant variable, success handles overall state
 
 
              else:
                   # Pieces were loaded from cache, AND thumbnails were already cached
-                  success = True # All assets for this image are ready in memory/cache
-                  pieces_are_ready = True # Redundant variable, success handles overall state
+                  success = True # All assets for this image (pieces/thumbs) are ready in memory/cache
+                  # pieces_are_ready = True # Redundant
 
 
-        # This image is considered successfully processed only if BOTH pieces AND thumbnails are ready
-        # final_success = pieces_are_ready and thumbnails_are_ready # Redundant variable, success handles overall state
+        # This image is considered successfully processed (for piece/thumbnail purposes)
+        # only if BOTH pieces AND thumbnails are ready
         final_success = success
 
         # Note: _update_loaded_count is called externally after batches are processed.
 
-        return final_success # 返回处理是否成功 (碎片和缩略图都已准备)
+        return final_success # Return True if pieces and thumbnails are ready
+
+# ... (保留 ImageManager 类其他方法不变) ...
 
 
 
@@ -1608,3 +1629,39 @@ class ImageManager:
 
 
         print(f"高优先级加载队列包含 {high_priority_count} 张图片 (需要加载资源)。") # Debug
+
+
+    def get_original_full_image(self, image_id):
+        """
+        从缓存获取指定图片ID的原始图片surface。
+        用于图库大图查看或完成动画。如果缓存中没有，则尝试从文件加载并缓存。
+
+        Args:
+            image_id (int): 图片ID。
+
+        Returns:
+            pygame.Surface or None: 缓存的原始图片surface，或None如果文件不存在或加载失败。
+        """
+        # Check if the original image is already in the cache
+        original_image = self.original_full_images.get(image_id)
+        if original_image is not None:
+            return original_image # Return from cache
+
+        # If not in cache, try to load it from file
+        filepath = self.all_image_files.get(image_id) # Get filepath using image_id
+        if filepath is None:
+             print(f"警告: ImageManager: get_original_full_image: 图片ID {image_id} 文件路径未知。") # 调试信息
+             return None # Image ID not scanned or invalid
+
+        try:
+            # print(f"ImageManager: get_original_full_image: 按需加载原始图片文件 {filepath}...") # 调试信息
+            original_image = pygame.image.load(filepath).convert_alpha()
+            self.original_full_images[image_id] = original_image # Cache it after loading
+            # print(f"  图片ID {image_id}: 原始图片按需加载并缓存成功。") # 调试信息
+            return original_image
+        except pygame.error as e:
+            print(f"错误: ImageManager: get_original_full_image: Pygame无法加载原始图片 {filepath}: {e}") # 调试信息
+            return None # Loading failed
+        except Exception as e:
+            print(f"错误: ImageManager: get_original_full_image: 加载原始图片 {filepath} 时发生未知错误: {e}") # 调试信息
+            return None

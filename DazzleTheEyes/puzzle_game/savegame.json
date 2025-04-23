@@ -41,53 +41,16 @@
                 null,
                 null,
                 null,
+                null,
                 {
-                    "id": 2,
-                    "orig_r": 0,
-                    "orig_c": 0
-                },
-                {
-                    "id": 2,
-                    "orig_r": 0,
-                    "orig_c": 1
-                },
-                {
-                    "id": 2,
-                    "orig_r": 0,
-                    "orig_c": 2
-                },
-                {
-                    "id": 2,
+                    "id": 3,
                     "orig_r": 1,
                     "orig_c": 0
                 },
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-            ],
-            [
-                null,
-                null,
-                null,
-                null,
-                null,
                 {
-                    "id": 2,
+                    "id": 3,
                     "orig_r": 1,
                     "orig_c": 1
-                },
-                {
-                    "id": 2,
-                    "orig_r": 1,
-                    "orig_c": 2
-                },
-                {
-                    "id": 2,
-                    "orig_r": 2,
-                    "orig_c": 0
                 },
                 {
                     "id": 3,
@@ -107,24 +70,49 @@
                 null,
                 null,
                 null,
+                null,
                 {
-                    "id": 2,
-                    "orig_r": 2,
+                    "id": 3,
+                    "orig_r": 1,
                     "orig_c": 2
+                },
+                {
+                    "id": 4,
+                    "orig_r": 0,
+                    "orig_c": 0
                 },
                 {
                     "id": 3,
                     "orig_r": 0,
                     "orig_c": 0
                 },
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            ],
+            [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 {
-                    "id": 3,
-                    "orig_r": 2,
-                    "orig_c": 0
+                    "id": 4,
+                    "orig_r": 0,
+                    "orig_c": 1
                 },
                 {
-                    "id": 2,
-                    "orig_r": 2,
+                    "id": 4,
+                    "orig_r": 0,
+                    "orig_c": 2
+                },
+                {
+                    "id": 3,
+                    "orig_r": 0,
                     "orig_c": 1
                 },
                 null,
@@ -140,26 +128,10 @@
                 null,
                 null,
                 null,
-                {
-                    "id": 3,
-                    "orig_r": 1,
-                    "orig_c": 0
-                },
-                {
-                    "id": 3,
-                    "orig_r": 1,
-                    "orig_c": 1
-                },
-                {
-                    "id": 3,
-                    "orig_r": 0,
-                    "orig_c": 1
-                },
-                {
-                    "id": 3,
-                    "orig_r": 1,
-                    "orig_c": 2
-                },
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -202,17 +174,17 @@
                 null
             ]
         ],
-        "playable_cols": 4,
-        "playable_rows": 4,
-        "unlocked_pictures_count": 1,
+        "playable_cols": 3,
+        "playable_rows": 3,
+        "unlocked_pictures_count": 2,
         "background_name": "background_2.png"
     },
     "image_manager_state": {
         "image_status": {
             "1": "lit",
-            "2": "unlit",
+            "2": "lit",
             "3": "unlit",
-            "4": "unentered",
+            "4": "unlit",
             "5": "unentered",
             "6": "unentered",
             "7": "unentered",
@@ -221,10 +193,11 @@
             "10": "unentered"
         },
         "completed_times": {
-            "1": 1745337217.9218478
+            "1": 1745380464.2655845,
+            "2": 1745380476.5872617
         },
-        "next_image_to_consume_id": 3,
-        "pieces_consumed_from_current_image": 7
+        "next_image_to_consume_id": 4,
+        "pieces_consumed_from_current_image": 3
     },
-    "save_time": 1745337289.6449435
+    "save_time": 1745380502.3864992
 }

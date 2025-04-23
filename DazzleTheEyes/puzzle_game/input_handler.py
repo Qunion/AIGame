@@ -97,94 +97,113 @@ class InputHandler:
                     self.game.display_piece_info = False
                     # print("Debug显示关闭") # Debug
 
-        # 在 Board 正在处理完成流程（移除、下落、填充）时，禁止玩家操作
-        if self.board.current_board_state != settings.BOARD_STATE_PLAYING:
-            # ... (处理 mouse up 清理状态的逻辑保持不变) ...
+        # === 关键修改：在 Board 状态不是 PLAYING 或完成动画状态下，屏蔽玩家操作 ===
+        # Allow mouse up event processing to clean up dragging state even if not PLAYING/ANIMATING
+        # Also allow event handling by the active animation
+        if self.board.current_board_state != settings.BOARD_STATE_PLAYING and \
+           self.board.current_board_state != settings.BOARD_STATE_COMPLETION_ANIMATING:
+            # Process mouse up to stop dragging if state changed mid-drag
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                self._handle_mouse_up(event) # <-- 将 event 传递进去
-            return # 屏蔽输入
+                self._handle_mouse_up(event) # <-- Pass event
+            # For any other event in this state, return False to indicate not handled by playing input
+            return # Shield input
 
+        # === 关键修改：在 完成动画状态下，将事件传递给动画处理 ===
+        if self.board.current_board_state == settings.BOARD_STATE_COMPLETION_ANIMATING:
+             # During animation, player input is mostly shielded, BUT the animation itself needs to handle input for dismissal.
+             # Pass the event to the active animation instance.
+             if hasattr(self.game, 'active_animation') and self.game.active_animation:
+                  # The animation's handle_event method should return True if it consumes the event (e.g., click to dismiss)
+                  if self.game.active_animation.handle_event(event):
+                       return # Event was handled by the animation.
+
+             # Even if the event was not handled by the animation, shield other playing input logic
+             # Allow mouse up event processing to clean up dragging state if it ended here (unlikely if drag started in PLAYING)
+             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                 self._handle_mouse_up(event) # <-- Pass event
+             # For any other event in this state (if not handled by animation), return False to indicate not handled by playing input
+             return # Shield input
+
+
+        # If we reach here, Board state is PLAYING. Process regular input.
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1: # 左键点击
-                self._handle_mouse_down(event) # <-- 将 event 传递进去
+                self._handle_mouse_down(event) # <-- Pass event
         elif event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1: # 左键释放
-                self._handle_mouse_up(event) # <-- 将 event 传递进去
+                self._handle_mouse_up(event) # <-- Pass event
         elif event.type == pygame.MOUSEMOTION:
-            self._handle_mouse_motion(event) # <-- 将 event 传递进去
+            self._handle_mouse_motion(event) # <-- Pass event
 
 
-    # def _handle_mouse_down(self, mouse_pos):
-    def _handle_mouse_down(self, event): # <-- 新的方法签名
-        """处理鼠标左键按下事件"""
-        # event 参数现在包含了 pos 和 button 等信息
-        mouse_pos = event.pos # <-- 从 event 中获取 mouse_pos
+    # def _handle_mouse_down(self, mouse_pos): # Old signature
+    def _handle_mouse_down(self, event): # <-- New method signature
+        """Handles mouse left button down event."""
+        # event parameter now contains pos, button, etc.
+        mouse_pos = event.pos # <-- Get mouse_pos from event
 
-        # 在 Board 正在处理完成流程时，已经在 _handle_playing_input 中检查并返回了，这里无需重复检查
-        # if self.board.current_board_state != settings.BOARD_STATE_PLAYING:
-        #     return
+        # Board state check already happened in _handle_playing_input.
 
-        self.mouse_down_pos = mouse_pos # 记录按下时的鼠标像素位置
+        self.mouse_down_pos = mouse_pos # Record pixel position of mouse down
 
-        # 检查是否点击了图库图标按钮
+        # Check if the gallery icon button was clicked
         if hasattr(self.game, 'gallery_icon_button') and self.game.gallery_icon_button:
-            # 将完整的 event 对象传递给按钮处理
-            # Button.handle_event 会检查是否点击，并执行回调
-            # 如果 Button 处理了事件，返回 True
-            # 我們在這裡只關心 MouseButtonDown 事件 (已在外層篩選)
-            # 移除创建 fake_event 和检查 hasattr(event, ...) 的逻辑
-            if self.game.gallery_icon_button.handle_event(event): # <-- 将真实的 event 传递给按钮处理
-                # 如果图库按钮处理了点击事件，返回，不再处理拼盘逻辑
-                # print("图库按钮点击事件已处理。") # Debug
-                return # 事件已被消耗
+            # Pass the complete event object to the button handler
+            # Button.handle_event checks for click and executes callback
+            # If Button handles the event, it returns True
+            # We only care about MouseButtonDown here (already filtered outside)
+            if self.game.gallery_icon_button.handle_event(event): # <-- Pass the actual event to the button handler
+                # If gallery button handled the click, return. Do not process board logic.
+                # print("Gallery button click event handled.") # Debug
+                return # Event consumed
 
-        # 如果点击未被图库按钮处理，则继续处理拼盘点击逻辑
-        self.mouse_down_grid_pos = utils.screen_to_grid(mouse_pos) # 记录按下时的网格位置
+        # If the click was not handled by the gallery button, continue with board click logic
+        self.mouse_down_grid_pos = utils.screen_to_grid(mouse_pos) # Record grid position of mouse down
 
-        # 将像素坐标转换为网格坐标
+        # Convert pixel coordinates to grid coordinates
         grid_pos = utils.screen_to_grid(mouse_pos)
         r, c = grid_pos
 
-        # 检查点击位置是否在拼盘范围内
-        if grid_pos == (-1, -1): # 不在拼盘范围内
-            # 如果当前有选中的碎片 (点击交换模式下)，点击空白区域取消选中
+        # Check if click position is within board boundaries
+        if grid_pos == (-1, -1): # Outside board
+            # If a piece is currently selected (in click-swap mode), click in empty area cancels selection
             if self.board.selected_piece:
-                 self.board.unselect_piece() # 通知board取消选中
-            return # 点击在拼盘外，不处理
+                 self.board.unselect_piece() # Notify board to unselect
+            return # Click outside board, do not process
 
-        # 点击位置在拼盘范围内 (grid_pos is valid)
+        # Click position is within board boundaries (grid_pos is valid)
         clicked_piece = self.board.grid[r][c]
 
         if clicked_piece:
-            # 如果点击位置有碎片，标记可能开始拖拽
-            # 将点击的碎片赋值给 dragging_piece
+            # If there's a piece at the clicked position, mark it as potentially starting a drag
+            # Assign the clicked piece to dragging_piece
             self.dragging_piece = clicked_piece
             self.drag_start_grid_pos = (r, c)
-            self.last_processed_grid_pos = (r, c) # 记录拖拽开始时的网格位置，用于后续拖拽交换判断
+            self.last_processed_grid_pos = (r, c) # Record grid position at start of drag, used for subsequent drag-swap checks
 
-            # 计算拖拽时的鼠标偏移量 (如果需要让碎片中心不完全跟随鼠标)
+            # Calculate mouse offset from piece center for dragging (if needed)
             # self.drag_offset_from_center = (mouse_pos[0] - clicked_piece.rect.centerx, mouse_pos[1] - clicked_piece.rect.centery)
 
-            # 注意：在这里不立即调用 board.start_dragging 或 select_piece
-            # 等待 MOUSEMOTION (判断拖拽) 或 MOUSEBUTTONUP (判断点击) 来确定具体操作
+            # Note: Do not call board.start_dragging or select_piece immediately here.
+            # Wait for MOUSEMOTION (to determine drag) or MOUSEBUTTONUP (to determine click) to decide the specific operation.
 
         else:
-            # 如果点击位置没有碎片 (空槽位)
-            # 并且当前有选中的碎片 (点击交换模式下)，则取消选中
+            # If there is no piece at the clicked position (empty slot)
+            # And a piece is currently selected (in click-swap mode), unselect it
             if self.board.selected_piece:
                  self.board.unselect_piece()
-            # 如果没有选中的碎片，点击空位不触发任何操作
+            # If no piece is selected, clicking an empty slot triggers no action
 
 
-    def _handle_mouse_up(self, event): # <-- 新的方法签名
-        """处理鼠标左键释放事件"""
-        mouse_pos = event.pos # <-- 从 event 中获取 mouse_pos
+    def _handle_mouse_up(self, event): # <-- New method signature
+        """Handles mouse left button release event."""
+        mouse_pos = event.pos # <-- Get mouse_pos from event
 
-        # 如果鼠标按下位置无效，或者 Board 状态不允许操作，不处理后续逻辑
-        # 这个检查在 _handle_playing_input 已经处理了 Board 状态，但是 mouse_down_pos 仍然需要检查是否有效
+        # If mouse down position was invalid, or Board state disallowed operation, do not process further logic
+        # Board state check is handled in _handle_playing_input, but mouse_down_pos still needs check.
         if self.mouse_down_pos == (-1, -1):
-            # ... (清理状态的逻辑保持不变) ...
+            # ... (Cleanup state logic remains the same) ...
             self.is_dragging = False # Ensure dragging stops if mouse_down was invalid
             if self.dragging_piece:
                 self.board.stop_dragging()
@@ -193,172 +212,173 @@ class InputHandler:
             self.last_processed_grid_pos = (-1, -1)
             self.mouse_down_grid_pos = (-1, -1) # Ensure mouse_down_grid_pos is also reset
             self.mouse_down_pos = (-1, -1) # Ensure mouse_down_pos is also reset
-            return # 无效的 mouse down 状态
+            return # Invalid mouse down state
 
 
-        # 计算鼠标按下和释放位置的距离
+        # Calculate distance between mouse down and up positions
         click_distance = math.dist(self.mouse_down_pos, mouse_pos)
 
-        # 释放时所在的网格位置
+        # Grid position at release point
         release_grid_pos = utils.screen_to_grid(mouse_pos)
         release_r, release_c = release_grid_pos
 
 
         if self.is_dragging:
-            # 如果正在拖拽中释放鼠标
-            self.is_dragging = False # 退出拖拽状态
+            # If releasing mouse while dragging
+            self.is_dragging = False # Exit dragging state
 
             if self.dragging_piece:
-                self.board.stop_dragging() # 通知board停止拖拽状态，碎片归位到其当前网格位置
+                self.board.stop_dragging() # Notify board to stop dragging state, piece snaps back to its current grid position
 
-            # 清除拖拽相关的状态变量
+            # Clear drag-related state variables
             self.dragging_piece = None
             self.drag_start_grid_pos = (-1, -1)
             self.last_processed_grid_pos = (-1, -1)
 
-            # 拖拽结束后的检查完成已在每次拖拽交换时触发，这里不再重复检查
+            # Completion check after drag-swap is triggered in board.swap_pieces, not here.
 
-        # 如果不是拖拽 (鼠标移动距离小于阈值)，这是一个单纯的点击
+        # If not dragging (mouse moved less than threshold), this is a simple click
         elif click_distance < settings.DRAG_THRESHOLD:
-             # 这是一个点击事件
-             # 检查点击释放位置是否在拼盘范围内进行点击交换处理
-            if release_grid_pos != (-1, -1): # 在拼盘范围内
-                 # 如果点击释放位置有碎片
+             # This is a click event
+             # Check if click release position is within board for click-swap processing
+            if release_grid_pos != (-1, -1): # Within board
+                 # If there is a piece at the click release position
                  clicked_piece = self.board.grid[release_r][release_c]
                  if clicked_piece:
                       self._handle_click_swap(clicked_piece, release_grid_pos)
                  else:
-                      # 如果点击释放位置没有碎片，并且当前有选中的碎片，取消选中
+                      # If no piece at click release position, and a piece is currently selected, unselect it
                       if self.board.selected_piece:
                            self.board.unselect_piece()
-            else: # 点击释放位置在拼盘外
-                 # 如果当前有选中的碎片，点击拼盘外取消选中
+            else: # Click release position is outside board
+                 # If a piece is currently selected, clicking outside the board cancels selection
                  if self.board.selected_piece:
                       self.board.unselect_piece()
 
 
-        # 重置鼠标按下位置记录
+        # Reset mouse down position records
         self.mouse_down_pos = (-1, -1)
         self.mouse_down_grid_pos = (-1, -1)
 
 
-    def _handle_mouse_motion(self, event):#这段代码是一个名为 _handle_mouse_motion 的方法，
-        # 它用于处理鼠标移动事件。这个方法的目的是在鼠标移动时检测是否应该开始或继续一个拖拽操作，
-        # 以及在拖拽过程中如何处理碎片的位置更新。
-        # 这个方法的主要逻辑如下：
+    def _handle_mouse_motion(self, event):
         """
-        处理鼠标移动事件。
+        Handles mouse motion event.
 
         Args:
-            event (pygame.event.Event): 鼠标移动事件对象。
+            event (pygame.event.Event): Mouse motion event object.
         """
-        # 确保鼠标左键是按下的，并且 Board 状态允许操作 (拖拽只能在 PLAYING 状态)
-        if not pygame.mouse.get_pressed()[0] or self.board.current_board_state != settings.BOARD_STATE_PLAYING:
-             # 如果鼠标左键没有按下，或者 Board 状态不允许，并且我们之前处于拖拽状态，需要清理
+        # Ensure left mouse button is pressed and Board state allows operation (dragging only in PLAYING)
+        # Board state check already happened in _handle_playing_input.
+        # Just check if left button is pressed.
+        if not pygame.mouse.get_pressed()[0]:
+             # If left mouse button is not pressed, and we were dragging, clean up
              if self.is_dragging:
-                 # print("Board 状态不允许或鼠标释放，停止拖拽。") # Debug
-                 self.board.stop_dragging() # 通知 Board 停止拖拽状态
+                 # print("Mouse button released during motion, stopping drag.") # Debug
+                 self.board.stop_dragging() # Notify Board to stop dragging state
                  self.is_dragging = False
                  self.dragging_piece = None
                  self.drag_start_grid_pos = (-1, -1)
                  self.last_processed_grid_pos = (-1, -1)
-             return # 不处理移动事件
+             return # Do not process motion event
 
-        # 获取当前的鼠标像素位置
+        # Get current mouse pixel position
         mouse_pos = event.pos
 
-        # 检查是否应该开始拖拽
-        # 只有当鼠标左键在 Board 区域某个碎片上按下 (self.dragging_piece 被临时赋值)，
-        # 且鼠标移动距离超过阈值时，才进入正式拖拽状态。
+        # Check if dragging should start
+        # Only enter formal dragging state if left mouse button was pressed on a piece (self.dragging_piece is temporarily assigned),
+        # and mouse has moved beyond the threshold.
         if not self.is_dragging and self.mouse_down_pos != (-1, -1) and self.dragging_piece is not None:
              move_distance = math.dist(self.mouse_down_pos, mouse_pos)
              if move_distance >= settings.DRAG_THRESHOLD:
-                 # 移动距离超过阈值，正式进入拖拽状态
+                 # Moved beyond threshold, officially enter dragging state
                  self.is_dragging = True
-                 # print(f"开始正式拖拽，起始网格: {self.drag_start_grid_pos}") # Debug
-                 # 通知board该碎片正在被拖拽 (用于可能的视觉效果)
-                 self.board.start_dragging(self.dragging_piece) # 调用board的方法启动拖拽状态
+                 # print(f"Starting formal drag, initial grid: {self.drag_start_grid_pos}") # Debug
+                 # Notify board that this piece is being dragged (for potential visual effects)
+                 self.board.start_dragging(self.dragging_piece) # Call board method to start dragging state
 
-                 # 如果之前有选中的碎片 (点击交换模式)，取消选中
+                 # If a piece was previously selected (click-swap mode), unselect it
                  if self.board.selected_piece:
                       self.board.unselect_piece()
 
-                 # 初始化上一次处理的网格位置为拖拽开始时的网格位置
+                 # Initialize the last processed grid position to the starting grid position of the drag
                  self.last_processed_grid_pos = self.drag_start_grid_pos
 
 
-        # 如果已经处于拖拽状态
+        # If already in dragging state
         if self.is_dragging and self.dragging_piece:
-            # 更新正在拖拽碎片的屏幕位置，使其中心跟随鼠标
-            # 这只是视觉上的跟随，碎片的 current_grid_row/col 和在 grid 数组中的位置只在交换时更新
-            self.dragging_piece.rect.center = mouse_pos
+            # Update the screen position of the dragging piece, centering it on the mouse
+            # This is just visual following, the piece's current_grid_row/col and position in the grid array are only updated during swap.
+            # Apply drag offset if needed:
+            # self.dragging_piece.rect.center = (mouse_pos[0] - self.drag_offset_from_center[0], mouse_pos[1] - self.drag_offset_from_center[1])
+            self.dragging_piece.rect.center = mouse_pos # Piece center follows mouse directly
 
-            # 获取鼠标当前所在的网格位置
+            # Get the grid position the mouse is currently over
             current_grid_pos = utils.screen_to_grid(mouse_pos)
             current_r, current_c = current_grid_pos
 
-            # 检查当前网格位置是否在板子上，并且与上一次进行交换/处理的位置不同
-            # 只有当鼠标移动到 *新* 的网格单元时，才考虑交换
-            if (current_grid_pos != (-1, -1) and # 鼠标在板子上
-                current_grid_pos != self.last_processed_grid_pos): # 鼠标进入了新的网格单元
+            # Check if the current grid position is on the board AND different from the last position processed for swap/check
+            # Only consider swapping when the mouse moves into a *new* grid cell.
+            if (current_grid_pos != (-1, -1) and # Mouse is on the board
+                current_grid_pos != self.last_processed_grid_pos): # Mouse entered a new grid cell
 
-                # 获取拖拽中的碎片当前所在的网格位置 (这是它在 grid 数组中的逻辑位置)
-                # 注意：这个位置可能会在拖拽过程中因为快速交换而改变
+                # Get the current grid position of the piece being dragged (its logical position in the grid array)
+                # Note: This position might have changed during dragging due to quick swaps
                 dragging_piece_current_grid_pos = (self.dragging_piece.current_grid_row, self.dragging_piece.current_grid_col)
 
-                # 只有当鼠标进入的新网格位置与拖拽碎片当前所在的网格位置不同时，才进行交换
-                # 理论上，如果我们只在进入新单元时检查，且上一次处理位置更新正确，这个条件总是满足的，但作为安全检查也可以保留
+                # Check if the mouse's new grid position is different from the dragged piece's current grid position
+                # (This is usually true if current_grid_pos != self.last_processed_grid_pos, but double-checking)
                 if current_grid_pos != dragging_piece_current_grid_pos:
 
-                    # 尝试与新位置的碎片进行交换
-                    # swap_pieces 方法会处理目标位置是空的情况
+                    # Attempt to swap with the piece at the new grid position
+                    # swap_pieces method handles the case where the target position is empty
                     swap_successful = self.board.swap_pieces(dragging_piece_current_grid_pos, current_grid_pos)
 
                     if swap_successful:
-                        # 交换成功后，拖拽中的 piece 对象（现在是目标位置的那个）已经去了 dragging_piece_current_grid_pos
-                        # 而原来的 dragging_piece (现在是 piece1) 去了 current_grid_pos
-                        # 我们需要更新 self.dragging_piece 引用到那个去了 current_grid_pos (新位置) 的碎片对象
-                        # 这是关键步骤，实现了拖拽过程中“手持”碎片身份的转移
+                        # If swap was successful, the piece object previously at dragging_piece_current_grid_pos
+                        # is now at current_grid_pos. self.dragging_piece needs to reference this object.
+                        # This is the crucial step that transfers the identity of the "held" piece during drag.
+                        # The piece object that *was* self.dragging_piece before the swap is now at dragging_piece_current_grid_pos.
                         self.dragging_piece = self.board.grid[current_r][current_c]
 
-                        # 更新上一次处理的网格位置为刚刚进行交换的位置
-                        self.last_processed_grid_pos = current_grid_pos # 更新记录
+                        # Update the last processed grid position to the position where the swap just occurred
+                        self.last_processed_grid_pos = current_grid_pos # Update record
 
-                        # 每次交换后立即检查是否有图片完成 (已在 board.swap_pieces 中调用)
+                        # Completion check after each swap is already triggered in board.swap_pieces.
                         # self.board.check_and_process_completion()
 
-                    # 如果交换失败 (例如 Board 状态突然不允许)，则 last_processed_grid_pos 不更新
+                    # If swap failed (e.g., Board state suddenly disallowed), last_processed_grid_pos is not updated.
                 else:
-                     # 鼠标在同一个网格内移动（即使是拖拽中），不触发交换。last_processed_grid_pos 保持不变。
-                     pass # No action needed if mouse is in the same grid cell as the last processed one
-
+                     # Mouse is moving within the same grid cell as the last processed one (even while dragging).
+                     # No swap is triggered. last_processed_grid_pos remains unchanged.
+                     pass # No action needed
 
     def _handle_click_swap(self, clicked_piece, grid_pos):
-        """处理点击交换逻辑"""
-        # 确保 Board 状态允许点击交换 (已在外层 _handle_playing_input 检查)
+        """Handles click-swap logic."""
+        # Board state check already handled in _handle_playing_input.
         # if self.board.current_board_state != settings.BOARD_STATE_PLAYING:
-        #      return # 屏蔽输入
+        #      return # Shield input
 
         if self.board.selected_piece is None:
-            # 如果当前没有选中的碎片，则选中当前点击的碎片
+            # If no piece is currently selected, select the clicked piece
             self.board.select_piece(clicked_piece)
-            # print(f"选中碎片: 图片ID {clicked_piece.original_image_id}, 原始位置 ({clicked_piece.original_row},{clicked_piece.original_col}), 当前位置 ({grid_pos[0]},{grid_pos[1]})") # Debug
+            # print(f"Selected piece: Image ID {clicked_piece.original_image_id}, Original position ({clicked_piece.original_row},{clicked_piece.original_col}), Current position ({grid_pos[0]},{grid_pos[1]})") # Debug
         else:
-            # 如果已有选中的碎片
+            # If a piece is already selected
             selected_pos = (self.board.selected_piece.current_grid_row, self.board.selected_piece.current_grid_col)
-            # 如果点击的是另一个碎片
+            # If the clicked piece is different from the selected piece
             if self.board.selected_piece != clicked_piece:
-                 # 交换这两个碎片
-                 print(f"点击交换: ({selected_pos[0]},{selected_pos[1]}) <-> ({grid_pos[0]},{grid_pos[1]})") # Debug
+                 # Swap these two pieces
+                 print(f"Click swap: ({selected_pos[0]},{selected_pos[1]}) <-> ({grid_pos[0]},{grid_pos[1]})") # Debug
                  swap_successful = self.board.swap_pieces(selected_pos, grid_pos)
 
-                 # 交换完成后，取消选中状态，无论交换是否真的发生 (例如点了自己)
+                 # After attempting swap, unselect the piece, regardless of whether swap actually occurred (e.g., clicked on itself)
                  self.board.unselect_piece()
 
-                 # 如果交换成功，检查是否有图片完成 (已在 board.swap_pieces 中调用)
+                 # If swap was successful, check for completed picture (already triggered in board.swap_pieces)
                  # if swap_successful:
                  #      self.board.check_and_process_completion()
             else:
-                 # 如果点击的是同一个已选中碎片，则取消选中
-                 # print("取消选中碎片。") # Debug
+                 # If the same selected piece is clicked, unselect it
+                 # print("Unselecting piece.") # Debug
                  self.board.unselect_piece()

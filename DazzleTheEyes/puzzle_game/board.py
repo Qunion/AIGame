@@ -1,7 +1,6 @@
 # board.py
 # 管理拼盘的状态、碎片布局、交换、完成检测、动态填充及动画
 
-# from ast import Return # 这个导入似乎没用到，可以移除
 import pygame
 import settings
 import random # 用于随机打乱碎片
@@ -12,6 +11,9 @@ from piece import Piece # 导入Piece类
 # from main import Game # Board 可能需要 Game 实例来触发状态改变 (如图片完成提示)
 import utils # 导入工具函数
 import image_manager # 导入 ImageManager 模块, 用于加载图片
+# === 新增：导入 CompletionAnimation 类 ===
+# Note: Need to import the class, but Game is responsible for creating/managing the instance.
+# import completion_animation # No, Game creates it. Board only needs to know the state.
 
 
 class Board:
@@ -23,12 +25,13 @@ class Board:
             image_manager (ImageManager): 图像管理器实例
             saved_game_data (dict, optional): 从存档中加载的游戏状态数据。如果为None，则进行初始填充。默认为None。
         """
-        # Check if image_manager is provided and has expected attributes
+        # Check if image_manager is provided and has expected attributes for Board's *initialization* needs
+        # === 关键修改：移除 Board 初始化时对 get_full_processed_image 和 get_original_full_image 的检查 ===
         if not hasattr(image_manager, 'get_initial_pieces_for_board') or \
            not hasattr(image_manager, 'pieces_surfaces') or \
            not hasattr(image_manager, 'game') or \
            not hasattr(image_manager, 'image_logic_dims') or \
-           not hasattr(image_manager, 'set_image_state'): # Add check for set_image_state
+           not hasattr(image_manager, 'set_image_state'): # Keep checks for methods Board *does* need
              raise TypeError("传入的image_manager参数缺少必要的方法或属性")
         self.image_manager = image_manager
         # self.game = image_manager.game # 持有Game实例引用，通过ImageManager获取
@@ -45,7 +48,7 @@ class Board:
         # 选中碎片的视觉反馈 Rect (直接绘制即可，不与碎片对象关联)
         self.selection_rect = None
 
-        # Board内部状态，管理完成 -> 移除 -> 下落 -> 填充 -> 区域升级流程
+        # Board内部状态，管理完成 -> 移除 -> 下落 -> 填充 -> 区域升级 -> 动画流程
         # 读档时，Board 状态应该回到 PLAYING
         self.current_board_state = settings.BOARD_STATE_PLAYING
         self._completed_image_id_pending_process = None # 完成的图片ID，等待处理
@@ -87,7 +90,7 @@ class Board:
                  # 触发致命错误，通知 Game 退出
                  if hasattr(self.image_manager.game, '_display_fatal_error'):
                      self.image_manager.game._display_fatal_error("配置错误: PLAYABLE_AREA_CONFIG 缺少键 0")
-                     # _display_fatal_error 应该在 Game 中处理退出
+                     # _display_fatal_error should handle exiting the game loop
                  else:
                     import sys; pygame.quit(); sys.exit()
 
@@ -101,8 +104,6 @@ class Board:
 
 
         print(f"Board 初始化完成. 当前状态: {self.current_board_state}. Group大小: {len(self.all_pieces_group) if isinstance(self.all_pieces_group, pygame.sprite.Group) else 'N/A'}") # Debug
-
-
     # 新增内部方法，用于加载 Board 自身状态
     def _load_state_from_data(self, board_state_data):
         """
@@ -393,9 +394,9 @@ class Board:
                            (orig_r, orig_c) in self.image_manager.pieces_surfaces[img_id]:
                              piece_surface = self.image_manager.pieces_surfaces[img_id][(orig_r, orig_c)]
                              # --- 关键调试：检查获取到的 Piece Surface ---
-                             if not isinstance(piece_surface, pygame.Surface):
-                                print(f"致命错误: Board: ImageManager 返回的对象不是 Surface! 图片ID {img_id}, 原始 ({orig_r},{orig_c}). 类型: {type(piece_surface)}") # Debug
-                                piece_surface = None # Treat as not available
+                             if piece_surface is None or not isinstance(piece_surface, pygame.Surface):
+                                # print(f"致命错误: Board: ImageManager 返回的对象不是 Surface 或 None! 图片ID {img_id}, 原始 ({orig_r},{orig_c}). 类型: {type(piece_surface)}") # Debug
+                                piece_surface = None # Treat as not available or invalid
 
                         if piece_surface is None:
                              # If surface is not available, try to queue it for high-priority loading
@@ -571,7 +572,7 @@ class Board:
         self.selection_rect = piece.rect.inflate(border_thickness * 2, border_thickness * 2)
         # self.selection_rect.topleft = (piece.rect.left - border_thickness, piece.rect.top - border_thickness) # This is calculated in draw as well to stay in sync
 
-        # print(f"选中碎片: 图片ID {piece.original_image_id}, 原始位置 ({piece.original_row},{piece.original_col}), 当前位置 ({piece.current_grid_row},{piece.current_grid_col})") # 调试信息
+        # print(f"选中碎片: 图片ID {piece.original_image_id}, 原始位置 ({piece.original_row},{piece.original_col}), 当前位置 ({grid_pos[0]},{grid_pos[1]})") # 调试信息
 
 
     def unselect_piece(self):
@@ -672,7 +673,6 @@ class Board:
         返回已完成的图片ID，如果没有则返回None。
         如果找到，记录完成区域的左上角物理网格位置在 self._completed_area_start_pos。
         """
-        print("Board: 检查拼盘中是否有完整的图片块...") # Debug informatio
         # 遍历所有可能的物理网格位置作为完成块的左上角
         # 这些位置必须位于当前可放置区域内
         # 物理起始行的范围: 从 self.playable_offset_row 到 self.playable_offset_row + self.playable_rows - 1
@@ -755,104 +755,165 @@ class Board:
 
         return None # 遍历所有可能位置后没有找到完整的图片
 
+
     def _process_completed_picture(self):
         """
         处理已完成图片的流程状态机。
         根据 current_board_state 执行相应的步骤。
         这个方法在 Board 的 update 中被调用。
         """
-        # print(f"Board: _process_completed_picture: 当前状态: {self.current_board_state}") # Debug - remove if too spammy
+        # Note: Transitions from PIECES_FALLING -> PENDING_FILL are handled in Board.update
 
         if self.current_board_state == settings.BOARD_STATE_PICTURE_COMPLETED:
-            # 状态：图片已检测完成，刚进入处理流程
-            print(f"Board State: PICTURE_COMPLETED -> REMOVING_PIECES for image {self._completed_image_id_pending_process}") # 调试信息
-            self.current_board_state = settings.BOARD_STATE_REMOVING_PIECES
-            # 移除碎片 (瞬间完成)
-            self.remove_completed_pieces()
-            # 移除完成后，立即切换到下落状态并启动下落动画
-            self.current_board_state = settings.BOARD_STATE_PIECES_FALLING
-            self.initiate_fall_down_pieces()
+            # 状态：图片完成检测完毕，等待处理。
+            # 尝试触发完成动画。
+            print(f"Board State: PICTURE_COMPLETED - Attempting to start animation for image {self._completed_image_id_pending_process} at {self._completed_area_start_pos}.") # 调试信息
 
+            # === 关键修改：调用 Game 方法请求启动动画，并根据返回值决定后续流程 ===
+            # Game 将负责检查是否能启动动画，如果能，Game 会将 Board 状态改为 COMPLETION_ANIMATING。
+            if hasattr(self.image_manager.game, 'start_completion_animation'):
+                 # 传递完成的图片ID和完成区域的起始网格坐标
+                 animation_started = self.image_manager.game.start_completion_animation(
+                     self._completed_image_id_pending_process,
+                     self._completed_area_start_pos
+                 )
 
-        elif self.current_board_state == settings.BOARD_STATE_REMOVING_PIECES:
-            # 状态：碎片正在移除动画中 (如果实现了的话)
-            # print("Board State: REMOVING_PIECES - waiting for animation (if any)...") # Debug
-            pass # Wait for potential removal animation
+                 if animation_started:
+                      # 动画已由 Game 成功启动。Game 已经将 Board 状态设置为 COMPLETION_ANIMATING。
+                      print("Board: 完成动画已由 Game 启动，等待动画结束。") # 调试信息
+                      # Board 的这个方法立即返回，当前 Board 状态是 COMPLETION_ANIMATING，不会继续处理。
+                      return # 退出状态机处理，等待 Game 调用 resume_completion_process_after_animation
 
+                 else:
+                      # Game 无法启动动画（例如 Game 状态不正确，或动画资源缺失等）。
+                      print("Board: Game 无法启动完成动画。跳过动画流程。") # 调试信息
+                      # Board 立即将状态转移到移除碎片，继续后续流程。
+                      self.current_board_state = settings.BOARD_STATE_REMOVING_PIECES
+                      # Fall through to the next state processing within this method (if state is in the list below).
+                      # Or explicitly call the next step if we want it to happen immediately in this update cycle:
+                      # self.remove_completed_pieces() # 移除碎片
+                      # self.current_board_state = settings.BOARD_STATE_PIECES_FALLING # 转移到下落状态
+                      # self.initiate_fall_down_pieces() # 启动下落
+                      # For now, let the state transition handle it below if state is in the list.
 
-        elif self.current_board_state == settings.BOARD_STATE_PIECES_FALLING:
-             # 状态：碎片正在下落动画中
-             # 碎片下落动画的更新由 Piece 的 update 方法处理，并在 Board 的 update 中调用 group.update
-             # 状态切换到 PENDING_FILL 在 Board.update 中检查 is_any_piece_falling() 实现
-             pass # Wait for falling animation to complete
-
-
-        elif self.current_board_state == settings.BOARD_STATE_PENDING_FILL:
-            # 状态：碎片下落完成，等待填充或升级
-            print("Board State: PENDING_FILL -> Checking for Upgrade...") # 调试信息
-
-            # === 关键修改：检查是否需要升级可放置区域 ===
-            # Add print before calling _get_next_playable_area_config
-            print(f"Board: PENDING_FILL: 调用 _get_next_playable_area_config (unlocked={self.unlocked_pictures_count}, current area={self.playable_rows}x{self.playable_cols})...") # Debug
-            next_upgrade_config = self._get_next_playable_area_config()
-            # Add print after calling _get_next_playable_area_config
-            print(f"Board: PENDING_FILL: _get_next_playable_area_config 返回: {next_upgrade_config}") # Debug
-
-            if next_upgrade_config:
-                # 需要升级
-                print(f"Board State: PENDING_FILL -> UPGRADING_AREA (Next config: {next_upgrade_config})") # Debug
-                self.current_board_state = settings.BOARD_STATE_UPGRADING_AREA # 切换到升级状态
-                self._upgrade_target_config = next_upgrade_config # Store target config
-                # 执行区域升级逻辑 (目前是瞬间完成)
-                print("Board: PENDING_FILL: 进行区域升级...") # Debug
-                self._upgrade_playable_area(next_upgrade_config)
-                self._upgrade_target_config = None # Clear target config after use
-                # 区域升级和碎片移动完成后，切换到 PLAYING 状态
-                # fill_new_pieces 会在 BOARD_STATE_PLAYING 的 update 循环中被 check_and_process_completion 触发吗？
-                # No, fill_new_pieces is called explicitly after the state transition completes the process.
-                # Let's trigger fill *after* upgrade, and then transition to PLAYING.
-                print("Board: PENDING_FILL: 区域升级完成，进行填充新区域...") # Debug
-                self.fill_new_pieces() # Fill the new larger area
-                print("Board: PENDING_FILL: 填充完成。切换回 PLAYING。") # Debug
-                self.current_board_state = settings.BOARD_STATE_PLAYING # Final transition to PLAYING
 
             else:
-                # 不需要升级，直接填充新碎片
-                print("Board State: PENDING_FILL -> No upgrade needed. Proceeding with fill.") # Debug
-                # Add print before calling fill_new_pieces
-                print("Board: PENDING_FILL: 无需升级区域。进行填充。") # Debug
-                self.fill_new_pieces() # Fill the empty slots in the current area
-                # Add print after calling fill_new_pieces
-                print("Board: PENDING_FILL: 填充完成。切换回 PLAYING。") # Debug
-                # 填充完成后，切换回 PLAYING 状态
+                 # 如果 Game 实例缺少 required method (致命配置错误)
+                 print("致命错误: Game 实例缺少 start_completion_animation 方法。无法处理完成动画或跳过。") # 调试信息
+                 # 尝试直接进行下一步以避免卡住，但记录为致命错误。
+                 self.current_board_state = settings.BOARD_STATE_REMOVING_PIECES
+                 # Fall through to the next state processing.
+
+
+        # Processes other states in the completion flow sequence:
+        # This block of processing should run if the state is NOT COMPLETION_ANIMATING (checked in Board.update)
+        # AND the state is one of the following:
+        if self.current_board_state == settings.BOARD_STATE_REMOVING_PIECES:
+             # 状态：正在移除碎片。
+             # 移除碎片是瞬时完成的。
+             # print("Board State: REMOVING_PIECES - executing removal...") # 调试信息
+             # remove_completed_pieces 方法由 resume_completion_process_after_animation
+             # 或跳过动画逻辑在转移到此状态时调用。
+             # 所以在此方法内，如果状态是 REMOVING_PIECES，移除应该已经发生。
+             # 立即转移到下一状态。
+             # 移除碎片后，下一个状态是碎片下落。
+             self.current_board_state = settings.BOARD_STATE_PIECES_FALLING
+             # 启动下落动画 (initiate_fall_down_pieces 在 resume_completion_process_after_animation 中调用)
+             # Let's ensure it's called if state transitions to PIECES_FALLING here directly from REMOVING_PIECES
+             # as a fallback, although resume should handle the primary transition.
+             # Let's move initiate_fall_down_pieces to resume_completion_process_after_animation and skip logic.
+             # If we are in REMOVING_PIECES state *here*, it means remove happened, so transition to FALLING is correct.
+             # The fall will be initiated in the next update cycle when state is FALLING and Board.update calls initiate_fall_down_pieces (if not already falling).
+             pass # State transition handles the flow
+
+
+        # State: PIECES_FALLING transition to PENDING_FILL is handled in Board.update when is_any_piece_falling() is False.
+
+        elif self.current_board_state == settings.BOARD_STATE_PENDING_FILL:
+            # 状态：碎片下落完成，等待填充。
+            print("Board State: PENDING_FILL -> Checking for Upgrade...") # 调试信息
+
+            # === 检查是否需要升级可放置区域 ===
+            next_upgrade_config = self._get_next_playable_area_config()
+            if next_upgrade_config:
+                # 需要升级，转移到 UPGRADING_AREA 状态。
+                print(f"Board: 检测到需要升级可放置区域。进行升级。")
+                self.current_board_state = settings.BOARD_STATE_UPGRADING_AREA # 转移状态
+                self._upgrade_target_config = next_upgrade_config # 存储目标配置
+                # 立即执行升级逻辑（目前瞬时完成）。
+                self._upgrade_playable_area(next_upgrade_config)
+                self._upgrade_target_config = None # 使用后清除目标配置
+
+                # 升级后，填充新区域中的空槽位。
+                print(f"Board State: UPGRADING_AREA -> Filling new area...") # 调试信息
+                self.fill_new_pieces() # 填充新的更大的区域
+
+                # 填充后，转移回 PLAYING 状态。
+                print("Board: 区域升级和填充完成。转移回 PLAYING。") # 调试信息
                 self.current_board_state = settings.BOARD_STATE_PLAYING
 
-            # 清理完成图片的记录 (在整个完成流程结束，状态切换到 PLAYING 之后)
-            # This block should now be reached in both the upgrade and no-upgrade paths within PENDING_FILL
-            if self.current_board_state == settings.BOARD_STATE_PLAYING:
-                 self._completed_image_id_pending_process = None
-                 self._completed_area_start_pos = None
-                 # 通知 Gallery 图库需要刷新
-                 if hasattr(self.image_manager.game, 'gallery'): # 检查Game实例是否有gallery属性
-                     try:
-                         # print("Board: 通知 Gallery 更新列表...") # Debug
-                         self.image_manager.game.gallery._update_picture_list() # Update gallery list data
-                     except Exception as e:
-                         print(f"警告: Board: 无法通知 Gallery 更新列表: {e}") # Debug
+            else:
+                # 不需要升级，直接填充新碎片。
+                print("Board: 无需升级区域。进行填充。") # 调试信息
+                self.fill_new_pieces() # 填充当前区域的空槽位
+                # 填充后，转移回 PLAYING 状态。
+                print("Board: 填充完成。转移回 PLAYING。") # 调试信息
+                self.current_board_state = settings.BOARD_STATE_PLAYING
+
+            # 在填充完成并状态转移回 PLAYING 后，清除完成图片记录。
+            # 这发生在 PENDING_FILL 块逻辑的末尾。
+            self._completed_image_id_pending_process = None
+            self._completed_area_start_pos = None
+
+            # TODO: 通知 Game 或 Gallery 图库需要刷新（通过 Game）。
+            # 这个通知应该在状态为 PLAYING 且资源可用后发生。
+            if hasattr(self.image_manager.game, 'gallery'): # 检查 Game 实例是否有 gallery 属性
+                 # 更好的做法是让 Gallery 知道数据可能已过期。
+                 # 目前，调用 update_picture_list 也可以。
+                 # 需要确保 ImageManager 在 Gallery 更新之前已更新其状态。
+                 # ImageManager.set_image_state 发生在之前。
+                 # 在这里调用 gallery 更新。
+                 try:
+                     self.image_manager.game.gallery._update_picture_list() # 更新图库列表数据
+                 except Exception as e:
+                     print(f"警告: Board: 无法通知 Gallery 更新列表: {e}") # 调试信息
 
 
-        elif self.current_board_state == settings.BOARD_STATE_UPGRADING_AREA:
-             # 状态：正在执行区域升级逻辑 (目前是瞬间完成)
-             # This state handles the upgrade animation if implemented.
-             # Currently, _upgrade_playable_area is called directly from PENDING_FILL,
-             # so this state might not be active for long, or at all if upgrade is instant.
-             # If upgrade had animation, the logic to check for animation completion
-             # and transition to the next state (PENDING_FILL for fill) would be here.
-             # For now, keep it simple, the transition out happens in the PENDING_FILL block after _upgrade_playable_area is called.
-             pass # Wait for potential upgrade animation
+        # State: UPGRADING_AREA logic is handled within the PENDING_FILL block or the state machine itself.
+        # This state is also an entry/waiting state if the upgrade involved animation.
+        # If upgrade involved animation, Board.update would handle updating the animation and transitioning out of this state.
+        pass # No processing needed here if animation is handled elsewhere.
+
+
+    # New method: Called by Game after the completion animation finishes to resume the Board's completion process
+    # This method now handles the start of the sequence after animation OR skipping animation.
+    def resume_completion_process_after_animation(self):
+        """
+        由 Game 在完成动画结束（或跳过）后调用。
+        恢复图片完成处理流程，从移除碎片开始。
+        流程：移除碎片 -> 碎片下落 -> 填充 -> 区域升级（如果需要）。
+        """
+        # 确保 Board 当前状态为 完成动画状态 或 图片完成状态 (如果跳过动画)。
+        if self.current_board_state in [settings.BOARD_STATE_COMPLETION_ANIMATING, settings.BOARD_STATE_PICTURE_COMPLETED]:
+             print("Board: 完成动画结束（或跳过），恢复完成处理流程。") # 调试信息
+
+             # 转移到序列中的下一个状态：移除碎片。
+             self.current_board_state = settings.BOARD_STATE_REMOVING_PIECES
+             # 立即执行下一步（移除碎片）。
+             self.remove_completed_pieces() # 移除碎片
+
+             # 转移到下一个状态：碎片下落。
+             self.current_board_state = settings.BOARD_STATE_PIECES_FALLING
+             self.initiate_fall_down_pieces() # 启动下落动画。
+             # 流程的其余部分（等待下落、等待填充、检查升级、填充、进入 Playing）
+             # 将在后续更新中通过 _process_completed_picture 状态机处理。
+
+        else:
+             print(f"警告: Board: 尝试在意外状态 ({self.current_board_state}) 恢复完成流程。忽略。") # 调试信息
 
 
 
+    # 替换 remove_completed_pieces 方法 (根据图片的独立逻辑尺寸移除)
     def remove_completed_pieces(self):
         """根据记录的 _completed_area_start_pos 和完成图片的逻辑尺寸，从 Board 中移除已完成图片的碎片。"""
         if self._completed_area_start_pos is None or self._completed_image_id_pending_process is None:
@@ -868,6 +929,8 @@ class Board:
              # Reset pending completion state if cannot process
              self._completed_image_id_pending_process = None
              self._completed_area_start_pos = None
+             # If this happens during resume, try to return to playing? Or fatal error?
+             # For now, just print error and stop processing this specific completion.
              return # Cannot remove if logic dims are unknown
 
         img_logic_c, img_logic_r = self.image_manager.image_logic_dims[completed_image_id] # 获取完成图片的逻辑尺寸
@@ -886,7 +949,7 @@ class Board:
                     piece_to_remove = self.grid[r][c]
                     # 再次检查碎片是否属于当前完成的图片 (安全检查)
                     # 检查原始行/列是否与逻辑区域的偏移匹配
-                    if piece_to_remove and piece_to_remove.original_image_id == completed_image_id and \
+                    if piece_to_remove and isinstance(piece_to_remove, Piece) and piece_to_remove.original_image_id == completed_image_id and \
                        piece_to_remove.original_row == dr and piece_to_remove.original_col == dc:
                          pieces_to_remove_list.append(piece_to_remove)
                          self.grid[r][c] = None # 将网格位置设为 None
@@ -1002,87 +1065,37 @@ class Board:
         new_offset_row = (settings.BOARD_ROWS - new_rows) // 2
 
 
-        # 2. 移动所有现有的碎片到新区域的对应位置
-        # Iterate through the old grid and move pieces if they exist
+        # 2. 移动所有现有的碎片到新区域的对应位置 (底部左对齐)
+        # Iterate through the old grid and collect pieces
         pieces_to_move = []
+        # Iterate through the entire physical grid to find all existing pieces
         for r in range(settings.BOARD_ROWS):
              for c in range(settings.BOARD_COLS):
                   piece = self.grid[r][c]
-                  if piece is not None:
-                       # This piece is currently at physical grid (r, c)
+                  if piece is not None and isinstance(piece, Piece): # Ensure it's a valid Piece
                        pieces_to_move.append(piece) # Collect pieces
 
 
         # Temporarily clear the grid while moving
         self.grid = [[None for _ in range(settings.BOARD_COLS)] for _ in range(settings.BOARD_ROWS)]
 
-        # Calculate new positions and place pieces in the new grid
+        # Calculate the shift needed to align the old area's bottom-left with the new area's bottom-left
+        # Old bottom-left physical grid: (old_offset_row + old_rows - 1, old_offset_col)
+        # New bottom-left physical grid: (new_offset_row + new_rows - 1, new_offset_col)
+        # Row shift: (new_offset_row + new_rows - 1) - (old_offset_row + old_rows - 1)
+        row_shift = new_offset_row + new_rows - old_offset_row - old_rows
+        # Col shift: new_offset_col - old_offset_col
+        col_shift = new_offset_col - old_offset_col
+
+        # Place pieces in the new grid by applying the calculated shift to their *old* grid positions
         for piece in pieces_to_move:
              # Get piece's old physical grid position
              old_r = piece.current_grid_row
              old_c = piece.current_grid_col
 
-             # Calculate its position relative to the OLD playable area's top-left offset
-             # This is needed if the old area wasn't at (0,0) in the physical grid
-             relative_old_r = old_r - old_offset_row
-             relative_old_c = old_c - old_offset_col
-
-             # Check if the piece was actually INSIDE the OLD playable area
-             # Pieces outside the old area are NOT moved relative to the old area.
-             # They should probably stay at their absolute physical position, or maybe moved to the edge of the new area?
-             # Design says "全部已有图片保持相对位置不变，移动到左下角" - this implies only pieces *within* the old area matter for relative movement.
-             # Pieces outside should perhaps be removed? Or handled differently?
-             # Let's assume only pieces *inside* the old playable area are moved relative to it.
-             # Pieces outside the old playable area are either removed or remain in place (and might become inside the new area).
-             # Given the "all existing pieces" phrasing, perhaps *all* pieces in the grid are moved if they were within the OLD area?
-             # Let's assume for simplicity now: pieces are moved IF their old position was inside the OLD playable area.
-             # Any pieces outside the OLD playable area remain in place (if their position is still valid on the BOARD).
-
-             # Let's re-read: "全部已有图片保持相对位置不变，移动到左下角" - this likely means all pieces *that are currently on the board*
-             # and were located within the *previous* playable area rectangle should be shifted.
-             # Pieces that were outside the previous playable area should probably stay where they are, if that position is still on the board.
-             # However, the most common scenario is pieces are only ever *in* the playable area.
-             # Let's assume "全部已有图片" means all pieces currently in self.all_pieces_group (which should only be pieces in the grid).
-             # And "保持相对位置不变" means relative to some point. "移动到左下角" suggests aligning with the *new* area's bottom-left.
-
-             # Let's go with the calculation: A piece at (old_r, old_c) within the OLD area
-             # moves to (new_r, new_c) within the NEW area, keeping its relative position.
-             # relative_to_old_top_left = (old_r - old_offset_row, old_c - old_offset_col)
-             # target_new_r = new_offset_row + relative_to_old_top_left[0] # Aligning top-left
-             # target_new_c = new_offset_col + relative_to_old_top_left[1] # Aligning top-left
-
-             # To align BOTTOM-LEFT:
-             # Piece's position relative to the OLD area's BOTTOM-LEFT:
-             # relative_to_old_bottom_left_r = old_r - (old_offset_row + old_rows - 1) # Negative value
-             # relative_to_old_bottom_left_c = old_c - old_offset_col # Positive value
-             # New target position relative to the NEW area's BOTTOM-LEFT:
-             # target_new_r = (new_offset_row + new_rows - 1) + relative_to_old_bottom_left_r
-             # target_new_c = new_offset_col + relative_to_old_bottom_left_c
-
-             # Substitute and simplify:
-             # target_new_r = new_offset_row + new_rows - 1 + old_r - old_offset_row - old_rows + 1
-             # target_new_r = new_offset_row + new_rows - old_rows + old_r - old_offset_row
-             # target_new_c = new_offset_col + old_c - old_offset_col
-
-             # This formula applies to pieces that *were* in the old playable area.
-             # What about pieces *outside* the old playable area? They shouldn't move relative to the old area.
-             # If a piece's old position (old_r, old_c) was outside the old playable area, it should just stay at (old_r, old_c)
-             # UNLESS that position is now outside the BOARD or inside the new playable area.
-             # The simplest interpretation of "全部已有图片保持相对位置不变，移动到左下角" is that *all pieces currently in the grid*
-             # are conceptually part of the "puzzle block" that is being shifted.
-             # Let's apply the relative shift based on the OLD playable area's top-left, BUT then shift the *entire block*
-             # so that its bottom-left aligns with the NEW playable area's bottom-left.
-
-             # Let's calculate the shift needed to align the old area's bottom-left with the new area's bottom-left
-             # Old bottom-left physical grid: (old_offset_row + old_rows - 1, old_offset_col)
-             # New bottom-left physical grid: (new_offset_row + new_rows - 1, new_offset_col)
-             # Row shift: (new_offset_row + new_rows - 1) - (old_offset_row + old_rows - 1) = new_offset_row + new_rows - old_offset_row - old_rows
-             # Col shift: new_offset_col - old_offset_col
-
-             # Apply this shift to EVERY piece's current physical grid position (old_r, old_c)
-             # New physical grid position (new_r, new_c):
-             new_r = old_r + (new_offset_row + new_rows - old_offset_row - old_rows)
-             new_c = old_c + (new_offset_col - old_offset_col)
+             # Calculate new physical grid position by applying the shift
+             new_r = old_r + row_shift
+             new_c = old_c + col_shift
 
              # Check if the new position is still on the board
              if 0 <= new_r < settings.BOARD_ROWS and 0 <= new_c < settings.BOARD_COLS:
@@ -1100,12 +1113,16 @@ class Board:
                        pass # Piece is lost
 
              else:
-                  # Piece moved outside the board, remove it
+                  # Piece moved outside the board, remove it from the group
                   print(f"警告: Board: _upgrade_playable_area: 碎片 {piece.original_image_id}_{piece.original_row}_{piece.original_col} 从 ({old_r},{old_c}) 移动到 ({new_r},{new_c})，超出板子范围。移除。") # Debug
                   # Remove from the group if it was still there (it shouldn't be as we collected all pieces)
-                  # if piece in self.all_pieces_group:
-                  #      self.all_pieces_group.remove(piece)
-                  # Piece is lost (not placed in grid or group)
+                  # Ensure the group is valid before removing
+                  if isinstance(self.all_pieces_group, pygame.sprite.Group):
+                       if piece in self.all_pieces_group:
+                            try:
+                                self.all_pieces_group.remove(piece)
+                            except Exception as e:
+                                 print(f"致命错误: Board: 从 Group 中移除超出范围的碎片时发生异常: {e}.") # Debug
 
 
         # 3. 设置新的可放置区域尺寸和偏移 (更新 Board 属性)
@@ -1132,21 +1149,16 @@ class Board:
 
 
         for c in range(playable_col_start, playable_col_end): # 遍历可放置区域内的列
-            # bottom_row_index_to_fill 是指在当前可放置区域的这一列中，最底部的空位对应的物理行索引
-            # 它从可放置区域的底行开始向上查找
-            # Note: The empty slots are created by removing completed pieces.
-            # Pieces *above* these empty slots within the playable area need to fall down.
-            # Pieces *below* the playable area are not affected.
-            # Pieces *outside* the playable area are also not affected by this fall.
+            # bottom_row_index_to_fill is the lowest physical row index within the playable area column
+            # that is currently empty, or the bottom-most row of the playable area if it's full.
+            # This loop finds pieces from the bottom up in the playable column and shifts them down to the lowest empty slot.
 
-            # Iterate from the bottom of the playable area upwards
-            # Find pieces within this column AND within the playable rows
             pieces_in_column_within_playable_area = []
-            for r in range(playable_row_end - 1, playable_row_start - 1, -1): # 从可放置区域底行向上遍历
+            # Iterate from the bottom of the playable area upwards in the current column
+            for r in range(playable_row_end - 1, playable_row_start - 1, -1):
                  if self.grid[r][c] is not None:
                      pieces_in_column_within_playable_area.append(self.grid[r][c])
-                     self.grid[r][c] = None # 先将原位置设为None
-
+                     self.grid[r][c] = None # Clear the piece's original position
 
             # Now, refill the column from the bottom of the playable area with the collected pieces
             current_row_to_fill = playable_row_end - 1 # Start filling from the bottom row of the playable area
@@ -1177,10 +1189,11 @@ class Board:
         return False
 
 
+    # 替换 fill_new_pieces 方法 (根据可放置区域填充)
     def fill_new_pieces(self):
         """
         根据填充规则，从 image_manager 获取新碎片填充当前可放置区域内的空位。
-        同时更新新进入拼盘的图片状态为 'unlit'。
+        同时更新新进入拼盘的图片状态为 'unlit'，并启动下落动画。
         """
         print("Board: 触发填充新碎片...") # Debug
         # 统计当前可放置区域内有多少个空槽位 (即网格中为 None 的位置)
@@ -1245,17 +1258,21 @@ class Board:
 
 
                  # Assign piece to grid position (its final logical place)
-                 self.grid[r][c] = piece
-                 # Update piece's internal grid pos immediately
-                 piece.current_grid_row = r
+                 self.grid[r][c] = piece # Place piece in grid at its final destination
+                 piece.current_grid_row = r # Update piece's internal grid pos immediately
                  piece.current_grid_col = c
 
                  # Set the piece's rect to the *initial* screen position for animation
                  piece.rect.topleft = (initial_piece_screen_x, initial_piece_screen_y) # Start position for fall animation
 
                  # Tell the piece its *target* final position and start the animation
-                 piece.fall_target_y = target_screen_y
-                 piece.is_falling = True # Start falling animation
+                 # Piece.set_grid_position sets the internal current_grid_pos and calculates the target Y.
+                 # We already set current_grid_pos above. Let's just set the target_y and start animation using set_grid_position.
+                 # Calling set_grid_position with animate=True will calculate the target_y internally and set is_falling.
+                 # BUT we need to ensure the piece STARTS from initial_piece_screen_y.
+                 # Let's set the rect.topleft first, then call set_grid_position with animate=True and the FINAL grid position.
+                 piece.set_grid_position(r, c, animate=True) # Tell piece its final position and start fall animation
+
 
                  # === 将新创建的 Piece 对象添加到 Sprite Group 并启动下落动画 ===
                  # 将新碎片添加到 Sprite Group
@@ -1294,52 +1311,65 @@ class Board:
         surface.blit(overlay_surface, playable_area_rect_physical.topleft) # 绘制到可放置区域的位置
 
 
-        # 绘制所有非拖拽中的碎片
-        # Temporarily remove the dragging piece from the group to draw it on top later
-        # Ensure the group is valid before attempting remove/add
-        if isinstance(self.all_pieces_group, pygame.sprite.Group):
-            if self.dragging_piece and self.dragging_piece in self.all_pieces_group:
-                 self.all_pieces_group.remove(self.dragging_piece)
+        # === 关键修改：只有在非动画状态下才绘制常规碎片 ===
+        if self.current_board_state != settings.BOARD_STATE_COMPLETION_ANIMATING:
+            # 绘制所有非拖拽中的碎片
+            # Temporarily remove the dragging piece from the group to draw it on top later
+            # Ensure the group is valid before attempting remove/add
+            if isinstance(self.all_pieces_group, pygame.sprite.Group):
+                if self.dragging_piece and isinstance(self.dragging_piece, Piece) and self.dragging_piece in self.all_pieces_group:
+                     self.all_pieces_group.remove(self.dragging_piece)
 
-            # === 关键修改：只绘制位于当前可放置区域内的碎片 (或与区域相交的碎片，例如下落中) ===
-            # Create a temporary group containing only sprites within or intersecting the playable area rect
-            playable_pieces_group = pygame.sprite.Group()
-            for piece in self.all_pieces_group:
-                 # Ensure it's a Piece object before accessing rect/other attributes
-                 if isinstance(piece, Piece):
-                      # Check if the piece's rect intersects the playable area rect
-                      if piece.rect.colliderect(playable_area_rect_physical):
-                          playable_pieces_group.add(piece)
-                 # else: print(f"警告: Sprite Group 中包含非 Piece 对象: {type(piece)}") # Debug invalid object
+                # === 关键修改：只绘制位于当前可放置区域内的碎片 (或与区域相交的碎片，例如下落中) ===
+                # Create a temporary group containing only sprites within or intersecting the playable area rect
+                playable_pieces_group = pygame.sprite.Group()
+                for piece in self.all_pieces_group:
+                     # Ensure it's a Piece object before accessing rect/other attributes
+                     if isinstance(piece, Piece):
+                          # Check if the piece's rect intersects the playable area rect
+                          if piece.rect.colliderect(playable_area_rect_physical):
+                              playable_pieces_group.add(piece)
+                     # else: print(f"警告: Sprite Group 中包含非 Piece 对象: {type(piece)}") # Debug invalid object
 
-            # 绘制 Group 中位于可放置区域内的所有 Sprite
-            playable_pieces_group.draw(surface)
-
-
-        # 绘制选中碎片的特殊效果 (例如绘制边框)
-        if self.selected_piece and self.selection_rect:
-             # Ensure highliight position is synced with the selected piece's rect
-             # We can also check if the selected piece is still within the playable area before drawing highlight
-             piece_grid_pos = (self.selected_piece.current_grid_row, self.selected_piece.current_grid_col)
-             playable_rect_grid = pygame.Rect(self.playable_offset_col, self.playable_offset_row, self.playable_cols, self.playable_rows)
-             if playable_rect_grid.collidepoint(piece_grid_pos[1], piece_grid_pos[0]): # collidepoint expects (x, y) -> (col, row)
-
-                 border_thickness = 2
-                 # Recalculate selection_rect position based on the selected piece's current screen position
-                 self.selection_rect.topleft = (self.selected_piece.rect.left - border_thickness, self.selected_piece.rect.top - border_thickness)
-                 self.selection_rect.size = (self.selected_piece.rect.width + border_thickness * 2, self.selected_piece.rect.height + border_thickness * 2)
-                 # Draw the selection border
-                 pygame.draw.rect(surface, settings.HIGHLIGHT_COLOR, self.selection_rect, border_thickness) # Draw border with thickness=5
+                # 绘制 Group中位于可放置区域内 或与之相交 的所有 Sprite
+                playable_pieces_group.draw(surface)
 
 
-        # 最后绘制正在拖拽的碎片，使其显示在最上层
-        if self.dragging_piece:
-             # InputHandler updates the dragging_piece.rect.center in MOUSEMOTION
-             # Ensure dragging piece is also drawn if it's within or near the playable area (optional check)
-             # if self.dragging_piece.rect.colliderect(playable_area_rect_physical): # Only draw dragging if near playable area? Or always draw if dragging? Let's always draw if dragging.
-             if isinstance(self.dragging_piece, Piece): # Safety check
-                  self.dragging_piece.draw(surface)
-             # else: print(f"警告: dragging_piece 不是 Piece 对象: {type(self.dragging_piece)}") # Debug
+            # 绘制选中碎片的特殊效果 (例如绘制边框)
+            if self.selected_piece and self.selection_rect:
+                 # Ensure highliight position is synced with the selected piece's rect
+                 # We can also check if the selected piece is still within the playable area before drawing highlight
+                 piece_grid_pos = (self.selected_piece.current_grid_row, self.selected_piece.current_grid_col)
+                 playable_rect_grid = pygame.Rect(self.playable_offset_col, self.playable_offset_row, self.playable_cols, self.playable_rows)
+                 if playable_rect_grid.collidepoint(piece_grid_pos[1], piece_grid_pos[0]): # collidepoint expects (x, y) -> (col, row)
+
+                     border_thickness = 5
+                     # Recalculate selection_rect position based on the selected piece's current screen position
+                     self.selection_rect.topleft = (self.selected_piece.rect.left - border_thickness, self.selected_piece.rect.top - border_thickness)
+                     self.selection_rect.size = (self.selected_piece.rect.width + border_thickness * 2, self.selected_piece.rect.height + border_thickness * 2)
+                     # Draw the selection border
+                     pygame.draw.rect(surface, settings.HIGHLIGHT_COLOR, self.selection_rect, 5) # Draw border with thickness=5
+
+
+            # 最后绘制正在拖拽的碎片，使其显示在最上层
+            if self.dragging_piece:
+                 # InputHandler updates the dragging_piece.rect.center in MOUSEMOTION
+                 # Ensure dragging piece is also drawn if it's within or near the playable area (optional check)
+                 # if self.dragging_piece.rect.colliderect(playable_area_rect_physical): # Only draw dragging if near playable area? Or always draw if dragging? Let's always draw if dragging.
+                 if isinstance(self.dragging_piece, Piece): # Safety check
+                      self.dragging_piece.draw(surface)
+                 # else: print(f"警告: dragging_piece 不是 Piece 对象: {type(self.dragging_piece)}") # Debug
+
+
+            # Add the dragging piece back to the group after drawing
+            if isinstance(self.all_pieces_group, pygame.sprite.Group):
+                if self.dragging_piece and isinstance(self.dragging_piece, Piece) and self.dragging_piece not in self.all_pieces_group:
+                     try:
+                         self.all_pieces_group.add(self.dragging_piece)
+                     except Exception as e:
+                          print(f"致命错误: Board: 将拖拽完的碎片添加到 Group 时发生异常: {e}.") # Debug
+                          # Handle error
+
 
         # Draw debug piece info if the debug flag is set in Game
         # Through ImageManager, access Game instance and debug font
@@ -1354,12 +1384,16 @@ class Board:
                            piece = self.grid[r][c] # Get piece from grid
                            if piece and isinstance(piece, Piece): # Ensure it's a Piece
                                 # Only draw debug for pieces whose grid position is within the playable area
-                                if playable_area_rect_physical.collidepoint(*utils.grid_to_screen(r, c)): # Check if piece's grid position is visually within the playable area
+                                # Check if piece's current grid position is within the playable area
+                                # Note: Piece.rect might be different from grid position visual if falling or dragging
+                                # Let's check grid position for debug text placement
+                                if playable_area_rect_physical.collidepoint(c, r): # Check if grid position (c, r) is within playable grid rect
+
                                      # Format the debug text (Image ID, Original Row, Original Column, Current Grid)
                                      debug_text = f"ID:{piece.original_image_id} ({piece.original_row},{piece.original_col}) [{piece.current_grid_row},{piece.current_grid_col}]"
                                      # Render the text
                                      text_surface = debug_font.render(debug_text, True, settings.DEBUG_TEXT_COLOR)
-                                     # Position the text, e.g., centered on the piece's rect
+                                     # Position the text, e.g., centered on the piece's rect (which reflects its current visual position)
                                      text_rect = text_surface.get_rect(center=piece.rect.center) # Use piece's actual rect center
                                      # Draw the text
                                      surface.blit(text_surface, text_rect)
@@ -1367,21 +1401,14 @@ class Board:
                  # Also draw info for the dragging piece if it's active and not in the group
                  # The dragging piece's rect is updated by InputHandler
                  if self.dragging_piece and isinstance(self.dragging_piece, Piece) and self.dragging_piece not in self.all_pieces_group:
-                      # We can draw debug info for the dragging piece regardless of its grid position, centered on its rect
+                      # Draw debug info for the dragging piece regardless of its logical grid position, centered on its visual rect
                       debug_text = f"ID:{self.dragging_piece.original_image_id} ({self.dragging_piece.original_row},{self.dragging_piece.original_col}) [{self.dragging_piece.current_grid_row},{self.dragging_piece.current_grid_col}]"
                       text_surface = debug_font.render(debug_text, True, settings.DEBUG_TEXT_COLOR)
                       text_rect = text_surface.get_rect(center=self.dragging_piece.rect.center) # Use dragging piece's actual rect center
                       surface.blit(text_surface, text_rect)
 
 
-        # Add the dragging piece back to the group after drawing
-        if isinstance(self.all_pieces_group, pygame.sprite.Group):
-            if self.dragging_piece and self.dragging_piece not in self.all_pieces_group:
-                 try:
-                     self.all_pieces_group.add(self.dragging_piece)
-                 except Exception as e:
-                      print(f"致命错误: Board: 将拖拽完的碎片添加到 Group 时发生异常: {e}.") # Debug
-                      # Handle error
+        # Note: The active animation drawing (CompletionAnimation.draw) happens in Game.draw, AFTER Board.draw
 
 
     def update(self, dt):
@@ -1392,27 +1419,33 @@ class Board:
              dt (float): 自上一帧以来的时间（秒）
          """
          # 更新所有碎片的动画 (特别是正在下落的碎片)
-         # 即使 Board 状态不是 FALLING，也需要更新，因为 Board 可能会在 PLAYING 状态下突然切换到 FALLING
-         # 碎片 Piece 的 update 方法会根据自身的 is_falling 属性决定是否移动
+         # This update happens regardless of Board state, as pieces might be falling even if state isn't explicitly FALLING (e.g., after load)
          # Ensure the group is valid before updating
          if isinstance(self.all_pieces_group, pygame.sprite.Group):
              self.all_pieces_group.update(dt) # Update all sprites in the group
 
-         # 如果 Board 状态是 FALLING，检查是否所有碎片都已停止下落，然后切换状态
+         # If Board state is FALLING, check if all pieces have stopped falling, then transition state
          if self.current_board_state == settings.BOARD_STATE_PIECES_FALLING:
               if not self.is_any_piece_falling():
                    print("Board: 所有碎片下落完成。状态切换到 PENDING_FILL。") # Debug
                    self.current_board_state = settings.BOARD_STATE_PENDING_FILL # 切换状态，等待填充
 
 
-         # 如果 Board 状态不是 PLAYING，则调用 _process_completed_picture 处理状态机
-         # Note: The transition from PIECES_FALLING to PENDING_FILL happens above.
-         # The handling of PENDING_FILL and subsequent states happens here.
-         if self.current_board_state in [settings.BOARD_STATE_PICTURE_COMPLETED,
+         # If Board state is not PLAYING or COMPLETION_ANIMATING, process the state machine
+         # COMPLETION_ANIMATING is handled by Game, not Board's state machine here.
+         if self.current_board_state in [settings.BOARD_STATE_PICTURE_COMPLETED, # Transition handled by Game
                                          settings.BOARD_STATE_REMOVING_PIECES,
-                                         settings.BOARD_STATE_PENDING_FILL, # Handle PENDING_FILL here
-                                         settings.BOARD_STATE_UPGRADING_AREA]: # Handle UPGRADING_AREA here
-              self._process_completed_picture() # 处理完成流程状态机
+                                         settings.BOARD_STATE_PIECES_FALLING, # Transition handled above
+                                         settings.BOARD_STATE_PENDING_FILL,
+                                         settings.BOARD_STATE_UPGRADING_AREA]:
+             # Note: The transition from PICTURE_COMPLETED to COMPLETION_ANIMATING happens immediately in the PICTURE_COMPLETED block.
+             # If animation is skipped, it transitions to REMOVING_PIECES.
+             # If animation plays, Game will call resume_completion_process_after_animation, which starts from REMOVING_PIECES.
+             # So, this block primarily handles REMOVING_PIECES -> ... -> PLAYING sequence.
+             self._process_completed_picture() # Process the completion flow state machine
+
+
+        # Note: UPGRADING_AREA state logic is handled within the PENDING_FILL block or the state machine.
 
 
     def get_piece_at_grid(self, row, col):
@@ -1438,6 +1471,36 @@ class Board:
             self.playable_cols * settings.PIECE_WIDTH, # 宽度 (像素)
             self.playable_rows * settings.PIECE_HEIGHT # 高度 (像素)
         )
+
+    # New method to get the rect of a specific completed area in screen coordinates
+    def get_completed_area_screen_rect(self):
+        """
+        根据记录的 _completed_area_start_pos 和完成图片的逻辑尺寸，
+        计算已完成区域在屏幕上的像素 Rect。
+        返回 None 如果没有已完成区域信息。
+        """
+        if self._completed_area_start_pos is None or self._completed_image_id_pending_process is None:
+             return None # No completed area information
+
+        start_row, start_col = self._completed_area_start_pos
+        completed_image_id = self._completed_image_id_pending_process
+
+        # Get logic dims for the completed image
+        if completed_image_id not in self.image_manager.image_logic_dims:
+             print(f"错误: Board: get_completed_area_screen_rect: 图片ID {completed_image_id} 逻辑尺寸缺失。") # Debug
+             return None # Cannot determine size
+
+        img_logic_c, img_logic_r = self.image_manager.image_logic_dims[completed_image_id]
+
+        # Calculate the screen position of the top-left corner of the completed area
+        topleft_screen_x = settings.BOARD_OFFSET_X + start_col * settings.PIECE_WIDTH
+        topleft_screen_y = settings.BOARD_OFFSET_Y + start_row * settings.PIECE_HEIGHT
+
+        # Calculate the total size of the completed area in pixels
+        area_width = img_logic_c * settings.PIECE_WIDTH
+        area_height = img_logic_r * settings.PIECE_HEIGHT
+
+        return pygame.Rect(topleft_screen_x, topleft_screen_y, area_width, area_height)
 
 
     # 替换 get_state 方法 (保存可放置区域信息和背景图名)
@@ -1468,7 +1531,7 @@ class Board:
 
         # Get current background image name (if loaded)
         # The _current_background_name attribute should store the name used to load.
-        # self.current_background_name is calculated in _load_background_image
+        # self.current_background_name is set in _load_background_image
 
         board_state = {
             'grid_layout': saved_grid,
