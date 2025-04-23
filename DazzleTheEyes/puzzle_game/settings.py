@@ -11,7 +11,7 @@ PIECES_PER_IMAGE = 20
 GALLERY_THUMBNAIL_HEIGHT = 500
 
 # 碎片生成与缓存设置
-REGENERATE_PIECES = 1 # 是否重新生成碎片：1-是，0-否。设置为0时优先从文件加载。
+REGENERATE_PIECES = 0 # 是否重新生成碎片：1-是，0-否。设置为0时优先从文件加载。
 
 # 屏幕设置 (固定)
 SCREEN_WIDTH = 1920
@@ -34,13 +34,42 @@ BOARD_OFFSET_Y = 0
 
 # 图片逻辑尺寸 (每张图独立配置)
 # 这是一个字典，键是图片ID，值是 (逻辑列数, 逻辑行数) 的元组
+IMAGE_LOGIC_DIMS = {
+    # 根据图片宽高和期望的碎片数量及比例配置，逻辑尺寸 * 碎片尺寸应接近原始图片尺寸
+    # (逻辑列数 * PIECE_WIDTH, 逻辑行数 * PIECE_HEIGHT) 决定了原图被处理（缩放裁剪）到的目标尺寸
+    1: (2, 3),  # image_1 裁剪为 2列x3行
+    2: (2, 3), # image_2 裁剪为 3列x3行
+    3: (3, 3),  
+    4: (3, 4),  
+    5: (3, 5),  
+    6: (4, 4), 
+    7: (4, 5), 
+    8: (3, 6),  
+    9: (4, 7), 
+    10: (5, 7), 
+    11: (3, 4),  # image_1 裁剪为 2列x3行
+    12: (4, 5), # image_2 裁剪为 3列x3行
+    13: (3, 6),  
+    14: (4, 6),  
+    15: (5, 6),  
+    16: (4, 7), 
+    17: (3, 7), 
+    18: (4, 8),  
+    19: (3, 5), 
+    20: (4, 8), 
+    # ... 根据你的图片数量和期望的裁剪方式添加更多条目
+    # 注意：这里的行列数定义了图片的逻辑结构和碎片数量，不是拼盘的物理尺寸。
+    # 确保 IMAGE_LOGIC_DIMS 中的所有图片ID在 assets 目录中都有对应的 image_ID.png 文件。
+}
+
+# #test使用
 # IMAGE_LOGIC_DIMS = {
 #     # 根据图片宽高和期望的碎片数量及比例配置，逻辑尺寸 * 碎片尺寸应接近原始图片尺寸
 #     # (逻辑列数 * PIECE_WIDTH, 逻辑行数 * PIECE_HEIGHT) 决定了原图被处理（缩放裁剪）到的目标尺寸
-#     1: (2, 3),  # image_1 裁剪为 2列x3行
-#     2: (3, 3), # image_2 裁剪为 3列x3行
-#     3: (3, 3),  
-#     4: (3, 4),  
+#     1: (2, 2),  # image_1 裁剪为 2列x3行
+#     2: (2, 3), # image_2 裁剪为 3列x3行
+#     3: (3, 2),  
+#     4: (3, 3),  
 #     5: (3, 5),  
 #     6: (4, 4), 
 #     7: (4, 5), 
@@ -52,33 +81,29 @@ BOARD_OFFSET_Y = 0
 #     # 确保 IMAGE_LOGIC_DIMS 中的所有图片ID在 assets 目录中都有对应的 image_ID.png 文件。
 # }
 
-#test使用
-IMAGE_LOGIC_DIMS = {
-    # 根据图片宽高和期望的碎片数量及比例配置，逻辑尺寸 * 碎片尺寸应接近原始图片尺寸
-    # (逻辑列数 * PIECE_WIDTH, 逻辑行数 * PIECE_HEIGHT) 决定了原图被处理（缩放裁剪）到的目标尺寸
-    1: (2, 2),  # image_1 裁剪为 2列x3行
-    2: (2, 3), # image_2 裁剪为 3列x3行
-    3: (3, 2),  
-    4: (3, 3),  
-    5: (3, 5),  
-    6: (4, 4), 
-    7: (4, 5), 
-    8: (3, 6),  
-    9: (4, 7), 
-    10: (5, 7), 
-    # ... 根据你的图片数量和期望的裁剪方式添加更多条目
-    # 注意：这里的行列数定义了图片的逻辑结构和碎片数量，不是拼盘的物理尺寸。
-    # 确保 IMAGE_LOGIC_DIMS 中的所有图片ID在 assets 目录中都有对应的 image_ID.png 文件。
-}
-
 
 # 可放置区域配置 (根据点亮图片数量动态变化)
 # 这是一个字典，键是点亮图片数量阈值，值是包含 'cols', 'rows', 'bg' 的字典
 # 'cols' 和 'rows' 是可放置区域在物理网格中的尺寸， 'bg' 是对应的背景图文件名
 # 升级阈值必须按升序排列
+PLAYABLE_AREA_CONFIG = {
+    0: {'cols': 2, 'rows': 3, 'bg': 'background_1.png'},     # 初始区域 5x5
+    1: {'cols': 4, 'rows': 4, 'bg': 'background_2.png'},     # 点亮 1 张图后升级到 7x7
+    3: {'cols': 5, 'rows': 6, 'bg': 'background_3.png'},     # 点亮 3 张图后升级到 9x9
+    5: {'cols': 6, 'rows': 7, 'bg': 'background_4.png'},    # 点亮 6 张图后升级到 12x9
+    7: {'cols': 7, 'rows': 8, 'bg': 'background_5.png'},   # 点亮 10 张图后升级到 15x8 (最大可放置区域等于物理拼盘尺寸)
+    10: {'cols': 9, 'rows': 8, 'bg': 'background_6.png'},   # 点亮 10 张图后升级到 15x8 (最大可放置区域等于物理拼盘尺寸)
+    12: {'cols': 12, 'rows': 8, 'bg': 'background_7.png'},   # 点亮 10 张图后升级到 15x8 (最大可放置区域等于物理拼盘尺寸)
+    15: {'cols': 15, 'rows': 8, 'bg': 'background_8.png'},   # 点亮 10 张图后升级到 15x8 (最大可放置区域等于物理拼盘尺寸)
+    # ... 添加更多阈值和配置
+    # 注意：确保可放置区域的尺寸 (cols * PIECE_WIDTH, rows * PIECE_HEIGHT) 不超过屏幕尺寸
+    # (即 cols <= BOARD_COLS 且 rows <= BOARD_ROWS)
+}
+
+# #test使用
 # PLAYABLE_AREA_CONFIG = {
 #     0: {'cols': 2, 'rows': 3, 'bg': 'background_1.png'},     # 初始区域 5x5
-#     1: {'cols': 4, 'rows': 4, 'bg': 'background_2.png'},     # 点亮 1 张图后升级到 7x7
+#     1: {'cols': 3, 'rows': 3, 'bg': 'background_2.png'},     # 点亮 1 张图后升级到 7x7
 #     3: {'cols': 5, 'rows': 5, 'bg': 'background_3.png'},     # 点亮 3 张图后升级到 9x9
 #     5: {'cols': 8, 'rows': 8, 'bg': 'background_4.png'},    # 点亮 6 张图后升级到 12x9
 #     10: {'cols': 15, 'rows': 8, 'bg': 'background_5.png'},   # 点亮 10 张图后升级到 15x8 (最大可放置区域等于物理拼盘尺寸)
@@ -86,18 +111,6 @@ IMAGE_LOGIC_DIMS = {
 #     # 注意：确保可放置区域的尺寸 (cols * PIECE_WIDTH, rows * PIECE_HEIGHT) 不超过屏幕尺寸
 #     # (即 cols <= BOARD_COLS 且 rows <= BOARD_ROWS)
 # }
-
-#test使用
-PLAYABLE_AREA_CONFIG = {
-    0: {'cols': 2, 'rows': 3, 'bg': 'background_1.png'},     # 初始区域 5x5
-    1: {'cols': 3, 'rows': 3, 'bg': 'background_2.png'},     # 点亮 1 张图后升级到 7x7
-    3: {'cols': 5, 'rows': 5, 'bg': 'background_3.png'},     # 点亮 3 张图后升级到 9x9
-    5: {'cols': 8, 'rows': 8, 'bg': 'background_4.png'},    # 点亮 6 张图后升级到 12x9
-    10: {'cols': 15, 'rows': 8, 'bg': 'background_5.png'},   # 点亮 10 张图后升级到 15x8 (最大可放置区域等于物理拼盘尺寸)
-    # ... 添加更多阈值和配置
-    # 注意：确保可放置区域的尺寸 (cols * PIECE_WIDTH, rows * PIECE_HEIGHT) 不超过屏幕尺寸
-    # (即 cols <= BOARD_COLS 且 rows <= BOARD_ROWS)
-}
 
 # 派生计算
 # 物理拼盘总槽位数
@@ -176,10 +189,10 @@ GAME_STATE_GALLERY_VIEW_LIT = 2  # 打开图库已点亮图片大图查看界面
 
 
 # 完成动画设置
-COMPLETION_ANIM_MOVE_SCALE_DURATION = 1.0 # 移动和缩放阶段时长 (秒)
-COMPLETION_ANIM_CROSS_FADE_DURATION = 1.0 # 交叉淡出阶段时长 (秒)
-COMPLETION_ANIM_MARGIN = 10 # 动画结束时原始图片距离屏幕边缘的边距
-COMPLETION_ANIM_PAUSE_DURATION = 1.0 # 交叉淡出后停留展示原始图的时长 (秒)
+COMPLETION_ANIM_MOVE_SCALE_DURATION = 0.8 # 移动和缩放阶段时长 (秒)
+COMPLETION_ANIM_CROSS_FADE_DURATION = 0.5 # 交叉淡出阶段时长 (秒)
+COMPLETION_ANIM_MARGIN = 100 # 动画结束时原始图片距离屏幕边缘的边距
+COMPLETION_ANIM_PAUSE_DURATION = 0.5 # 交叉淡出后停留展示原始图的时长 (秒)
 
 # 图库设置
 GALLERY_WIDTH = 1080
@@ -201,7 +214,7 @@ GALLERY_SCROLL_SPEED = 90 # 图库滑动速度 (像素/帧)
 
 # 提示信息设置 ("美图尚未点亮")
 TIP_TEXT_COLOR = WHITE
-TIP_DISPLAY_DURATION = 1 # 提示信息显示时长 (秒)
+TIP_DISPLAY_DURATION = 0.5 # 提示信息显示时长 (秒)
 TIP_FONT_SIZE = 20 # 提示信息字体大小
 
 
