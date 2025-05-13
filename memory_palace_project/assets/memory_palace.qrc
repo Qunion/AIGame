@@ -1,0 +1,35 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/assets">
+    <!-- Icons -->
+    <file alias="icons/mode_review_memory.png">icons/mode_review_memory.png</file>
+    <file alias="icons/mode_recite_dictation.png">icons/mode_recite_dictation.png</file>
+    <file alias="icons/mode_explore_fog.png">icons/mode_explore_fog.png</file>
+    <file alias="icons/mode_view.png">icons/mode_view.png</file>
+    <file alias="icons/mode_edit.png">icons/mode_edit.png</file>
+    <file alias="icons/mode_panel_expand.png">icons/mode_panel_expand.png</file>
+    <file alias="icons/mode_panel_collapse.png">icons/mode_panel_collapse.png</file>
+
+    <file alias="icons/common_add.png">icons/common_add.png</file>
+    <file alias="icons/common_back_arrow.png">icons/common_back_arrow.png</file>
+    <file alias="icons/common_edit_pencil.png">icons/common_edit_pencil.png</file>
+    <file alias="icons/common_delete_trash.png">icons/common_delete_trash.png</file>
+    <file alias="icons/common_settings.png">icons/common_settings.png</file>
+    <file alias="icons/common_developer_info.png">icons/common_developer_info.png</file>
+
+    <file alias="icons/node_sort_up.png">icons/node_sort_up.png</file>
+    <file alias="icons/node_sort_down.png">icons/node_sort_down.png</file>
+    <file alias="icons/button_change_background.png">icons/button_change_background.png</file>
+    <file alias="icons/node_editor_cancel.png">icons/node_editor_cancel.png</file>
+
+    <!-- (可选) 如果有时间轴列表的预设样式图标 -->
+    <!-- <file alias="icons/timeline_cover_icon_style1.png">icons/timeline_cover_icon_style1.png</file> -->
+    <!-- <file alias="icons/timeline_cover_icon_style2.png">icons/timeline_cover_icon_style2.png</file> -->
+    <!-- <file alias="icons/timeline_cover_icon_style3.png">icons/timeline_cover_icon_style3.png</file> -->
+
+    <!-- Images -->
+    <file alias="images/default_segment_background.png">images/default_segment_background.png</file>
+
+    <!-- Sounds -->
+    <file alias="sounds/recite_success.wav">sounds/recite_success.wav</file>
+</qresource>
+</RCC>
