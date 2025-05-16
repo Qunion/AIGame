@@ -16,5 +16,8 @@
     "detail_textarea_initial_rows": 5,
     "detail_textarea_max_rows": 20,
     "panel_width_px": 280
+  },
+  "assets": {
+    "default_segment_background_alias": ":/assets/images/default_segment_background.png"
   }
 }

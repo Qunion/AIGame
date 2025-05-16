@@ -5,6 +5,11 @@ from datetime import datetime, timezone # timezone 用于 UTC
 from ..utils.constants import DATABASE_PATH, DATA_DIR
 from ..core.timeline import Timeline # 导入Timeline数据类
 from typing import Optional, List # 如果你后面也会用到 List 类型提示，可以一并导入
+from ..core.segment import Segment # <<<<<<<<<<<<<<<<<<<<<<<<<<< 导入 Segment
+from ..core.node import Node       # <<<<<<<<<<<<<<<<<<<<<<<<<<< 导入 Node
+from ..utils.constants import DEFAULT_NODE_MAX_WIDTH_PX # 导入默认节点最大宽度
+from ..utils.file_utils import copy_image_to_data_dir, delete_app_data_file # (稍后创建file_utils.py)
+from ..utils.constants import DATABASE_PATH, DATA_DIR, DEFAULT_NODE_MAX_WIDTH_PX, DEFAULT_SEGMENT_BACKGROUND_ALIAS # <<<<<<< 添加
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +249,211 @@ class DatabaseManager:
     # ...
 
 # ... (之前的 if __name__ == '__main__': 测试代码可以保留或修改) ...
+
+    def add_segment(self, segment: Segment) -> Optional[int]:
+        """添加一个新的片段到数据库。通常在创建片段时，也会创建其默认节点。"""
+        conn = self.get_connection()
+        if not conn or segment.timeline_id is None:
+            logger.error("Cannot add segment: database connection error or timeline_id is None.")
+            return None
+        try:
+            cursor = conn.cursor()
+            # 获取当前时间轴下最大的order_index，新片段的order_index为其+1
+            cursor.execute("SELECT MAX(order_index) FROM Segments WHERE timeline_id = ?", (segment.timeline_id,))
+            max_order = cursor.fetchone()[0]
+            segment.order_index = (max_order + 1) if max_order is not None else 0
+
+            cursor.execute("""
+                INSERT INTO Segments (timeline_id, order_index, background_image_path,
+                                    background_image_original_width, background_image_original_height,
+                                    created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (segment.timeline_id, segment.order_index, segment.background_image_path,
+                  segment.background_image_original_width, segment.background_image_original_height,
+                  segment.created_at, segment.updated_at))
+            segment_id = cursor.lastrowid
+            conn.commit()
+            logger.info(f"Segment added with id: {segment_id} to timeline {segment.timeline_id}, order: {segment.order_index}")
+            return segment_id
+        except sqlite3.Error as e:
+            logger.error(f"Error adding segment to timeline {segment.timeline_id}: {e}")
+            conn.rollback()
+            return None
+
+    def get_segment(self, segment_id: int) -> Optional[Segment]:
+        conn = self.get_connection()
+        if not conn: return None
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Segments WHERE id = ?", (segment_id,))
+            row = cursor.fetchone()
+            if row:
+                return Segment(**dict(row))
+            return None
+        except sqlite3.Error as e:
+            logger.error(f"Error getting segment with id {segment_id}: {e}")
+            return None
+
+    def get_segments_for_timeline(self, timeline_id: int) -> List[Segment]:
+        conn = self.get_connection()
+        if not conn: return []
+        segments = []
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Segments WHERE timeline_id = ? ORDER BY order_index ASC", (timeline_id,))
+            rows = cursor.fetchall()
+            for row in rows:
+                segments.append(Segment(**dict(row)))
+            return segments
+        except sqlite3.Error as e:
+            logger.error(f"Error getting segments for timeline {timeline_id}: {e}")
+            return []
+
+    def update_segment(self, segment: Segment) -> bool:
+        conn = self.get_connection()
+        if not conn or segment.id is None: return False
+        segment.updated_at = datetime.now()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE Segments
+                SET timeline_id = ?, order_index = ?, background_image_path = ?,
+                    background_image_original_width = ?, background_image_original_height = ?,
+                    updated_at = ?
+                WHERE id = ?
+            """, (segment.timeline_id, segment.order_index, segment.background_image_path,
+                  segment.background_image_original_width, segment.background_image_original_height,
+                  segment.updated_at, segment.id))
+            conn.commit()
+            logger.info(f"Segment updated with id: {segment.id}")
+            return True
+        except sqlite3.Error as e:
+            logger.error(f"Error updating segment with id {segment.id}: {e}")
+            conn.rollback()
+            return False
+
+    def delete_segment(self, segment_id: int) -> bool:
+        conn = self.get_connection()
+        if not conn: return False
+        try:
+            cursor = conn.cursor()
+            # 删除Segment会自动删除其Nodes和NodeMemoryProgress (通过外键CASCADE)
+            cursor.execute("DELETE FROM Segments WHERE id = ?", (segment_id,))
+            conn.commit()
+            logger.info(f"Segment deleted with id: {segment_id}")
+            return True
+        except sqlite3.Error as e:
+            logger.error(f"Error deleting segment with id {segment_id}: {e}")
+            conn.rollback()
+            return False
+
+    # --- Node CRUD ---
+    def add_node(self, node: Node) -> Optional[int]:
+        conn = self.get_connection()
+        if not conn or node.segment_id is None:
+            logger.error("Cannot add node: database connection error or segment_id is None.")
+            return None
+        try:
+            cursor = conn.cursor()
+            # 获取当前片段下最大的order_in_segment，新节点的order为其+1 (如果需要自动排序)
+            # 或者node.order_in_segment由调用者指定
+            # 这里我们假设调用者已设置好 order_in_segment
+            if node.max_width_px is None: # 如果未设置，从常量获取
+                node.max_width_px = DEFAULT_NODE_MAX_WIDTH_PX
+
+
+            cursor.execute("""
+                INSERT INTO Nodes (segment_id, name, detail, anchor_x_percent, anchor_y_percent,
+                                   current_width_px, current_height_px, max_width_px, order_in_segment,
+                                   created_at, updated_at, visual_style_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (node.segment_id, node.name, node.detail, node.anchor_x_percent, node.anchor_y_percent,
+                  node.current_width_px, node.current_height_px, node.max_width_px, node.order_in_segment,
+                  node.created_at, node.updated_at, node.visual_style_json))
+            node_id = cursor.lastrowid
+            conn.commit()
+            logger.info(f"Node added with id: {node_id} to segment {node.segment_id}")
+            return node_id
+        except sqlite3.Error as e:
+            logger.error(f"Error adding node to segment {node.segment_id}: {e}")
+            conn.rollback()
+            return None
+
+    def get_nodes_for_segment(self, segment_id: int) -> List[Node]:
+        conn = self.get_connection()
+        if not conn: return []
+        nodes = []
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Nodes WHERE segment_id = ? ORDER BY order_in_segment ASC", (segment_id,))
+            rows = cursor.fetchall()
+            for row in rows:
+                nodes.append(Node(**dict(row)))
+            return nodes
+        except sqlite3.Error as e:
+            logger.error(f"Error getting nodes for segment {segment_id}: {e}")
+            return []
+
+    # ... (update_node, delete_node, get_node 等可以后续添加) ...
+
+    # --- NodeMemoryProgress CRUD (保持骨架) ---
+    # ...
+
+    # Helper for creating default timeline content
+
+
+    def create_default_segment_for_timeline(self, timeline_id: int, config_manager) -> Optional[int]:
+        logger.debug(f"Creating default segment for timeline_id: {timeline_id}")
+
+        default_bg_alias = config_manager.get_setting(
+            "assets.default_segment_background_alias", # 确保settings.json中有此项
+            DEFAULT_SEGMENT_BACKGROUND_ALIAS # 使用常量中的默认值
+        )
+
+        # 使用 file_utils 复制图片
+        copied_bg_path, width, height = copy_image_to_data_dir(
+            source_path_or_qresource_alias=default_bg_alias,
+            timeline_id_str=str(timeline_id), # 文件夹通常用字符串ID
+            original_filename="default_background.png" # 提供一个原始文件名用于确定扩展名
+        )
+        if not copied_bg_path:
+            logger.warning("Failed to copy default background image for new segment. Path will be None.")
+            # copied_bg_path = None # 它已经是None了
+            width, height = None, None
+
+
+        default_segment = Segment(
+            timeline_id=timeline_id,
+            background_image_path=copied_bg_path,
+            background_image_original_width=width,
+            background_image_original_height=height
+        )
+        segment_id = self.add_segment(default_segment)
+        # ... (后续创建默认节点的逻辑不变) ...
+        if segment_id:
+            default_node = Node(
+                segment_id=segment_id,
+                name="这是一个节点示例",
+                detail="双击任意位置可添加新的节点。",
+                anchor_x_percent=0.5,
+                anchor_y_percent=0.5,
+                order_in_segment=0,
+                max_width_px=config_manager.get_setting("node.default_max_width_px", DEFAULT_NODE_MAX_WIDTH_PX)
+            )
+            node_id = self.add_node(default_node)
+            if node_id:
+                logger.info(f"Default node created (ID: {node_id}) for new segment (ID: {segment_id}).")
+            else:
+                logger.error(f"Failed to create default node for new segment (ID: {segment_id}).")
+            return segment_id
+        else:
+            logger.error(f"Failed to create default segment for timeline_id: {timeline_id}.")
+            return None
+
+
+# ... (if __name__ == '__main__': 测试代码) ...
+# 在测试代码中，你现在可以添加对 Segment 和 Node CRUD 的测试了
+# 例如，创建一个Timeline后，调用 create_default_segment_for_timeline
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     db_manager = DatabaseManager(db_path=":memory:") # 使用内存数据库进行快速测试

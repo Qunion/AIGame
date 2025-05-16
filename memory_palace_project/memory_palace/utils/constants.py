@@ -26,5 +26,6 @@ SETTINGS_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirnam
 DEFAULT_SEGMENT_BACKGROUND_ALIAS = ":/assets/images/default_segment_background.png"
 DEFAULT_SOUND_RECITE_SUCCESS_ALIAS = ":/assets/sounds/recite_success.wav"
 
+
 # 最大宽度常量等可以放在这里或settings.json
 DEFAULT_NODE_MAX_WIDTH_PX = 300
