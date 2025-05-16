@@ -1,0 +1,20 @@
+{
+  "debug_mode": true,
+  "logging_level": "INFO",
+  "window": {
+    "default_x": 100,
+    "default_y": 100,
+    "default_width": 1280,
+    "default_height": 720,
+    "min_width": 800,
+    "min_height": 600
+  },
+  "database": {
+    "local_db_name": "memory_palace.sqlite"
+  },
+  "node_detail_editor": {
+    "detail_textarea_initial_rows": 5,
+    "detail_textarea_max_rows": 20,
+    "panel_width_px": 280
+  }
+}
