@@ -109,6 +109,7 @@ class UIManager:
             pygame.draw.line(surface, color, (pos[0] - 12, y), (pos[0] + 12, y), 3)
         
     def draw_group_menu(self, surface, mouse_pos):
+        """MODIFIED: 恢复悬浮和选中状态的背景色"""
         item_height = 40; num_items = len(self.sim.neuron_groups) + 1
         menu_height = num_items * item_height
         self.menu_rect = pygame.Rect(self.screen_rect.width - 220, 60, 200, menu_height)
@@ -120,9 +121,21 @@ class UIManager:
         for i, group in enumerate(self.sim.neuron_groups):
             item_y = self.menu_rect.top + (i + 1) * item_height
             item_rect = pygame.Rect(self.menu_rect.left, item_y, self.menu_rect.width, item_height)
-            if i == self.sim.active_group_index: pygame.draw.rect(surface, (255, 255, 255, 30), item_rect)
+            
+            # --- 关键修复：绘制背景色 (选中 > 悬浮) ---
+            # 为了能显示半透明效果，需要创建一个单独的 surface
+            bg_surface = pygame.Surface(item_rect.size, pygame.SRCALPHA)
+            if i == self.sim.active_group_index:
+                bg_surface.fill(config.GROUP_MENU_SELECTED_BG_COLOR)
+            elif i == self.hovered_group_index:
+                bg_surface.fill(config.GROUP_MENU_HOVER_BG_COLOR)
+            surface.blit(bg_surface, item_rect.topleft)
+            # --- 修复结束 ---
+            
+            # 绘制文本
             utils.render_text_ui(surface, group['name'], item_rect, config.TEXT_COLOR)
             
+            # 绘制删除图标
             if self.hovered_group_index == i:
                 delete_icon_rect = self._get_delete_icon_rect(i)
                 if self.group_marked_for_deletion and self.group_marked_for_deletion[0] == i:
@@ -130,6 +143,7 @@ class UIManager:
                 else:
                     utils.render_text_ui(surface, "🗑️", delete_icon_rect, config.DELETE_COLOR, font_size=20)
 
+            # 绘制分隔线
             if i < len(self.sim.neuron_groups) - 1:
                 pygame.draw.line(surface, (255,255,255, 50), (item_rect.left + 10, item_rect.bottom), (item_rect.right - 10, item_rect.bottom))
     
