@@ -15,21 +15,17 @@ class Neuron:
         self.id = str(uuid.uuid4())
         self.text = text
         self.position = vec(position)
-        
-        self.mass = mass if mass is not None else random.uniform(
-            config.INITIAL_NEURON_MASS_MIN, config.INITIAL_NEURON_MASS_MAX
-        )
-        self.velocity = velocity if velocity is not None else vec(
-            random.uniform(-config.MAX_INITIAL_SPEED, config.MAX_INITIAL_SPEED),
-            random.uniform(-config.MAX_INITIAL_SPEED, config.MAX_INITIAL_SPEED)
-        )
-        
+        self.mass = mass if mass is not None else random.uniform(config.INITIAL_NEURON_MASS_MIN, config.INITIAL_NEURON_MASS_MAX)
+        self.velocity = velocity if velocity is not None else vec(random.uniform(-config.MAX_INITIAL_SPEED, config.MAX_INITIAL_SPEED), random.uniform(-config.MAX_INITIAL_SPEED, config.MAX_INITIAL_SPEED))
         self.color = color if color is not None else random.choice(config.NEURON_COLORS)
         self.radius = self.calculate_radius()
+        
+        # 状态
         self.isHeld = False
         self.isInvalidPlacement = False
         self.originalPositionBeforeDrag = None
         self.scale = 1.0
+        self.is_marked_for_deletion = False # NEW: 待删除标记
 
     def calculate_radius(self): return math.sqrt(self.mass) * config.RADIUS_BASE_SCALE
     def update_radius(self): self.radius = self.calculate_radius()
@@ -53,12 +49,14 @@ class Neuron:
         pygame.gfxdraw.aacircle(surface, pos_x, pos_y, visual_radius, self.color)
         pygame.gfxdraw.filled_circle(surface, pos_x, pos_y, visual_radius, self.color)
 
-        # MODIFIED: 调用新的文本渲染函数
-        if self.text:
-            utils.render_text_in_circle(surface, self.text, self.position, visual_radius, config.TEXT_COLOR)
+        if self.text: utils.render_text_in_circle(surface, self.text, self.position, visual_radius, config.TEXT_COLOR)
+
+        # NEW: 如果标记为待删除，绘制一个 "X"
+        if self.is_marked_for_deletion:
+            utils.render_text_ui(surface, "X", pygame.Rect(0, 0, visual_radius*2, visual_radius*2), config.DELETE_COLOR, font_size=int(visual_radius*1.5), center=self.position)
 
         if self.isHeld:
-            border_color = config.INVALID_PLACEMENT_BORDER_COLOR if self.isInvalidPlacement else config.HELD_NEURON_BORDER_COLOR
+            border_color = config.INVALID_PLACEMENT_BORDER_COLOR if self.isInvalidPlacement or self.is_marked_for_deletion else config.HELD_NEURON_BORDER_COLOR
             pygame.gfxdraw.aacircle(surface, pos_x, pos_y, visual_radius, border_color)
             if config.HELD_NEURON_BORDER_WIDTH > 1:
                 pygame.gfxdraw.aacircle(surface, pos_x, pos_y, visual_radius - (config.HELD_NEURON_BORDER_WIDTH - 1), border_color)
@@ -68,4 +66,4 @@ class Neuron:
 
     def stop_drag(self, is_legal_pos):
         if not is_legal_pos and self.originalPositionBeforeDrag: self.position = self.originalPositionBeforeDrag
-        self.isHeld = False; self.isInvalidPlacement = False; self.originalPositionBeforeDrag = None
+        self.isHeld = False; self.isInvalidPlacement = False; self.originalPositionBeforeDrag = None; self.is_marked_for_deletion = False
