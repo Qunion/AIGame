@@ -40,10 +40,17 @@ class Simulation:
 
     def run(self):
         while self.is_running:
+            # MODIFIED: 在循环开始时就获取dt，而不是在调用update之前
             dt = self.clock.tick(config.FPS) / 1000.0
+            
             self.paused = self.paused_by_user
+            
             self._handle_events()
-            if not self.paused: self._update(dt)
+            
+            # 只有在非暂停状态下才进行物理更新
+            if not self.paused: 
+                self._update(dt)
+
             self._draw()
         pygame.quit()
 
@@ -85,18 +92,23 @@ class Simulation:
             elif event.button == 3:
                 if self.velocity_adjust_mode: self.velocity_grace_period_timer = pygame.time.get_ticks()
 
-    def _create_new_neuron_at(self, pos):
-        """MODIFIED: 移除窗口最小化调用"""
+    def _call_input_dialog(self, title, prompt):
+        """
+        一个统一的函数来调用输入对话框并处理时钟。
+        """
         self.paused_by_user = True
         
-        # 不再最小化窗口
-        # pygame.display.iconify() 
+        text = input_dialog.ask_string(title, prompt)
+        
+        # KEY FIX: 重置时钟！
+        # 这会使下一帧的 dt 变得非常小，就像时间没有流逝一样。
+        self.clock.tick() 
+        
+        self.paused_by_user = False
+        return text
 
-        text = input_dialog.ask_string("创建新节点", "请输入节点文本:")
-
-        # 也不再需要恢复窗口
-        # pygame.display.flip() 
-        # pygame.display.set_mode(self.screen.get_size(), self.screen.get_flags())
+    def _create_new_neuron_at(self, pos):
+        text = self._call_input_dialog("创建新节点", "请输入节点文本:")
         
         if text and text.strip():
             text = text.strip()
@@ -107,29 +119,20 @@ class Simulation:
             self.neurons.append(new_neuron)
             self.neuron_groups[self.active_group_index]['neurons'].append(text)
             self.data_manager.save_neuron_groups(self.neuron_groups)
-        
-        self.paused_by_user = False
 
     def add_new_group(self):
-        """MODIFIED: 移除窗口最小化调用"""
-        self.paused_by_user = True
-        
-        new_group_name = input_dialog.ask_string("创建新节点组", "请输入新组的名称:")
+        new_group_name = self._call_input_dialog("创建新节点组", "请输入新组的名称:")
 
         if not new_group_name or not new_group_name.strip():
-            self.paused_by_user = False
-            return # 如果用户取消或输入为空，则直接返回
+            return
         
         new_group_name = new_group_name.strip()
-        
         new_group = {"name": new_group_name, "neurons": ["新节点"]}
         self.neuron_groups.append(new_group)
         
         new_index = len(self.neuron_groups) - 1
         self.switch_group(new_index)
         self.data_manager.save_neuron_groups(self.neuron_groups)
-        
-        self.paused_by_user = False
 
     # --- 以下方法保持不变 ---
     def _update(self, dt):
