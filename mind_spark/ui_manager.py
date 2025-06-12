@@ -13,14 +13,19 @@ class UIManager:
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self._is_mouse_over_menu_icon(event.pos):
-                self.is_menu_open = not self.is_menu_open
-                return True
+            # 如果菜单是打开的
+            if self.is_menu_open:
+                # 检查是否点击在菜单内
+                if self.menu_rect and self.menu_rect.collidepoint(event.pos):
+                    self._handle_menu_click(event.pos)
+                self.is_menu_open = False # 无论点哪里，只要菜单是打开的，点击后就关闭
+                return True # 事件被UI消耗
 
-            if self.is_menu_open and self.menu_rect and self.menu_rect.collidepoint(event.pos):
-                self._handle_menu_click(event.pos)
-                self.is_menu_open = False
-                return True
+            # 如果菜单是关闭的，检查是否点击了图标以打开它
+            if self._is_mouse_over_menu_icon(event.pos):
+                self.is_menu_open = True
+                return True # 事件被UI消耗
+
         return False
 
     def _handle_menu_click(self, pos):
@@ -47,18 +52,20 @@ class UIManager:
             self.draw_group_menu(surface)
 
     def draw_info_panel(self, surface):
-        """MODIFIED: 使用新的 render_text_ui 函数"""
+        """MODIFIED: 简化状态显示"""
         panel_rect = pygame.Rect(10, 10, 250, 100)
         pygame.draw.rect(surface, config.INFO_PANEL_COLOR, panel_rect, border_radius=10)
 
+        # 简化状态逻辑
         if self.sim.is_loading: status_text = "加载中..."
-        elif self.sim.paused and self.sim.held_neuron: status_text = f"控制中: {self.sim.held_neuron.text}"
-        elif self.sim.paused and self.sim.new_neuron_preview: status_text = "添加节点"
-        elif self.sim.paused: status_text = "已暂停"
+        elif self.sim.paused_by_user: status_text = "用户交互中"
         else: status_text = "运行中"
             
-        group_name = self.sim.neuron_groups[self.sim.active_group_index]['name']
-        
+        try:
+            group_name = self.sim.neuron_groups[self.sim.active_group_index]['name']
+        except IndexError:
+            group_name = "无" # 防止切换组时瞬间出错
+
         title_rect = pygame.Rect(panel_rect.x, panel_rect.y + 5, panel_rect.width, 25)
         utils.render_text_ui(surface, config.TITLE, title_rect, config.TEXT_COLOR, font_size=18)
         
@@ -81,7 +88,6 @@ class UIManager:
             pygame.draw.line(surface, color, (pos[0] - 12, y), (pos[0] + 12, y), 3)
 
     def draw_group_menu(self, surface):
-        """MODIFIED: 使用新的 render_text_ui 函数"""
         item_height = 40
         num_items = len(self.sim.neuron_groups) + 1
         menu_height = num_items * item_height
