@@ -1,7 +1,7 @@
 # FILENAME: neuron.py
 
 import pygame
-import pygame.gfxdraw # NEW: 导入用于抗锯齿绘图的模块
+import pygame.gfxdraw
 import uuid
 import math
 import random
@@ -26,75 +26,46 @@ class Neuron:
         
         self.color = color if color is not None else random.choice(config.NEURON_COLORS)
         self.radius = self.calculate_radius()
-
-        # 状态
         self.isHeld = False
         self.isInvalidPlacement = False
         self.originalPositionBeforeDrag = None
-
-        # NEW: Q弹动画属性
         self.scale = 1.0
 
-    def calculate_radius(self):
-        return math.sqrt(self.mass) * config.RADIUS_BASE_SCALE
-
-    def update_radius(self):
-        self.radius = self.calculate_radius()
-
-    def trigger_bounce(self):
-        """触发Q弹动画"""
-        self.scale = config.NEURON_BOUNCE_FACTOR
+    def calculate_radius(self): return math.sqrt(self.mass) * config.RADIUS_BASE_SCALE
+    def update_radius(self): self.radius = self.calculate_radius()
+    def trigger_bounce(self): self.scale = config.NEURON_BOUNCE_FACTOR
 
     def update(self, dt, container_rect):
-        """更新神经元的位置、动画和处理边界碰撞"""
-        # 更新位置
         self.position += self.velocity * dt
+        if self.scale > 1.0: self.scale += (1.0 - self.scale) * config.NEURON_BOUNCE_RECOVERY
+        else: self.scale = 1.0
 
-        # NEW: 更新Q弹动画的缩放值，使其平滑恢复到1.0
-        # 使用lerp (线性插值) 的思想来平滑过渡
-        if self.scale != 1.0:
-            self.scale += (1.0 - self.scale) * config.NEURON_BOUNCE_RECOVERY
-
-        # 边界碰撞
-        if self.position.x - self.radius < 0:
-            self.position.x = self.radius; self.velocity.x *= -config.WALL_RESTITUTION
-        elif self.position.x + self.radius > container_rect.width:
-            self.position.x = container_rect.width - self.radius; self.velocity.x *= -config.WALL_RESTITUTION
-        if self.position.y - self.radius < 0:
-            self.position.y = self.radius; self.velocity.y *= -config.WALL_RESTITUTION
-        elif self.position.y + self.radius > container_rect.height:
-            self.position.y = container_rect.height - self.radius; self.velocity.y *= -config.WALL_RESTITUTION
+        r = self.radius * self.scale
+        if self.position.x - r < 0: self.position.x = r; self.velocity.x *= -config.WALL_RESTITUTION
+        elif self.position.x + r > container_rect.width: self.position.x = container_rect.width - r; self.velocity.x *= -config.WALL_RESTITUTION
+        if self.position.y - r < 0: self.position.y = r; self.velocity.y *= -config.WALL_RESTITUTION
+        elif self.position.y + r > container_rect.height: self.position.y = container_rect.height - r; self.velocity.y *= -config.WALL_RESTITUTION
 
     def draw(self, surface):
-        """MODIFIED: 使用gfxdraw绘制平滑的、可缩放的神经元"""
-        # 计算视觉半径（应用Q弹缩放效果）
         visual_radius = int(self.radius * self.scale)
-        # 绘图函数需要整数坐标
         pos_x, pos_y = int(self.position.x), int(self.position.y)
 
-        # 绘制主体 (两步法实现抗锯齿填充圆形)
         pygame.gfxdraw.aacircle(surface, pos_x, pos_y, visual_radius, self.color)
         pygame.gfxdraw.filled_circle(surface, pos_x, pos_y, visual_radius, self.color)
 
-        # 绘制文本 (文本也应在视觉中心)
-        utils.draw_text_in_circle(surface, self.text, self.position, visual_radius)
+        # MODIFIED: 调用新的文本渲染函数
+        if self.text:
+            utils.render_text_in_circle(surface, self.text, self.position, visual_radius, config.TEXT_COLOR)
 
-        # 绘制高亮或警示边框
         if self.isHeld:
             border_color = config.INVALID_PLACEMENT_BORDER_COLOR if self.isInvalidPlacement else config.HELD_NEURON_BORDER_COLOR
-            # 使用gfxdraw绘制平滑的边框
             pygame.gfxdraw.aacircle(surface, pos_x, pos_y, visual_radius, border_color)
             if config.HELD_NEURON_BORDER_WIDTH > 1:
-                pygame.gfxdraw.aacircle(surface, pos_x, pos_y, visual_radius - (config.HELD_NEURON_BORDER_WIDTH -1), border_color)
+                pygame.gfxdraw.aacircle(surface, pos_x, pos_y, visual_radius - (config.HELD_NEURON_BORDER_WIDTH - 1), border_color)
 
     def start_drag(self):
-        if not self.isHeld:
-            self.isHeld = True
-            self.originalPositionBeforeDrag = vec(self.position)
+        if not self.isHeld: self.isHeld = True; self.originalPositionBeforeDrag = vec(self.position)
 
     def stop_drag(self, is_legal_pos):
-        if not is_legal_pos and self.originalPositionBeforeDrag:
-            self.position = self.originalPositionBeforeDrag
-        self.isHeld = False
-        self.isInvalidPlacement = False
-        self.originalPositionBeforeDrag = None
+        if not is_legal_pos and self.originalPositionBeforeDrag: self.position = self.originalPositionBeforeDrag
+        self.isHeld = False; self.isInvalidPlacement = False; self.originalPositionBeforeDrag = None
