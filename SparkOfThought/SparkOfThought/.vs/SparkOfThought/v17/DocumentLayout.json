@@ -1,0 +1,198 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\sparkofthought.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\sparkofthought.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\config.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\config.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\assemblyinfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\assemblyinfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\mainwindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\mainwindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\settingswindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\settingswindow.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\neuron.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\neuron.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\app.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\app.xaml.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\nativemethods.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\nativemethods.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\mainwindow.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\mainwindow.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\app.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\app.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|c:\\users\\admin\\documents\\github\\aigame\\sparkofthought\\sparkofthought\\sparkofthought\\settingswindow.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}",
+      "RelativeMoniker": "D:0:0:{B0267EFA-0F9E-4E1B-ACC7-E938E02B5E66}|SparkOfThought\\SparkOfThought.csproj|solutionrelative:sparkofthought\\settingswindow.xaml||{F11ACC28-31D1-4C80-A34B-F4E09D3D753C}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "SparkOfThought.csproj",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\SparkOfThought.csproj",
+              "RelativeDocumentMoniker": "SparkOfThought\\SparkOfThought.csproj",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\SparkOfThought.csproj",
+              "RelativeToolTip": "SparkOfThought\\SparkOfThought.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-05-23T10:50:37.695Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "AssemblyInfo.cs",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\AssemblyInfo.cs",
+              "RelativeDocumentMoniker": "SparkOfThought\\AssemblyInfo.cs",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\AssemblyInfo.cs",
+              "RelativeToolTip": "SparkOfThought\\AssemblyInfo.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAADwvwoAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-23T09:03:58.279Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "SettingsWindow.xaml.cs",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\SettingsWindow.xaml.cs",
+              "RelativeDocumentMoniker": "SparkOfThought\\SettingsWindow.xaml.cs",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\SettingsWindow.xaml.cs",
+              "RelativeToolTip": "SparkOfThought\\SettingsWindow.xaml.cs",
+              "ViewState": "AgIAAEcAAAAAAAAAAAAQwF0AAACAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-23T08:19:29.069Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "App.xaml.cs",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\App.xaml.cs",
+              "RelativeDocumentMoniker": "SparkOfThought\\App.xaml.cs",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\App.xaml.cs",
+              "RelativeToolTip": "SparkOfThought\\App.xaml.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAmAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-23T08:16:21.425Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "App.xaml",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\App.xaml",
+              "RelativeDocumentMoniker": "SparkOfThought\\App.xaml",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\App.xaml",
+              "RelativeToolTip": "SparkOfThought\\App.xaml",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003549|",
+              "WhenOpened": "2025-05-23T08:15:08.696Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "Neuron.cs",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\Neuron.cs",
+              "RelativeDocumentMoniker": "SparkOfThought\\Neuron.cs",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\Neuron.cs",
+              "RelativeToolTip": "SparkOfThought\\Neuron.cs",
+              "ViewState": "AgIAAI8AAAAAAAAAAAAkwKkAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-23T08:14:39.765Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Config.cs",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\Config.cs",
+              "RelativeDocumentMoniker": "SparkOfThought\\Config.cs",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\Config.cs",
+              "RelativeToolTip": "SparkOfThought\\Config.cs",
+              "ViewState": "AgIAAD8AAAAAAAAAAAAkwE0AAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-23T08:14:09.124Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "MainWindow.xaml",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\MainWindow.xaml",
+              "RelativeDocumentMoniker": "SparkOfThought\\MainWindow.xaml",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\MainWindow.xaml",
+              "RelativeToolTip": "SparkOfThought\\MainWindow.xaml",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003549|",
+              "WhenOpened": "2025-05-23T08:07:29.553Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "MainWindow.xaml.cs",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\MainWindow.xaml.cs",
+              "RelativeDocumentMoniker": "SparkOfThought\\MainWindow.xaml.cs",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\MainWindow.xaml.cs",
+              "RelativeToolTip": "SparkOfThought\\MainWindow.xaml.cs",
+              "ViewState": "AgIAAAkAAAAAAAAAAABIwBkAAAAsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-23T08:07:29.037Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "NativeMethods.cs",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\NativeMethods.cs",
+              "RelativeDocumentMoniker": "SparkOfThought\\NativeMethods.cs",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\NativeMethods.cs",
+              "RelativeToolTip": "SparkOfThought\\NativeMethods.cs",
+              "ViewState": "AgIAACkAAAAAAAAAAAAgwDUAAABEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-05-23T08:14:57.271Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "SettingsWindow.xaml",
+              "DocumentMoniker": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\SettingsWindow.xaml",
+              "RelativeDocumentMoniker": "SparkOfThought\\SettingsWindow.xaml",
+              "ToolTip": "C:\\Users\\admin\\Documents\\GitHub\\AIGame\\SparkOfThought\\SparkOfThought\\SparkOfThought\\SettingsWindow.xaml",
+              "RelativeToolTip": "SparkOfThought\\SettingsWindow.xaml",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003549|",
+              "WhenOpened": "2025-05-23T08:18:35.382Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

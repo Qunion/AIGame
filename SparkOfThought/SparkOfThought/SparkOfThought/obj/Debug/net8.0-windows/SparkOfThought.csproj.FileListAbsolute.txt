@@ -1,0 +1,6 @@
+C:\Users\admin\Documents\GitHub\AIGame\SparkOfThought\SparkOfThought\SparkOfThought\obj\Debug\net8.0-windows\SettingsWindow.baml
+C:\Users\admin\Documents\GitHub\AIGame\SparkOfThought\SparkOfThought\SparkOfThought\obj\Debug\net8.0-windows\MainWindow.g.cs
+C:\Users\admin\Documents\GitHub\AIGame\SparkOfThought\SparkOfThought\SparkOfThought\obj\Debug\net8.0-windows\SettingsWindow.g.cs
+C:\Users\admin\Documents\GitHub\AIGame\SparkOfThought\SparkOfThought\SparkOfThought\obj\Debug\net8.0-windows\App.g.cs
+C:\Users\admin\Documents\GitHub\AIGame\SparkOfThought\SparkOfThought\SparkOfThought\obj\Debug\net8.0-windows\SparkOfThought_MarkupCompile.cache
+C:\Users\admin\Documents\GitHub\AIGame\SparkOfThought\SparkOfThought\SparkOfThought\obj\Debug\net8.0-windows\SparkOfThought_MarkupCompile.lref
