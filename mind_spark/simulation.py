@@ -32,6 +32,12 @@ class Simulation:
         self.held_neuron = None
         self.velocity_adjust_mode = False
         self.velocity_grace_period_timer = None
+
+        # 输入线程状态管理
+        self.input_thread = None
+        self.input_callback = None
+        self.input_pos = None
+
         self._load_initial_data()
 
     def _toggle_fullscreen(self):
@@ -43,24 +49,53 @@ class Simulation:
     def run(self):
         while self.is_running:
             dt = self.clock.tick(config.FPS) / 1000.0
-            self.paused = self.paused_by_user
+            
+            # 暂停条件：用户交互 或 正在等待输入
+            self.paused = self.paused_by_user or (self.input_thread is not None)
+            
             self._handle_events()
+
             if not self.paused:
                 self._update(dt)
+
             self._draw()
         pygame.quit()
 
     def _handle_events(self):
+        # 检查输入线程的结果
+        if self.input_thread:
+            result = self.input_thread.get_result()
+            if result != "NO_RESULT_YET":
+                if self.input_callback:
+                    # 如果有结果 (不是 None)，则调用回调
+                    if result is not None:
+                        self.input_callback(result, self.input_pos)
+                self._stop_input_thread()
+        
+        # 宽限期计时器
         if self.velocity_grace_period_timer and pygame.time.get_ticks() - self.velocity_grace_period_timer > config.VELOCITY_GRACE_PERIOD:
             self.velocity_adjust_mode = False
             self.velocity_grace_period_timer = None
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.is_running = False
+                self._stop_input_thread() # 退出时确保线程关闭
+                return
+            
+            # 如果正在输入，任何点击都取消输入
+            if self.input_thread is not None:
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    print("检测到遮罩被点击，取消输入。")
+                    self._stop_input_thread()
+                continue # 消耗所有其他事件
+
             if self.ui_manager.handle_event(event):
                 continue
+            
             if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and (event.mod & pygame.KMOD_ALT):
                 self._toggle_fullscreen()
+            
             self._handle_mouse_events(event)
 
     def _handle_mouse_events(self, event):
@@ -99,15 +134,25 @@ class Simulation:
                 if self.velocity_adjust_mode:
                     self.velocity_grace_period_timer = pygame.time.get_ticks()
 
-    def _call_input_dialog(self, title, prompt):
-        self.paused_by_user = True
-        text = input_dialog.ask_string(title, prompt)
-        self.clock.tick()
-        self.paused_by_user = False
-        return text
-        
+    def _start_input_thread(self, title, prompt, callback, pos=None):
+        """启动一个非阻塞的输入线程"""
+        if self.input_thread: return
+        self.input_callback = callback
+        self.input_pos = pos
+        self.input_thread = input_dialog.ask_string_non_blocking(title, prompt)
+
+    def _stop_input_thread(self):
+        """安全地停止输入线程"""
+        if self.input_thread:
+            self.input_thread.close()
+            self.input_thread = None
+            self.input_callback = None
+            self.input_pos = None
+
     def _create_new_neuron_at(self, pos):
-        text = self._call_input_dialog("创建新节点", "请输入节点文本:")
+        self._start_input_thread("创建新节点", "请输入节点文本:", self._finalize_neuron_creation, pos)
+
+    def _finalize_neuron_creation(self, text, pos):
         if text and text.strip():
             text = text.strip()
             new_neuron = Neuron(text, pos)
@@ -120,16 +165,20 @@ class Simulation:
             self.data_manager.save_neuron_groups(self.neuron_groups)
 
     def add_new_group(self):
-        new_group_name = self._call_input_dialog("创建新节点组", "请输入新组的名称:")
-        if not new_group_name or not new_group_name.strip():
+        self._start_input_thread("创建新节点组", "请输入新组的名称:", self._finalize_group_creation)
+
+    def _finalize_group_creation(self, text, pos=None): # pos 参数是为了统一回调格式
+        if text and text.strip():
+            new_group_name = text.strip()
+        else:
             return
-        new_group_name = new_group_name.strip()
+
         new_group = {"name": new_group_name, "neurons": ["新节点"]}
         self.neuron_groups.append(new_group)
         new_index = len(self.neuron_groups) - 1
         self.switch_group(new_index)
         self.data_manager.save_neuron_groups(self.neuron_groups)
-        
+
     def _delete_neuron(self, neuron_to_delete):
         self.neurons.remove(neuron_to_delete)
         try:
@@ -194,21 +243,14 @@ class Simulation:
             n2.position -= separation_vec
 
     def _draw(self):
-        """BUG FIX: 恢复了绘制节点的循环"""
         self.screen.fill(config.BG_COLOR)
-        
-        # --- 关键修复：恢复此循环 ---
         for n in self.neurons:
             n.draw(self.screen)
-        # --- 修复结束 ---
-        
         if self.velocity_adjust_mode and pygame.mouse.get_pressed()[2]:
             start_pos = self.held_neuron.position
             end_pos = vec(pygame.mouse.get_pos())
             utils.draw_arrow(self.screen, config.HELD_NEURON_BORDER_COLOR, start_pos, end_pos)
-        
         self.ui_manager.draw(self.screen, pygame.mouse.get_pos())
-        
         pygame.display.flip()
 
     def _load_initial_data(self):

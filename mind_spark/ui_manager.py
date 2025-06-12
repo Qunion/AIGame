@@ -73,6 +73,10 @@ class UIManager:
         return dist_sq < config.GROUP_MENU_HOVER_RADIUS**2
 
     def draw(self, surface, mouse_pos):
+        # NEW: 如果正在输入，绘制遮罩
+        if self.sim.input_thread is not None:
+            self.draw_input_mask(surface)
+
         if self.sim.held_neuron:
             self.draw_delete_zone(surface)
             
@@ -80,7 +84,13 @@ class UIManager:
         self.draw_group_menu_icon(surface, mouse_pos) # 这个调用导致了错误
         if self.is_menu_open:
             self.draw_group_menu(surface, mouse_pos)
-            
+
+    def draw_input_mask(self, surface):
+        """绘制一个半透明的遮罩，覆盖整个屏幕"""
+        mask = pygame.Surface(self.screen_rect.size, pygame.SRCALPHA)
+        mask.fill((0, 0, 0, 150)) # 半透明黑色
+        surface.blit(mask, (0, 0))
+         
     def draw_delete_zone(self, surface):
         rect = config.DELETE_ZONE_RECT
         color = config.DELETE_COLOR if rect.collidepoint(self.sim.held_neuron.position) else (100, 100, 100)
